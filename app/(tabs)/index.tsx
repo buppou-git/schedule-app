@@ -2,7 +2,9 @@ import { StatusBar } from "expo-status-bar";
 import React, { useState } from "react"; // 状態を管理する機能を追加
 import {
   Alert,
+  Keyboard,
   Modal,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -10,12 +12,14 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
 
 //カレンダー部品の挿入
 import { CalendarList } from "react-native-calendars";
-
+//todo用の追加機能を実装するためのパーツ
+import DateTimePicker from '@react-native-community/datetimepicker';
 // neverエラーを防ぐ
 interface ScheduleItem {
   id: string;
@@ -48,9 +52,6 @@ export default function Index() {
   const [isEvent, setIsEvent] = useState(true);
   const [isTodo, setIsTodo] = useState(false);
   const [isExpense, setIsExpense] = useState(false);
-
-  //予定とtodoが異なる日付の場合のstateを宣言
-  const [subTaskDate, setSubTaskDate] = useState("");
 
   //状況に応じて初期状態を変更するシステムの構築(スイッチ)
   const handleOpenNewModal = () => {
@@ -129,11 +130,31 @@ export default function Index() {
   const [selectedColor, setSelectedColor] = useState("#007AFF");
   const COLOR_PALETTE = ["#007AFF", "#34C759", "#FF9500", "#AF52DE", "#FF3B30"];
 
+  //todo関連のstate
+  const [subTasks, setSubTasks] = useState([
+    { id: Date.now(), title: "", date: new Date(), amount: 0, showPicker: false }
+  ]);
+
+  //特定のtodoを削除するための関数
+  const removeSubTaskField = (id: any) => {
+    // 指定されたID以外のアイテムだけを残す
+    setSubTasks(subTasks.filter(task => task.id !== id));
+  };
+
+  // ToDo入力欄を増やす関数
+  const addSubTaskField = () => {
+    setSubTasks([
+      ...subTasks,
+      { id: Date.now(), title: "", date: new Date(), amount: 0, showPicker: false }
+    ]);
+  };
+
+  // データを保存する関数
   // データを保存する関数
   const handleSave = () => {
     if (!inputText) return Alert.alert("エラー", "タイトルを入力してください");
 
-    //何も入力しないまま保存することを防ぐ
+    // 何も入力しないまま保存することを防ぐ
     if (!isEvent && !isTodo && !isExpense)
       return Alert.alert("エラー", "登録先を最低1つ設定してください");
 
@@ -141,60 +162,70 @@ export default function Index() {
     if (!newData[selectedDate]) newData[selectedDate] = [];
 
     if (selectedItem) {
-      // 【更新モード】 mapを使って、IDが一致するデータだけ中身を差し替える
+      // 【更新モード】
       newData[selectedDate] = newData[selectedDate].map((item) =>
         item.id === selectedItem.id
           ? {
-              ...item,
-              title: inputText,
-              amount: parseInt(inputAmount) || 0,
-              isEvent,
-              isTodo,
-              isExpense,
-              color: selectedColor,
-            }
+            ...item,
+            title: inputText,
+            amount: parseInt(inputAmount) || 0,
+            isEvent,
+            isTodo,
+            isExpense,
+            color: selectedColor,
+          }
           : item,
       );
     } else {
-      // 【新規追加モード】 今まで通りの処理
-      const newItem: ScheduleItem = {
-        id: Date.now().toString(),
-        title: inputText,
-        tag: activeMode === "money" ? "出費" : "予定",
-        amount: parseInt(inputAmount) || 0,
-        isDone: false,
-        isEvent: isEvent,
-        isTodo: isTodo,
-        isExpense: isExpense,
-        color: activeMode === "money" ? "#FF9500" : "#007AFF",
-      };
+      // 【新規追加モード】
+      const baseId = Date.now().toString();
 
-      // もし別日の期日が入力されていたら、データを2つに分裂させる
-      if (
-        (isTodo || isExpense) &&
-        subTaskDate &&
-        subTaskDate !== selectedDate
-      ) {
-        // ① ライブ当日用のデータ（予定のみONにする）
-        const eventItem = { ...newItem, isTodo: false, isExpense: false };
-        newData[selectedDate] = [...(newData[selectedDate] || []), eventItem];
+      // 空欄のタスクを無視して、ちゃんと入力されたタスクだけを抽出する
+      const validSubTasks = subTasks.filter(task => task.title.trim() !== "");
 
-        // ② 振込期日用のデータ（予定OFF、タイトルに[期日]をつける）
-        const subItem = {
-          ...newItem,
-          id: newItem.id + "_sub",
-          title: `[期日] ${inputText}`,
-          isEvent: false,
+      // メイン予定を保存するかの判定
+      // カレンダーか支出がON、または「ToDoはONだけどリストが1個も書かれていない」場合はメインを作る
+      const shouldSaveMain = isEvent || isExpense || (isTodo && validSubTasks.length === 0);
+
+      if (shouldSaveMain) {
+        const mainItem: ScheduleItem = {
+          id: baseId,
+          title: inputText,
+          tag: activeMode === "money" ? "出費" : "予定",
+          amount: parseInt(inputAmount) || 0,
+          isDone: false,
+          isEvent: isEvent,
+          isTodo: (isTodo && validSubTasks.length === 0), // リストがない時だけメインをToDo扱いにする
+          isExpense: isExpense,
+          color: selectedColor,
         };
-        newData[subTaskDate] = [...(newData[subTaskDate] || []), subItem];
-      } else {
-        // 通常の保存（同じ日の場合はそのまま）
-        newData[selectedDate] = [...(newData[selectedDate] || []), newItem];
+        newData[selectedDate] = [...(newData[selectedDate] || []), mainItem];
+      }
+
+      // 🌟 複数ToDoリストの保存（リストが1個以上ある場合）
+      if (isTodo && validSubTasks.length > 0) {
+        validSubTasks.forEach((task, index) => {
+          const subDateStr = task.date.toISOString().split('T')[0];
+
+          const subItem: ScheduleItem = {
+            id: `${baseId}_sub_${index}`,
+            title: `${task.title} (${inputText})`, // 例: グッズ代 (ずっと真夜中でいいのに。ライブ)
+            tag: task.amount > 0 ? "出費" : "予定",
+            amount: task.amount, // 各タスクの金額を保存！
+            isDone: false,
+            isEvent: false, // 関連ToDoはカレンダーには出さない
+            isTodo: true,
+            isExpense: task.amount > 0, // 金額が1円以上なら、自動的に家計簿にも出す！
+            color: selectedColor,
+          };
+
+          newData[subDateStr] = [...(newData[subDateStr] || []), subItem];
+        });
       }
     }
 
     setScheduleData(newData); // 状態を更新
-    closeModal(); // お掃除して閉じる（このあと作る関数)
+    closeModal(); // お掃除して閉じる
   };
 
   //　チェックボタンを動かすための関数
@@ -272,6 +303,7 @@ export default function Index() {
     setInputText("");
     setInputAmount("");
     setSelectedColor("#007AFF"); //色を青色にリセット
+    setSubTasks([{ id: Date.now(), title: "", date: new Date(), amount: 0, showPicker: false }]);
   };
 
   //本当に削除するのかの確認を行うための処理
@@ -531,93 +563,206 @@ export default function Index() {
 
       {/*入力用モーダル*/}
       <Modal visible={modalVisible} animationType="slide" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              {selectedItem ? "予定を編集" : `${selectedDate} に追加`}
-            </Text>
-            <TextInput
-              style={styles.input}
-              placeholder="タイトル（例：情報工学 課題）"
-              value={inputText}
-              onChangeText={setInputText}
-            />
-            {/* ② 追加：カラーパレット */}
-            <Text style={styles.label}>ラベルの色</Text>
-            <View style={styles.colorContainer}>
-              {COLOR_PALETTE.map((color) => (
-                <TouchableOpacity
-                  key={color}
-                  style={[
-                    styles.colorCircle,
-                    { backgroundColor: color },
-                    selectedColor === color && styles.selectedCircle, // 選ばれている色に枠線をつける
-                  ]}
-                  onPress={() => setSelectedColor(color)}
-                />
-              ))}
-            </View>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.modalOverlay}>
 
-            {/* 3つの切り替えスイッチ */}
-            <View style={styles.switchRow}>
-              <Text style={styles.switchLabel}>📅 カレンダーに表示</Text>
-              <Switch value={isEvent} onValueChange={setIsEvent} />
-            </View>
-            <View style={styles.switchRow}>
-              <Text style={styles.switchLabel}>✅ ToDoとして管理</Text>
-              <Switch value={isTodo} onValueChange={setIsTodo} />
-            </View>
-            <View style={styles.switchRow}>
-              <Text style={styles.switchLabel}>💰 支出も記録する</Text>
-              <Switch value={isExpense} onValueChange={setIsExpense} />
-            </View>
-
-            {/* 金額欄を {isExpense && ...} で囲んで、ONの時だけ表示する */}
-            {isExpense && (
-              <TextInput
-                style={styles.input}
-                placeholder="金額（任意）"
-                keyboardType="numeric"
-                value={inputAmount}
-                onChangeText={setInputAmount}
-              />
-            )}
-
-            {/*todoと予定の日付が違う場合の処理 */}
-            {isTodo && (
-              <TextInput
-                style={styles.input}
-                placeholder="期日・入金日（別日なら入力 例: 2026-03-15）"
-                value={subTaskDate}
-                onChangeText={setSubTaskDate}
-              />
-            )}
-
-            <View style={styles.modalButtons}>
-              {/* 追加：編集モードの時だけ削除ボタンを表示 */}
-              {selectedItem && (
-                <TouchableOpacity
-                  onPress={checkDelete}
-                  style={styles.deleteBtn}
+            <TouchableWithoutFeedback>
+              <View style={[styles.modalContent, { maxHeight: '80%' }]}>
+                <ScrollView showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  keyboardDismissMode="on-drag"
                 >
-                  <Text style={{ color: "#FF3B30", fontWeight: "bold" }}>
-                    削除
+                  <Text style={styles.modalTitle}>
+                    {selectedItem ? "予定を編集" : `${selectedDate} に追加`}
                   </Text>
-                </TouchableOpacity>
-              )}
+                  <TextInput
+                    style={styles.input}
+                    placeholder="タイトル（例：情報工学 課題）"
+                    value={inputText}
+                    onChangeText={setInputText}
+                  />
+                  {/* ② 追加：カラーパレット */}
+                  <Text style={styles.label}>ラベルの色</Text>
+                  <View style={styles.colorContainer}>
+                    {COLOR_PALETTE.map((color) => (
+                      <TouchableOpacity
+                        key={color}
+                        style={[
+                          styles.colorCircle,
+                          { backgroundColor: color },
+                          selectedColor === color && styles.selectedCircle, // 選ばれている色に枠線をつける
+                        ]}
+                        onPress={() => setSelectedColor(color)}
+                      />
+                    ))}
+                  </View>
 
-              <TouchableOpacity onPress={closeModal} style={styles.cancelBtn}>
-                <Text>キャンセル</Text>
-              </TouchableOpacity>
+                  {/* 1. カレンダー表示スイッチ */}
+                  <View style={styles.switchRow}>
+                    <Text style={styles.switchLabel}>📅 カレンダーに表示</Text>
+                    <Switch value={isEvent} onValueChange={setIsEvent} />
+                  </View>
 
-              <TouchableOpacity onPress={handleSave} style={styles.saveBtn}>
-                <Text style={{ color: "#fff", fontWeight: "bold" }}>
-                  {selectedItem ? "更新" : "保存"}
-                </Text>
-              </TouchableOpacity>
-            </View>
+                  {/* 2. 支出スイッチ */}
+                  <View style={styles.switchRow}>
+                    <Text style={styles.switchLabel}>💰 支出も記録する</Text>
+                    <Switch value={isExpense} onValueChange={setIsExpense} />
+                  </View>
+
+                  {/* 支出がONの時だけ現れる入力エリア */}
+                  {isExpense && (
+                    <TextInput
+                      style={styles.input}
+                      placeholder="金額（例：8000）"
+                      keyboardType="numeric"
+                      value={inputAmount}
+                      onChangeText={setInputAmount}
+                    />
+                  )}
+
+                  {/* 3. ToDoスイッチ */}
+                  <View style={styles.switchRow}>
+                    <Text style={styles.switchLabel}>✅ ToDo（やること）に追加</Text>
+                    <Switch value={isTodo} onValueChange={setIsTodo} />
+                  </View>
+
+                  {/* ToDoがONの時だけ現れる入力エリア */}
+                  {isTodo && (
+                    <View style={{ backgroundColor: '#F8FFF9', padding: 10, borderRadius: 8, marginBottom: 15 }}>
+
+                      {/* 追加されたタスクの数だけループして表示 */}
+                      {subTasks.map((task, index) => (
+                        <View key={task.id} style={{ marginBottom: 15, paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: '#D1E8D5' }}>
+
+
+                          {/*削除するためのボタン*/}
+                          <TouchableOpacity
+                            onPress={() => removeSubTaskField(task.id)}
+                            style={{ alignSelf: 'flex-end', padding: 5 }}
+                          >
+                            <Text style={{ color: '#FF3B30', fontWeight: 'bold' }}>✕ 削除</Text>
+                          </TouchableOpacity>
+
+
+
+                          <TextInput
+                            style={styles.input}
+                            placeholder={`やる事 ${index + 1} (例: グッズ代支払い)`}
+                            value={task.title}
+                            onChangeText={(text) => {
+                              const newTasks = [...subTasks];
+                              newTasks[index].title = text;
+                              setSubTasks(newTasks); // 自分の行のタイトルだけ更新
+                            }}
+
+                            returnKeyType="done"
+                            onSubmitEditing={Keyboard.dismiss}
+                            onBlur={Keyboard.dismiss}
+                          />
+
+                          <TextInput
+                            style={styles.input}
+                            placeholder="このタスクの金額 (なければ空欄)"
+                            keyboardType="numeric"
+                            value={task.amount > 0 ? task.amount.toString() : ""}
+                            onChangeText={(val) => {
+                              const newTasks = [...subTasks];
+                              newTasks[index].amount = parseInt(val) || 0;
+                              setSubTasks(newTasks); // 自分の行の金額だけ更新
+                            }}
+                          />
+
+                          {/* iOS/Androidの1タップ分岐（リスト対応） */}
+                          {Platform.OS === 'ios' ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 5, paddingHorizontal: 5 }}>
+                              <Text style={{ fontSize: 16, color: '#333' }}>📅 期限を選択</Text>
+                              <DateTimePicker
+                                value={task.date}
+                                mode="date"
+                                display="default"
+                                onChange={(event, selectedDate) => {
+                                  if (selectedDate) {
+                                    const newTasks = [...subTasks];
+                                    newTasks[index].date = selectedDate;
+                                    setSubTasks(newTasks);
+                                  }
+                                }}
+                              />
+                            </View>
+                          ) : (
+                            <View>
+                              <TouchableOpacity
+                                style={[styles.input, { justifyContent: 'center', backgroundColor: '#fff', marginBottom: 0 }]}
+                                onPress={() => {
+                                  const newTasks = [...subTasks];
+                                  newTasks[index].showPicker = true; // 自分の行のカレンダーだけ開く！
+                                  setSubTasks(newTasks);
+                                }}
+                              >
+                                <Text style={{ color: '#333' }}>
+                                  📅 期限: {task.date.toISOString().split('T')[0]}
+                                </Text>
+                              </TouchableOpacity>
+
+                              {task.showPicker && (
+                                <DateTimePicker
+                                  value={task.date}
+                                  mode="date"
+                                  display="default"
+                                  onChange={(event, selectedDate) => {
+                                    const newTasks = [...subTasks];
+                                    newTasks[index].showPicker = false; // 閉じる
+                                    if (selectedDate) newTasks[index].date = selectedDate;
+                                    setSubTasks(newTasks);
+                                  }}
+                                />
+                              )}
+                            </View>
+                          )}
+                        </View>
+                      ))}
+
+                      {/* 🌟 リストを追加するボタン */}
+                      <TouchableOpacity onPress={addSubTaskField} style={{ padding: 10, alignItems: 'center' }}>
+                        <Text style={{ color: '#007AFF', fontWeight: 'bold', fontSize: 16 }}>＋ やる事をさらに追加</Text>
+                      </TouchableOpacity>
+
+                    </View>
+                  )}
+
+
+
+
+
+                  <View style={styles.modalButtons}>
+                    {/* 追加：編集モードの時だけ削除ボタンを表示 */}
+                    {selectedItem && (
+                      <TouchableOpacity
+                        onPress={checkDelete}
+                        style={styles.deleteBtn}
+                      >
+                        <Text style={{ color: "#FF3B30", fontWeight: "bold" }}>
+                          削除
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+
+                    <TouchableOpacity onPress={closeModal} style={styles.cancelBtn}>
+                      <Text>キャンセル</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity onPress={handleSave} style={styles.saveBtn}>
+                      <Text style={{ color: "#fff", fontWeight: "bold" }}>
+                        {selectedItem ? "更新" : "保存"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
+              </View>
+            </TouchableWithoutFeedback>
+
           </View>
-        </View>
+        </TouchableWithoutFeedback>
       </Modal>
 
       {/* --- 追加：右下のプラスボタン --- */}
