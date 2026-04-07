@@ -1,5 +1,6 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from "expo-status-bar";
-import React, { useState } from "react"; // 状態を管理する機能を追加
+import React, { useEffect, useState } from "react"; // 状態を管理する機能を追加
 import {
   SafeAreaView,
   ScrollView,
@@ -58,62 +59,41 @@ export default function Index() {
 
 
   // 実際の予定の管理 (scheduleDataをuseStateに変更)
-  const [scheduleData, setScheduleData] = useState<{
-    [key: string]: ScheduleItem[];
-  }>({
-    "2026-03-12": [
-      {
-        id: "1",
-        title: "お台場デート",
-        tag: "遊び", // 用途別のタグ
-        amount: 10000, // 支出（なければ 0 や null）
-        isDone: false, // 完了したか
-        color: "#FF3B30", // タグの色（遊び＝赤、学校＝青など）
-        isEvent: true, // カレンダーに表示
-        isTodo: false, // ToDoではない
-        isExpense: true, // 支出あり
-      },
-    ],
+  const [scheduleData, setScheduleData] = useState<{ [key: string]: ScheduleItem[] }>({});
 
-    "2026-03-15": [
-      {
-        id: "2",
-        title: "会費徴収",
-        tag: "学校", // 用途別のタグ
-        amount: 8000, // 支出（なければ 0 や null）
-        isDone: false, // 完了したか
-        color: "#007AFF", // タグの色（遊び＝赤、学校＝青など）
-        isEvent: true,
-        isTodo: true, // ToDoとして管理
-        isExpense: true, // 支出あり
-      },
-    ],
+  //ロードとセーブ機能を追加
+  // 1. アプリ起動時にスマホの奥底からデータを「ロード（読み込み）」する
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const savedData = await AsyncStorage.getItem('myScheduleData');
+        if (savedData !== null) {
+          // 保存されていたら、文字(JSON)からデータに戻してセットする
+          setScheduleData(JSON.parse(savedData));
+        }
+      } catch (error) {
+        console.error("データの読み込みに失敗しました", error);
+      }
+    };
+    loadData();
+  }, []); // [] は「アプリ起動時に1回だけ実行する」という合図
 
-    "2026-03-25": [
-      {
-        id: "3",
-        title: "ずっと真夜中でいいのに。ライブ",
-        tag: "遊び", // 用途別のタグ
-        amount: 8000, // 支出（なければ 0 や null）
-        isDone: false, // 完了したか
-        color: "#FF3B30", // タグの色（遊び＝赤、学校＝青など）
-        isEvent: true,
-        isTodo: true,
-        isExpense: true,
-      },
-      {
-        id: "4",
-        title: "情報工学 課題提出",
-        tag: "学校",
-        amount: 0,
-        isDone: true,
-        color: "#007AFF",
-        isEvent: true,
-        isTodo: true,
-        isExpense: false, // 支出なし
-      },
-    ],
-  });
+  // 2. scheduleData の中身が変わるたびに、自動でスマホに「セーブ」する
+  useEffect(() => {
+    const saveData = async () => {
+      try {
+        // データを文字(JSON)に変換して保存する
+        await AsyncStorage.setItem('myScheduleData', JSON.stringify(scheduleData));
+      } catch (error) {
+        console.error("データの保存に失敗しました", error);
+      }
+    };
+
+    // 初期状態（空っぽ）の時は、間違えて空のデータを上書き保存しないようにする工夫
+    if (Object.keys(scheduleData).length > 0) {
+      saveData();
+    }
+  }, [scheduleData]); // [scheduleData] は「このデータが変化した時だけ実行する」という合図
 
   //モーダルと入力用のstate
   const [modalVisible, setModalVisible] = useState(false);
