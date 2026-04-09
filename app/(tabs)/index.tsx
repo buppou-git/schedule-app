@@ -1,19 +1,17 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Haptics from "expo-haptics";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useState } from "react"; // 状態を管理する機能を追加
-//円グラフを作成するために追加
-import { Dimensions } from "react-native";
-import { PieChart } from "react-native-chart-kit";
+
 
 import {
-  Alert,
+  Modal,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 
 //カレンダー部品の挿入
@@ -43,6 +41,9 @@ import TabBar from "./components/TabBar";
 
 //ScheduleModalを呼び出すために挿入
 import ScheduleModal from "./components/ScheduleModal";
+
+//MoneyDashboardを呼び出すために挿入
+import MoneyDashboard from "./components/MoneyDashboard";
 
 //　今日の日付を確保するための関数
 const getTodayString = () => {
@@ -109,122 +110,14 @@ export default function Index() {
     }
   }, [scheduleData]); // [scheduleData] は「このデータが変化した時だけ実行する」という合図
 
-  //{家計簿のための計算ロジック}
-  //家計簿用の新しいState（状態管理）
-  const [isSummaryMode, setIsSummaryMode] = useState(false); // 日別か、月間か
-  const [monthlyBudget, setMonthlyBudget] = useState(100000); // 今月の予算
-  const [isSettingMode, setIsSettingMode] = useState(false); //詳細設定画面
-  const [quickAmount, setQuickAmount] = useState(""); // クイック入力の金額
-  const [payday, setPayday] = useState(25); // デフォルトは25日(給料日までの日数のため)
 
-  // 今日の合計出費を自動計算
-  const dailyTotal = (scheduleData[selectedDate] || [])
-    .filter((item) => item.isExpense)
-    .reduce((sum, item) => sum + item.amount, 0);
-
-  // 今日の合計出費を自動計算
-  const currentMonth = selectedDate.substring(0, 7); // "2026-03" を切り出す
-  let monthlyTotal = 0;
-
-  //追加：カテゴリ別の合計を計算する箱
-  const categoryTotals: { [key: string]: number } = {};
-
-  //給料日までの残り日数を計算するロジック
-  const calculateDailyAllowance = () => {
-    const todayDate = new Date(selectedDate);
-    const currentYear = todayDate.getFullYear();
-    const currentMonth = todayDate.getMonth();
-    const currentDay = todayDate.getDate();
-
-    let nextPayday;
-    if (currentDay < payday) {
-      // 今月の給料日がまだ来ていない
-      nextPayday = new Date(currentYear, currentMonth, payday);
-    } else {
-      // 今月の給料日は過ぎたので、来月の給料日を目標にする
-      nextPayday = new Date(currentYear, currentMonth + 1, payday);
-    }
-
-    // 日数の差分を計算（ミリ秒を日数に変換）
-    const diffTime = nextPayday.getTime() - todayDate.getTime();
-    const remainingDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    const safeRemainingDays = remainingDays === 0 ? 1 : remainingDays; // 当日は1日として扱う（ゼロ除算防止）
-
-    // 1日あたりの使用可能額（マイナスの場合は0にする）
-    const balance = monthlyBudget - monthlyTotal;
-    const dailyAvailable = Math.max(0, Math.floor(balance / safeRemainingDays));
-
-    return { remainingDays: safeRemainingDays, dailyAvailable };
-  };
-
-  const { remainingDays, dailyAvailable } = calculateDailyAllowance();
-
-  Object.keys(scheduleData).forEach((date) => {
-    if (date.startsWith(currentMonth)) {
-      scheduleData[date].forEach((item) => {
-        if (item.isExpense) {
-          monthlyTotal += item.amount;
-          //追加：タグ（カテゴリ）ごとに金額を足していく
-          categoryTotals[item.tag] = (categoryTotals[item.tag] || 0) + item.amount;
-        }
-      });
-    }
-  });
-
-  //追加：円グラフ用のデータに変換する
-  const screenWidth = Dimensions.get("window").width;
-  const chartColors: { [key: string]: string } = {
-    "食費": "#FF9500",
-    "交通費": "#007AFF",
-    "趣味": "#FF3B30",
-    "日用": "#34C759"
-  };
-
-  const pieData = Object.keys(categoryTotals).map((key) => ({
-    name: key,
-    population: categoryTotals[key],
-    color: chartColors[key] || "#888888", // 知らないタグならグレー
-    legendFontColor: "#7F7F7F",
-    legendFontSize: 11,
-  }));
-
-  // クイック入力の保存機能
-  const handleQuickAdd = (category: string) => {
-    const amountNum = parseInt(quickAmount);
-    if (isNaN(amountNum) || amountNum <= 0) {
-      return Alert.alert("エラー", "正しい金額を入力してください");
-    }
-
-    const newItem = {
-      id: Date.now().toString(),
-      title: category, // タイトルは「食費」などになる
-      tag: category,
-      amount: amountNum,
-      isDone: false,
-      // カテゴリによって色を自動で分ける工夫
-      color:
-        category === "食費"
-          ? "#FF9500"
-          : category === "交通費"
-            ? "#007AFF"
-            : "#34C759",
-      isEvent: false,
-      isTodo: false,
-      isExpense: true,
-    };
-
-    // 保存処理（お馴染みのやつ）
-    const newData = { ...scheduleData };
-    newData[selectedDate] = [...(newData[selectedDate] || []), newItem];
-    setScheduleData(newData);
-    setQuickAmount(""); // 入力が終わったら欄を空にする
-  };
 
   //モーダルと入力用のstate
   const [modalVisible, setModalVisible] = useState(false);
 
   //　チェックボタンを動かすための関数
   const toggleTodo = (date: any, id: any) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const newData = { ...scheduleData };
     newData[date] = newData[date].map((item) =>
       item.id === id ? { ...item, isDone: !item.isDone } : item,
@@ -271,6 +164,35 @@ export default function Index() {
   // 「今どのモードか」を記憶する箱（初期値は 'calendar'）
   const [activeMode, setActiveMode] = useState("calendar");
 
+  //タグ別カレンダーの実装
+  // 1. 今「ON」になっているタグを記憶する箱（空っぽなら『すべて表示』という意味）
+  const [activeTags, setActiveTags] = useState<string[]>([]);
+
+  //フィルター画面を開いているかどうかを判定
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+
+  // 2. 賢いアルゴリズム：今あるすべての予定から、重複なく「タグ」だけを抜き出す！
+  const allTags = Array.from(
+    new Set(
+      Object.values(scheduleData)
+        .flat()
+        .map((item) => item.tag)
+        .filter((tag) => tag) // 空っぽのタグを除外
+    )
+  );
+
+  // 3. ボタンを押した時にON/OFFを切り替える関数
+  const toggleTag = (tag: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); // ここでもブルッ！
+    if (activeTags.includes(tag)) {
+      // すでにONなら、リストから外す（OFFにする）
+      setActiveTags(activeTags.filter((t) => t !== tag));
+    } else {
+      // OFFなら、リストに追加する（ONにする）
+      setActiveTags([...activeTags, tag]);
+    }
+  };
+
   //　各モードに対応するドットを出力する関数
   const getMarkedDates = () => {
     let marked: any = {}; //空の最終結果リストを準備
@@ -302,11 +224,20 @@ export default function Index() {
   return (
     <SafeAreaView style={styles.container}>
       {/* 画面上部：ヘッダー領域 */}
-      <View style={styles.header}>
-        <Text style={styles.headerText}>≡ 日常（すべて）</Text>
-      </View>
+      <TouchableOpacity
+        style={styles.header}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          setFilterModalVisible(true);
+        }}
+      >
+        <Text style={styles.headerText}>
+          ≡ {activeTags.length === 0 ? "日常（すべて）" : activeTags.join(", ")}
+        </Text>
+      </TouchableOpacity>
 
       <TabBar activeMode={activeMode} setActiveMode={setActiveMode} />
+
 
       {/* 画面中央：メイン領域（モードによって文字が変わる！） */}
       <View style={styles.main}>
@@ -322,7 +253,6 @@ export default function Index() {
                 date={selectedDate}
                 onDateChanged={(date) => {
                   setSelectedDate(date);
-                  setIsSummaryMode(false); // 日付を触ったら自動で「日別詳細」に切り替える神UX！
                 }}
               >
                 <WeekCalendar
@@ -424,164 +354,18 @@ export default function Index() {
                 );
               }
 
-              // 家計簿モード
+              // --- 【家計簿モード】新しく作った専用の部屋（MoneyDashboard）を表示する！ ---
               else if (activeMode === "money") {
                 return (
-                  <View style={{ width: '100%', paddingBottom: 40 }}>
-                    {/* トグルスイッチ（日別 / 月間） */}
-                    <View style={styles.toggleContainer}>
-                      <TouchableOpacity
-                        style={[styles.toggleBtn, !isSummaryMode && styles.toggleActive]}
-                        onPress={() => setIsSummaryMode(false)}
-                      >
-                        <Text style={[styles.toggleText, !isSummaryMode && styles.toggleTextActive]}>📅 日別詳細</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.toggleBtn, isSummaryMode && styles.toggleActive]}
-                        onPress={() => {
-                          setIsSummaryMode(true);
-                          setIsSettingMode(false); // タブを切り替えたら設定画面は閉じる
-                        }}
-                      >
-                        <Text style={[styles.toggleText, isSummaryMode && styles.toggleTextActive]}>📊 予算確認</Text>
-                      </TouchableOpacity>
-                    </View>
-
-     {/* 🌟 ここからレイアウト分岐 🌟 */}
-     {isSummaryMode ? (
-                      /* ＝＝＝【月間総評モード】上に数字、下にグラフ ＝＝＝ */
-                      <View style={[styles.dashLeft, { width: '100%', marginRight: 0 }]}>
-                        
-                        {/* ヘッダー部分（タイトル ＆ 詳細設定ボタン） */}
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
-                          <Text style={{ fontSize: 14, color: '#007AFF', fontWeight: 'bold' }}>
-                            📅 給料日まで あと {remainingDays} 日
-                          </Text>
-                          <TouchableOpacity onPress={() => setIsSettingMode(!isSettingMode)}>
-                            <Text style={{ color: '#007AFF', fontSize: 13, fontWeight: 'bold' }}>
-                              {isSettingMode ? '戻る' : '⚙️ 詳細設定'}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-
-                        {isSettingMode ? (
-                          /* ⚙️ 設定画面モード */
-                          <View style={{ marginTop: 20 }}>
-                            <Text style={styles.dashLabel}>今月の予算設定</Text>
-                            <TextInput
-                              style={styles.quickInput}
-                              placeholder="予算金額"
-                              keyboardType="numeric"
-                              value={monthlyBudget.toString()}
-                              onChangeText={(text) => setMonthlyBudget(parseInt(text) || 0)}
-                            />
-                            
-                            {/* 🌟 給料日の設定を追加 */}
-                            <Text style={[styles.dashLabel, { marginTop: 15 }]}>毎月の給料日（日）</Text>
-                            <TextInput
-                              style={styles.quickInput}
-                              placeholder="例: 25"
-                              keyboardType="numeric"
-                              value={payday.toString()}
-                              onChangeText={(text) => {
-                                const day = parseInt(text) || 1;
-                                // 1〜31の間に制限する安全対策
-                                setPayday(day > 31 ? 31 : day);
-                              }}
-                            />
-                          </View>
-                        ) : (
-                          /* 📊 メイン表示（上に数字、下にグラフ） */
-                          <View style={{ flex: 1, alignItems: "center" }}>
-                            
-                            {/* 🌟 上部：金額のまとめカード 🌟 */}
-                            <View style={{ 
-                              flexDirection: "row", 
-                              width: "100%", 
-                              justifyContent: "space-around", 
-                              marginBottom: 20, 
-                              backgroundColor: '#F8F9FA', // 薄いグレーの背景をつけてカード風に
-                              paddingVertical: 15, 
-                              borderRadius: 12 
-                            }}>
-                              <View style={{ alignItems: 'center' }}>
-                                <Text style={styles.dashLabel}>合計出費</Text>
-                                <Text style={styles.dashTotal}>¥{monthlyTotal.toLocaleString()}</Text>
-                              </View>
-                              <View style={{ alignItems: 'center' }}>
-                                <Text style={styles.dashLabel}>今月の残高</Text>
-                                <Text style={[styles.dashTotal, { color: monthlyBudget - monthlyTotal < 0 ? "#FF3B30" : "#2E7D32" }]}>
-                                  ¥{(monthlyBudget - monthlyTotal).toLocaleString()}
-                                </Text>
-                              </View>
-                            </View>
-
-                            {/* 🌟 下部：ドデカ円グラフ 🌟 */}
-                            {pieData.length > 0 ? (
-                              <PieChart
-                                data={pieData}
-                                width={screenWidth * 0.85} // 画面幅の85%
-                                height={200}
-                                chartConfig={{ color: () => `black` }}
-                                accessor={"population"}
-                                backgroundColor={"transparent"}
-                                paddingLeft={"15"}
-                                absolute 
-                                hasLegend={true}
-                              />
-                            ) : (
-                              <Text style={{ color: "#999", marginVertical: 40 }}>
-                                まだデータがありません
-                              </Text>
-                            )}
-                          </View>
-                        )}
-                      </View>
-                    ) : (
-                      /* ＝＝＝【日別詳細モード】これまでの左右分割 ＝＝＝ */
-                      <View style={styles.dashboardSplit}>
-                        {/* 👈 左側：確認エリア */}
-                        <View style={styles.dashLeft}>
-                          <Text style={styles.dashLabel}>{selectedDate} の出費</Text>
-                          <Text style={styles.dashTotal}>¥{dailyTotal.toLocaleString()}</Text>
-
-                          {scheduleData[selectedDate] && (
-                            <View style={{ marginTop: 10 }}>
-                              {scheduleData[selectedDate]
-                                .filter((i) => i.isExpense)
-                                .map((item) => (
-                                  <Text key={item.id} style={{ fontSize: 13, color: "#555", marginBottom: 4 }} numberOfLines={1}>
-                                    ・{item.title} (¥{item.amount})
-                                  </Text>
-                                ))}
-                            </View>
-                          )}
-                        </View>
-
-                        {/* 👉 右側：入力エリア */}
-                        <View style={styles.dashRight}>
-                          <Text style={styles.dashLabel}>金額</Text>
-                          <TextInput
-                            style={styles.quickInput}
-                            placeholder="例: 800"
-                            keyboardType="numeric"
-                            value={quickAmount}
-                            onChangeText={setQuickAmount}
-                          />
-                          <Text style={[styles.dashLabel, { marginTop: 10 }]}>カテゴリで追加</Text>
-                          <View style={styles.chipContainer}>
-                            {["食費", "交通費", "趣味", "日用"].map((cat) => (
-                              <TouchableOpacity key={cat} style={styles.quickChip} onPress={() => handleQuickAdd(cat)}>
-                                <Text style={styles.quickChipText}>{cat}</Text>
-                              </TouchableOpacity>
-                            ))}
-                          </View>
-                        </View>
-                      </View>
-                    )}
-                  </View>
+                  <MoneyDashboard
+                    scheduleData={scheduleData}
+                    setScheduleData={setScheduleData}
+                    selectedDate={selectedDate}
+                  />
                 );
               }
+
+
 
               // --- 【通常・家計簿モード】これまでの表示 ---
               else {
@@ -645,6 +429,53 @@ export default function Index() {
         scheduleData={scheduleData}
         setScheduleData={setScheduleData}
       />
+
+      <Modal visible={filterModalVisible} transparent={true} animationType="fade">
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setFilterModalVisible(false)} // 余白を押したら閉じる
+        >
+          <View style={styles.filterModalContent}>
+            <Text style={{ fontSize: 16, fontWeight: "bold", marginBottom: 15 }}>
+              表示するレイヤーを選択
+            </Text>
+
+            <View style={styles.chipContainer}>
+              {/* 「すべて」ボタン */}
+              <TouchableOpacity
+                style={[styles.filterChip, activeTags.length === 0 && styles.filterChipActive]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setActiveTags([]);
+                  setFilterModalVisible(false); // 選んだら自動で閉じる！
+                }}
+              >
+                <Text style={[styles.filterChipText, activeTags.length === 0 && styles.filterChipTextActive]}>
+                  すべて表示
+                </Text>
+              </TouchableOpacity>
+
+              {/* 存在するタグの数だけボタンを自動生成 */}
+              {allTags.map((tag) => (
+                <TouchableOpacity
+                  key={tag}
+                  style={[styles.filterChip, activeTags.includes(tag) && styles.filterChipActive]}
+                  onPress={() => {
+                    toggleTag(tag);
+                    // 複数選びたい場合は下を消す。1つ選んで閉じるなら活かす！
+                    // setFilterModalVisible(false); 
+                  }}
+                >
+                  <Text style={[styles.filterChipText, activeTags.includes(tag) && styles.filterChipTextActive]}>
+                    {tag}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* --- 追加：右下のプラスボタン --- */}
       <TouchableOpacity
@@ -815,84 +646,58 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  //ダッシュボード用
-  // --- ダッシュボード用デザイン ---
-  toggleContainer: {
-    flexDirection: "row",
-    backgroundColor: "#EFEFF4",
-    borderRadius: 8,
-    padding: 3,
-    marginBottom: 15,
-  },
-  toggleBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: "center",
-    borderRadius: 6,
-  },
-  toggleActive: {
-    backgroundColor: "#fff",
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 2,
-  },
-  toggleText: { color: "#8E8E93", fontWeight: "bold" },
-  toggleTextActive: { color: "#333", fontWeight: "bold" },
 
-  dashboardSplit: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  //タグ切り替えボタン周りのデザイン
+  filterContainer: {
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E5EA",
   },
-  dashLeft: {
-    width: "48%",
-    backgroundColor: "#fff",
-    padding: 15,
-    borderRadius: 12,
-    marginRight: 5,
+  filterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "#F0F0F5",
+    marginRight: 10,
     borderWidth: 1,
-    borderColor: "#E5E5EA",
+    borderColor: "transparent",
   },
-  dashRight: {
-    width: "49%",
-    backgroundColor: "#F8FFF9",
-    padding: 15,
-    borderRadius: 12,
-    marginLeft: 5,
-    borderWidth: 1,
-    borderColor: "#D1E8D5",
+  filterChipActive: {
+    backgroundColor: "#E3F2FD",
+    borderColor: "#007AFF",
   },
-  dashLabel: {
+  filterChipText: {
     fontSize: 12,
     color: "#666",
     fontWeight: "bold",
-    marginBottom: 5,
   },
-  dashTotal: { fontSize: 22, fontWeight: "bold", color: "#333" },
-  quickInput: {
+  filterChipTextActive: {
+    color: "#007AFF",
+  },
+
+  // 🌟 追加：フィルターモーダル用のデザイン
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)", // 背景を少し暗くする
+    justifyContent: "flex-start",
+    paddingTop: 100, // ヘッダーの少し下に出す
+  },
+  filterModalContent: {
     backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 10,
-    height: 40, 
-    fontSize: 16,
+    marginHorizontal: 20,
+    padding: 20,
+    borderRadius: 15,
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 5,
   },
   chipContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
-    justifyContent: "space-between",
+    gap: 10, // チップ同士の隙間
   },
-  quickChip: {
-    backgroundColor: "#fff",
-    paddingVertical: 8,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: "#ccc",
-    width: "48%",
-    marginBottom: 8,
-    alignItems: "center",
-  },
-  quickChipText: { fontSize: 12, color: "#333", fontWeight: "bold" },
+
 });
