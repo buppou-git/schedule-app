@@ -286,7 +286,7 @@ export default function Index() {
                   </View>
                 );
               } else if (activeMode === "money") {
-                return <MoneyDashboard scheduleData={scheduleData} setScheduleData={setScheduleData} selectedDate={selectedDate} />;
+                return <MoneyDashboard scheduleData={scheduleData} setScheduleData={setScheduleData} selectedDate={selectedDate}tagMaster={tagMaster}activeTags={activeTags}layerMaster={layerMaster} />;
               } else {
                 return (
                   <View>
