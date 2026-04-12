@@ -5,6 +5,9 @@ import { StatusBar } from "expo-status-bar";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
+  Alert,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   SafeAreaView,
@@ -23,7 +26,6 @@ import {
   WeekCalendar,
 } from "react-native-calendars";
 
-// 🌟 統一された型定義
 interface ScheduleItem {
   id: string; title: string; tag?: string; tags?: string[]; amount: number; isDone: boolean;
   color: string; isEvent: boolean; isTodo: boolean; isExpense: boolean;
@@ -67,7 +69,6 @@ export default function Index() {
 
   const calendarKey = useMemo(() => activeMode, [activeMode]);
 
-  // --- フィルターロジック ---
   const openFilterModal = useCallback(() => {
     setTempActiveTags(activeTags);
     setFilterModalVisible(true);
@@ -86,6 +87,33 @@ export default function Index() {
     setFilterModalVisible(false);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }, [tempActiveTags]);
+
+  // 🌟 モーダル競合回避ロジック（＋ボタン用）
+  const handleOpenPresetModal = () => {
+    setFilterModalVisible(false); // 先にフィルター画面を閉じる
+    setTimeout(() => {
+      setPresetModalVisible(true); // 完全に閉じてから次を開く
+    }, 400); 
+  };
+
+  const confirmSavePreset = async () => {
+    if (!tempPresetName.trim()) return;
+    const newPresets = { ...presets, [tempPresetName.trim()]: tempActiveTags };
+    setPresets(newPresets);
+    await AsyncStorage.setItem("filterPresets", JSON.stringify(newPresets));
+    
+    setActiveTags(tempActiveTags); // 🌟 保存と同時にカレンダーにも即反映
+    setTempPresetName(""); 
+    setPresetModalVisible(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const deletePreset = async (name: string) => {
+    const newPresets = { ...presets };
+    delete newPresets[name];
+    setPresets(newPresets);
+    await AsyncStorage.setItem("filterPresets", JSON.stringify(newPresets));
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -106,48 +134,31 @@ export default function Index() {
     loadData();
   }, []);
 
-  // 🌟 パフォーマンス改善：Setを使って計算コストを劇的に削減
   const markedDatesBase = useMemo(() => {
     const marked: any = {};
     const activeTagsSet = new Set(activeTags);
     const isAllLayers = activeTags.length === 0;
 
     Object.keys(scheduleData).forEach((date) => {
-      const dayDots = new Set<string>(); // 重複色を防ぐための集合
-      
+      const dayDots = new Set<string>();
       scheduleData[date].forEach(item => {
-        // 表示モードとアイテムの一致確認
-        const matchesMode = (activeMode === "calendar" && item.isEvent) || 
-                           (activeMode === "todo" && item.isTodo) || 
-                           (activeMode === "money" && item.isExpense);
+        const matchesMode = (activeMode === "calendar" && item.isEvent) || (activeMode === "todo" && item.isTodo) || (activeMode === "money" && item.isExpense);
         if (!matchesMode) return;
-
         const itemTags = item.tags && item.tags.length > 0 ? item.tags : (item.tag ? [item.tag] : []);
-        
         itemTags.forEach(tag => {
           const info = tagMaster[tag] || { layer: "生活", color: "#999" };
-          // フィルター判定（Setで高速化）
           if (!isAllLayers && !activeTagsSet.has(info.layer)) return;
-          
-          const displayColor = isAllLayers ? (layerMaster[info.layer] || "#999") : info.color;
-          dayDots.add(displayColor);
+          dayDots.add(isAllLayers ? (layerMaster[info.layer] || "#999") : info.color);
         });
       });
-
-      if (dayDots.size > 0) {
-        marked[date] = { dots: Array.from(dayDots).map(color => ({ color })) };
-      }
+      if (dayDots.size > 0) marked[date] = { dots: Array.from(dayDots).map(color => ({ color })) };
     });
     return marked;
   }, [scheduleData, activeTags, activeMode, layerMaster, tagMaster]);
 
   const currentMarkedDates = useMemo(() => ({
     ...markedDatesBase,
-    [selectedDate]: { 
-      ...markedDatesBase[selectedDate], 
-      selected: true, 
-      selectedColor: activeTags.length === 1 ? (layerMaster[activeTags[0]] || "#1C1C1E") : "#1C1C1E" 
-    }
+    [selectedDate]: { ...markedDatesBase[selectedDate], selected: true, selectedColor: activeTags.length === 1 ? (layerMaster[activeTags[0]] || "#1C1C1E") : "#1C1C1E" }
   }), [markedDatesBase, selectedDate, activeTags, layerMaster]);
 
   const currentSolidColor = useMemo(() => activeTags.length === 1 ? layerMaster[activeTags[0]] : "#1C1C1E", [activeTags, layerMaster]);
@@ -164,14 +175,44 @@ export default function Index() {
     });
   };
 
-  const confirmSavePreset = async () => {
-    if (!tempPresetName.trim()) return;
-    const newPresets = { ...presets, [tempPresetName.trim()]: tempActiveTags };
-    setPresets(newPresets);
-    await AsyncStorage.setItem("filterPresets", JSON.stringify(newPresets));
-    setTempPresetName(""); setPresetModalVisible(false);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  };
+  // 🌟 処理落ち解消の切り札：リスト計算の完全キャッシュ化
+  const { dayTasks, upcomingTasks, dayEvents } = useMemo(() => {
+    const items = scheduleData[selectedDate] || [];
+    const isAllLayers = activeTags.length === 0;
+    const activeTagsSet = new Set(activeTags);
+
+    const dTasks: any[] = [];
+    const dEvents: any[] = [];
+    
+    items.forEach(item => {
+        const itemTags = item.tags && item.tags.length > 0 ? item.tags : (item.tag ? [item.tag] : []);
+        const matchLayer = isAllLayers || itemTags.some(tag => activeTagsSet.has(tagMaster[tag]?.layer || "生活"));
+        if (matchLayer) {
+            if (item.isTodo) dTasks.push(item);
+            if (item.isEvent) dEvents.push(item);
+        }
+    });
+
+    const uTasks: any[] = [];
+    if (activeMode === "todo") {
+        Object.keys(scheduleData).forEach(date => {
+            if (date > selectedDate) {
+                scheduleData[date].forEach(task => {
+                    if (task.isTodo && !task.isDone) {
+                        const itemTags = task.tags && task.tags.length > 0 ? task.tags : (task.tag ? [task.tag] : []);
+                        if (isAllLayers || itemTags.some(tag => activeTagsSet.has(tagMaster[tag]?.layer || "生活"))) {
+                            uTasks.push({ ...task, date });
+                        }
+                    }
+                });
+            }
+        });
+        uTasks.sort((a, b) => a.date.localeCompare(b.date)); // 最後に1回だけソート
+    }
+
+    return { dayTasks: dTasks, upcomingTasks: uTasks, dayEvents: dEvents };
+  }, [scheduleData, selectedDate, activeTags, activeMode, tagMaster]);
+
 
   const renderTodoItem = (item: any, itemDate: string) => {
     const itemTags = item.tags && item.tags.length > 0 ? item.tags : (item.tag ? [item.tag] : []);
@@ -184,9 +225,7 @@ export default function Index() {
     return (
       <TouchableOpacity key={item.id} style={[styles.todoCard, item.isDone && styles.todoCardDone]} onPress={() => openEditModal(item)} activeOpacity={0.7}>
         <View style={styles.stripeContainer}>
-            {uniqueColors.map((color: any, idx: number) => (
-                <View key={idx} style={[styles.todoAccent, { backgroundColor: color }]} />
-            ))}
+            {uniqueColors.map((color: any, idx: number) => (<View key={idx} style={[styles.todoAccent, { backgroundColor: color }]} />))}
         </View>
         <View style={styles.todoContent}>
           <View style={styles.todoMainRow}>
@@ -201,10 +240,7 @@ export default function Index() {
           </View>
           <View style={styles.todoSubRow}>
             {!item.isAllDay && item.startTime ? (
-              <View style={styles.todoTimeRow}>
-                <Ionicons name="time-outline" size={10} color="#8E8E93" />
-                <Text style={styles.todoTimeText}>{item.startTime}{item.endTime ? ` - ${item.endTime}` : ""}</Text>
-              </View>
+              <View style={styles.todoTimeRow}><Ionicons name="time-outline" size={10} color="#8E8E93" /><Text style={styles.todoTimeText}>{item.startTime}{item.endTime ? ` - ${item.endTime}` : ""}</Text></View>
             ) : itemDate !== selectedDate ? (
               <Text style={styles.todoTimeText}>📅 {itemDate.split('-')[1]}/{itemDate.split('-')[2]}</Text>
             ) : null}
@@ -253,27 +289,11 @@ export default function Index() {
 
           <ScrollView style={styles.scheduleList} contentContainerStyle={{ paddingBottom: 120 }} removeClippedSubviews={true}>
             {(() => {
-              const items = scheduleData[selectedDate] || [];
               if (activeMode === "money") {
                 return <MoneyDashboard scheduleData={scheduleData} setScheduleData={setScheduleData} selectedDate={selectedDate} tagMaster={tagMaster} activeTags={activeTags} layerMaster={layerMaster} setTagMaster={setTagMaster} />;
               }
 
               if (activeMode === "todo") {
-                const dayTasks = items.filter((item) => {
-                  if (!item.isTodo) return false;
-                  const itemTags = item.tags && item.tags.length > 0 ? item.tags : (item.tag ? [item.tag] : []);
-                  if (activeTags.length === 0) return true;
-                  return itemTags.some(tag => activeTags.includes(tagMaster[tag]?.layer || "生活"));
-                });
-
-                const upcomingTasks = Object.keys(scheduleData).filter(date => date > selectedDate).sort().flatMap(date => scheduleData[date].map(task => ({ ...task, date })))
-                    .filter(task => {
-                        if (!task.isTodo || task.isDone) return false;
-                        const itemTags = task.tags && task.tags.length > 0 ? task.tags : (task.tag ? [task.tag] : []);
-                        if (activeTags.length === 0) return true;
-                        return itemTags.some(tag => activeTags.includes(tagMaster[tag]?.layer || "生活"));
-                    });
-
                 const [y, m, d] = selectedDate.split('-');
                 const totalDayTasks = dayTasks.length;
                 const completedDayTasks = dayTasks.filter(t => t.isDone).length;
@@ -292,7 +312,9 @@ export default function Index() {
                         </View>
                       )}
                     </View>
+                    
                     {dayTasks.map(t => renderTodoItem(t, selectedDate))}
+                    
                     {upcomingTasks.length > 0 && (
                       <View style={styles.upcomingSection}>
                         <Text style={styles.upcomingMiniTitle}>今後の予定（未完了）</Text>
@@ -303,26 +325,19 @@ export default function Index() {
                 );
               }
 
-              const dayEvents = items.filter((item) => {
-                if (!item.isEvent) return false;
-                const itemTags = item.tags && item.tags.length > 0 ? item.tags : (item.tag ? [item.tag] : []);
-                if (activeTags.length === 0) return true;
-                return itemTags.some(tag => activeTags.includes(tagMaster[tag]?.layer || "生活"));
-              });
-
               return (
                 <View style={styles.listPadding}>
                   <Text style={styles.dateTitle}>{selectedDate} の予定</Text>
                   {dayEvents.map(item => {
                       const itemTags = item.tags && item.tags.length > 0 ? item.tags : (item.tag ? [item.tag] : []);
-                      const displayColors = itemTags.map(tag => {
+                      const displayColors = itemTags.map((tag:any) => {
                           const info = tagMaster[tag] || { layer: "生活", color: "#999" };
                           return activeTags.length === 0 ? (layerMaster[info.layer] || "#999") : info.color;
                       });
                       return (
                         <TouchableOpacity key={item.id} style={styles.listItem} onPress={() => openEditModal(item)}>
                           <View style={{ flexDirection: 'row', gap: 4, marginRight: 8, flexWrap: 'wrap', width: '25%' }}>
-                              {itemTags.map((tag, idx) => (
+                              {itemTags.map((tag:any, idx:any) => (
                                   <View key={idx} style={[styles.tagBadge, { backgroundColor: displayColors[idx] }]}>
                                       <Text style={styles.tagText}>{tag}</Text>
                                   </View>
@@ -352,20 +367,114 @@ export default function Index() {
                   <Ionicons name="settings-sharp" size={16} color="#1C1C1E" /><Text style={styles.settingsBtnLabel}>CONFIG</Text>
                 </TouchableOpacity>
               </View>
+
               <ScrollView style={styles.gridScrollArea} showsVerticalScrollIndicator={false}>
-                <View style={styles.sectionTitleRow}><Text style={styles.modalSectionLabel}>PRESETS</Text>{tempActiveTags.length > 0 && (<TouchableOpacity style={styles.savePresetQuickBtn} onPress={() => setPresetModalVisible(true)}><Ionicons name="add" size={12} color={currentSolidColor} /><Text style={[styles.savePresetQuickText, { color: currentSolidColor }]}>SAVE_CURRENT</Text></TouchableOpacity>)}</View>
-                <View style={styles.presetContainer}>{Object.keys(presets).map((pName) => { const isMatch = JSON.stringify(tempActiveTags.sort()) === JSON.stringify(presets[pName].sort()); return (<TouchableOpacity key={pName} style={[styles.presetBtn, isMatch && { backgroundColor: '#1C1C1E', borderColor: '#1C1C1E' }]} onPress={() => setTempActiveTags(presets[pName])}><Text style={[styles.presetBtnText, isMatch && { color: '#FFF' }]}>{pName.toUpperCase()}</Text></TouchableOpacity>); })}</View>
+                <View style={styles.sectionTitleRow}>
+                  <Text style={styles.modalSectionLabel}>PRESETS</Text>
+                </View>
+                
+                <View style={styles.presetContainer}>
+                  {Object.keys(presets).map((pName) => {
+                    const isMatch = JSON.stringify(tempActiveTags.sort()) === JSON.stringify(presets[pName].sort());
+                    return (
+                      <TouchableOpacity 
+                        key={pName} 
+                        style={[styles.presetBtn, isMatch && { backgroundColor: '#1C1C1E', borderColor: '#1C1C1E' }]} 
+                        onPress={() => setTempActiveTags(presets[pName])}
+                        onLongPress={() => {
+                          Alert.alert("削除", `プリセット「${pName}」を削除しますか？`, [
+                            { text: "キャンセル", style: "cancel" },
+                            { text: "削除", style: "destructive", onPress: () => deletePreset(pName) }
+                          ]);
+                        }}
+                      >
+                        <Text style={[styles.presetBtnText, isMatch && { color: '#FFF' }]}>{pName.toUpperCase()}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                  
+                  {/* 🌟 競合回避済みの「＋」追加ボタン */}
+                  {tempActiveTags.length > 0 && (
+                    <TouchableOpacity style={styles.addPresetBtn} onPress={handleOpenPresetModal}>
+                      <Ionicons name="add" size={16} color="#AEAEB2" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
                 <Text style={[styles.modalSectionLabel, { marginTop: 20 }]}>REGISTRY</Text>
-                <View style={styles.gridContainer}><TouchableOpacity style={[styles.gridCard, tempActiveTags.length === 0 ? { backgroundColor: '#1C1C1E', borderColor: '#1C1C1E' } : styles.gridCardGhost]} onPress={() => setTempActiveTags([])}><Ionicons name={tempActiveTags.length === 0 ? "checkmark-circle" : "apps-outline"} size={20} color={tempActiveTags.length === 0 ? "#FFF" : "#1C1C1E"} /><Text style={[styles.gridCardText, tempActiveTags.length === 0 && { color: "#FFF" }]}>すべて表示</Text></TouchableOpacity>{Object.keys(layerMaster).map((layer) => { const isSelected = tempActiveTags.includes(layer); return (<TouchableOpacity key={layer} style={[styles.gridCard, isSelected ? { backgroundColor: layerMaster[layer], borderColor: layerMaster[layer] } : [styles.gridCardGhost, { borderColor: layerMaster[layer] + '40' }]]} onPress={() => toggleTempTag(layer)}><Ionicons name={isSelected ? "checkmark-circle" : "ellipse-outline"} size={18} color={isSelected ? "#FFF" : layerMaster[layer]} /><Text style={[styles.gridCardText, isSelected && { color: "#FFF" }]}>{layer}</Text></TouchableOpacity>); })}</View>
+                <View style={styles.gridContainer}>
+                  <TouchableOpacity style={[styles.gridCard, tempActiveTags.length === 0 ? { backgroundColor: '#1C1C1E', borderColor: '#1C1C1E' } : styles.gridCardGhost]} onPress={() => setTempActiveTags([])}>
+                    <Ionicons name={tempActiveTags.length === 0 ? "checkmark-circle" : "apps-outline"} size={20} color={tempActiveTags.length === 0 ? "#FFF" : "#1C1C1E"} />
+                    <Text style={[styles.gridCardText, tempActiveTags.length === 0 && { color: "#FFF" }]}>すべて表示</Text>
+                  </TouchableOpacity>
+                  {Object.keys(layerMaster).map((layer) => {
+                    const isSelected = tempActiveTags.includes(layer);
+                    return (
+                      <TouchableOpacity key={layer} style={[styles.gridCard, isSelected ? { backgroundColor: layerMaster[layer], borderColor: layerMaster[layer] } : [styles.gridCardGhost, { borderColor: layerMaster[layer] + '40' }]]} onPress={() => toggleTempTag(layer)}>
+                        <Ionicons name={isSelected ? "checkmark-circle" : "ellipse-outline"} size={18} color={isSelected ? "#FFF" : layerMaster[layer]} />
+                        <Text style={[styles.gridCardText, isSelected && { color: "#FFF" }]}>{layer}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               </ScrollView>
-              <TouchableOpacity style={[styles.confirmBtn, { backgroundColor: currentSolidColor }]} onPress={applyFilters}><Text style={styles.confirmBtnText}>表示を確定する</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.confirmBtn, { backgroundColor: currentSolidColor }]} onPress={applyFilters}>
+                <Text style={styles.confirmBtnText}>表示を確定する</Text>
+              </TouchableOpacity>
             </View>
           </TouchableWithoutFeedback>
         </TouchableOpacity>
       </Modal>
 
+      {/* 🌟 プリセット名の入力モーダル */}
       <Modal visible={presetModalVisible} transparent={true} animationType="fade">
-        <View style={styles.namingOverlay}><View style={styles.namingContent}><Text style={styles.namingLabel}>SAVE_PRESET</Text><Text style={styles.namingTitle}>プリセット名の入力</Text><TextInput style={styles.namingInput} placeholder="PRESET_NAME..." placeholderTextColor="#AEAEB2" autoFocus={true} value={tempPresetName} onChangeText={setTempPresetName} /><View style={styles.namingActionRow}><TouchableOpacity style={styles.namingCancelBtn} onPress={() => { setPresetModalVisible(false); setTempPresetName(""); }}><Text style={styles.namingCancelText}>CANCEL</Text></TouchableOpacity><TouchableOpacity style={styles.namingConfirmBtn} onPress={confirmSavePreset}><Text style={styles.namingConfirmText}>SAVE</Text></TouchableOpacity></View></View></View>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+          style={{ flex: 1 }}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.namingOverlay}>
+              <TouchableWithoutFeedback>
+                <View style={styles.namingContent}>
+                  <Text style={styles.namingLabel}>SAVE_PRESET</Text>
+                  <Text style={styles.namingTitle}>プリセット名の入力</Text>
+                  
+                  <TextInput 
+                    style={styles.namingInput} 
+                    placeholder="PRESET_NAME..." 
+                    placeholderTextColor="#AEAEB2" 
+                    autoFocus={true} 
+                    value={tempPresetName} 
+                    onChangeText={setTempPresetName} 
+                  />
+                  
+                  <View style={styles.namingActionRow}>
+                    <TouchableOpacity 
+                      style={styles.namingCancelBtn} 
+                      onPress={() => { 
+                        setPresetModalVisible(false); 
+                        setTempPresetName(""); 
+                        Keyboard.dismiss(); // 🌟 閉じる時もキーボードをしまう
+                      }}
+                    >
+                      <Text style={styles.namingCancelText}>CANCEL</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={styles.namingConfirmBtn} 
+                      onPress={() => {
+                        confirmSavePreset();
+                        Keyboard.dismiss(); // 🌟 保存する時もキーボードをしまう
+                      }}
+                    >
+                      <Text style={styles.namingConfirmText}>SAVE</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
 
       <ScheduleModal visible={modalVisible} onClose={() => setModalVisible(false)} selectedDate={selectedDate} selectedItem={selectedItem} activeMode={activeMode} scheduleData={scheduleData} setScheduleData={setScheduleData} layerMaster={layerMaster} tagMaster={tagMaster} setTagMaster={setTagMaster} />
@@ -444,12 +553,11 @@ const styles = StyleSheet.create({
   presetContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
   presetBtn: { paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#F2F2F7', borderRadius: 10, borderWidth: 1, borderColor: '#F2F2F7' },
   presetBtnText: { fontSize: 10, fontWeight: '700', color: '#8E8E93' },
+  addPresetBtn: { width: 34, height: 34, borderRadius: 10, backgroundColor: '#F2F2F7', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#C7C7CC', borderStyle: 'dashed' },
   enhancedSettingsBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F2F2F7', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, gap: 6 },
   settingsBtnLabel: { fontSize: 10, fontWeight: '800', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
   sectionTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  savePresetQuickBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6, borderWidth: 1, borderColor: '#F2F2F7' },
-  savePresetQuickText: { fontSize: 9, fontWeight: '800', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
-
+  
   namingOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center' },
   namingContent: { width: '80%', backgroundColor: '#FFF', borderRadius: 20, padding: 24 },
   namingLabel: { fontSize: 9, fontWeight: "800", color: "#C7C7CC", letterSpacing: 1.5, marginBottom: 4, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
