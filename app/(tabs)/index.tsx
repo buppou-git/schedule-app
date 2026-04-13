@@ -51,6 +51,7 @@ interface ScheduleItem {
   endTime?: string;
 }
 
+import ConfigModal from "./components/ConfigModal";
 import LayerManagementModal from "./components/LayerManagementModal";
 import MoneyDashboard from "./components/MoneyDashboard";
 import ScheduleModal from "./components/ScheduleModal";
@@ -95,6 +96,10 @@ export default function Index() {
 
   //フラグを管理する
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  //設定画面を追加する
+  const [configModalVisible, setConfigModalVisible] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
 
   const openFilterModal = useCallback(() => {
     setTempActiveTags(activeTags);
@@ -153,7 +158,7 @@ export default function Index() {
 
   useEffect(() => {
     // 匿名ログイン（バックアップ用のIDを確保）
-    signInAnonymously(auth).catch((err) => console.error("Auth Error:", err));
+    signInAnonymously(auth).catch((err: any) => console.error("Auth Error:", err));
 
     // アプリの状態（表示/非表示）の変化を監視
     const subscription = AppState.addEventListener(
@@ -185,6 +190,7 @@ export default function Index() {
             });
 
             console.log("Auto-save: 完了！🚀");
+            setLastSyncedAt(new Date().toLocaleString('ja-JP'));
           } catch (error) {
             console.error("Auto-save Error:", error);
           }
@@ -458,28 +464,33 @@ export default function Index() {
     <SafeAreaView
       style={[styles.container, { backgroundColor: currentBgColor }]}
     >
-      <TouchableOpacity
-        style={[styles.header, { backgroundColor: currentBgColor }]}
-        onPress={openFilterModal}
-        activeOpacity={0.6}
-      >
-        <View style={styles.headerTitleContainer}>
+      <View style={[styles.header, { backgroundColor: currentBgColor, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
+        {/* 左側：カテゴリ選択（既存の機能） */}
+        <TouchableOpacity
+          style={styles.headerTitleContainer}
+          onPress={openFilterModal}
+          activeOpacity={0.6}
+        >
           <Text style={styles.headerPrefix}>INDEX / CATEGORY</Text>
           <View style={styles.headerMainRow}>
             <Text style={styles.headerText} numberOfLines={1}>
-              {activeTags.length === 0
-                ? "ALL_LAYERS"
-                : activeTags.join(", ").toUpperCase()}
+              {activeTags.length === 0 ? "ALL_LAYERS" : activeTags.join(", ").toUpperCase()}
             </Text>
-            <Ionicons
-              name="chevron-down-outline"
-              size={14}
-              color="#C7C7CC"
-              style={{ marginLeft: 6 }}
-            />
+            <Ionicons name="chevron-down-outline" size={14} color="#C7C7CC" style={{ marginLeft: 6 }} />
           </View>
-        </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
+
+        {/* 右側：設定ボタン（新設！） */}
+        <TouchableOpacity
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setConfigModalVisible(true);
+          }}
+          style={{ padding: 8 }}
+        >
+          <Ionicons name="settings-outline" size={24} color="#1C1C1E" />
+        </TouchableOpacity>
+      </View>
 
       <TabBar
         activeMode={activeMode}
@@ -807,13 +818,13 @@ export default function Index() {
                           styles.gridCard,
                           isSelected
                             ? {
-                                backgroundColor: layerMaster[layer],
-                                borderColor: layerMaster[layer],
-                              }
+                              backgroundColor: layerMaster[layer],
+                              borderColor: layerMaster[layer],
+                            }
                             : [
-                                styles.gridCardGhost,
-                                { borderColor: layerMaster[layer] + "40" },
-                              ],
+                              styles.gridCardGhost,
+                              { borderColor: layerMaster[layer] + "40" },
+                            ],
                         ]}
                         onPress={() => toggleTempTag(layer)}
                       >
@@ -934,6 +945,19 @@ export default function Index() {
         <Text style={styles.fabText}>＋</Text>
       </TouchableOpacity>
       <StatusBar style="auto" />
+
+      {/*設定画面のモーダル */}
+      <ConfigModal
+        visible={configModalVisible}
+        onClose={() => setConfigModalVisible(false)}
+        lastSyncedAt={lastSyncedAt} // 🌟 変数を渡すように修正
+        onRestore={() => {
+          // 🌟 ここは後で一緒に書きましょう！
+          console.log("復元処理を開始します");
+        }}
+      />
+
+
     </SafeAreaView>
   );
 }
