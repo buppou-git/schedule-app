@@ -158,7 +158,9 @@ export default function Index() {
 
   useEffect(() => {
     // 匿名ログイン（バックアップ用のIDを確保）
-    signInAnonymously(auth).catch((err: any) => console.error("Auth Error:", err));
+    signInAnonymously(auth).catch((err: any) =>
+      console.error("Auth Error:", err),
+    );
 
     // アプリの状態（表示/非表示）の変化を監視
     const subscription = AppState.addEventListener(
@@ -173,25 +175,22 @@ export default function Index() {
             console.log("Auto-save: クラウドへの保存を開始...");
 
             // 現在のローカルデータをすべて取得
-            const [schedule, layers, tags, pre] = await Promise.all([
-              AsyncStorage.getItem("myScheduleData"),
-              AsyncStorage.getItem("layerMasterData"),
-              AsyncStorage.getItem("tagMasterData"),
-              AsyncStorage.getItem("filterPresets"),
-            ]);
+            const dataToSave = JSON.parse(
+              JSON.stringify({
+                scheduleData,
+                layerMaster,
+                tagMaster,
+                presets,
+                activeTags,
+                lastSyncedAt: new Date().toISOString(),
+              }),
+            );
 
             // Firestoreの「users/自分のID」という場所に上書き保存
-            await setDoc(doc(db, "users", user.uid), {
-              scheduleData: scheduleData, // 直接 State を使う
-              layerMaster: layerMaster,
-              tagMaster: tagMaster,
-              presets: presets,
-              activeTags: activeTags, // 表示カテゴリも保存
-              lastSyncedAt: new Date().toISOString(),
-            });
+            await setDoc(doc(db, "users", user.uid), dataToSave);
 
             console.log("Auto-save: 完了！🚀");
-            setLastSyncedAt(new Date().toLocaleString('ja-JP'));
+            setLastSyncedAt(new Date().toLocaleString("ja-JP"));
           } catch (error) {
             console.error("Auto-save Error:", error);
           }
@@ -201,9 +200,6 @@ export default function Index() {
 
     return () => subscription.remove();
   }, [scheduleData, layerMaster, tagMaster, presets, activeTags]);
-  [];
-
-
 
   useEffect(() => {
     const loadData = async () => {
@@ -237,9 +233,15 @@ export default function Index() {
       try {
         // 予定データが存在する場合のみ上書き保存
         if (Object.keys(scheduleData).length > 0) {
-          await AsyncStorage.setItem("myScheduleData", JSON.stringify(scheduleData));
+          await AsyncStorage.setItem(
+            "myScheduleData",
+            JSON.stringify(scheduleData),
+          );
         }
-        await AsyncStorage.setItem("layerMasterData", JSON.stringify(layerMaster));
+        await AsyncStorage.setItem(
+          "layerMasterData",
+          JSON.stringify(layerMaster),
+        );
         await AsyncStorage.setItem("tagMasterData", JSON.stringify(tagMaster));
         await AsyncStorage.setItem("filterPresets", JSON.stringify(presets));
         await AsyncStorage.setItem("activeTags", JSON.stringify(activeTags));
@@ -249,7 +251,6 @@ export default function Index() {
     };
     syncToStorage();
   }, [scheduleData, layerMaster, tagMaster, presets, activeTags]);
-
 
   const markedDatesBase = useMemo(() => {
     const marked: any = {};
@@ -334,12 +335,14 @@ export default function Index() {
     setHasUnsavedChanges(true);
   };
 
-
   //データ復元用
   const handleRestore = async () => {
     const user = auth.currentUser;
     if (!user) {
-      Alert.alert("エラー", "ログイン状態が確認できません。一度アプリを再起動してください。");
+      Alert.alert(
+        "エラー",
+        "ログイン状態が確認できません。一度アプリを再起動してください。",
+      );
       return;
     }
 
@@ -354,11 +357,26 @@ export default function Index() {
 
         // 1. AsyncStorage（端末の保存領域）を更新
         await Promise.all([
-          AsyncStorage.setItem("myScheduleData", JSON.stringify(cloudData.scheduleData || {})),
-          AsyncStorage.setItem("layerMasterData", JSON.stringify(cloudData.layerMaster || {})),
-          AsyncStorage.setItem("tagMasterData", JSON.stringify(cloudData.tagMaster || {})),
-          AsyncStorage.setItem("filterPresets", JSON.stringify(cloudData.presets || {})),
-          AsyncStorage.setItem("activeTags", JSON.stringify(cloudData.activeTags || [])),
+          AsyncStorage.setItem(
+            "myScheduleData",
+            JSON.stringify(cloudData.scheduleData || {}),
+          ),
+          AsyncStorage.setItem(
+            "layerMasterData",
+            JSON.stringify(cloudData.layerMaster || {}),
+          ),
+          AsyncStorage.setItem(
+            "tagMasterData",
+            JSON.stringify(cloudData.tagMaster || {}),
+          ),
+          AsyncStorage.setItem(
+            "filterPresets",
+            JSON.stringify(cloudData.presets || {}),
+          ),
+          AsyncStorage.setItem(
+            "activeTags",
+            JSON.stringify(cloudData.activeTags || []),
+          ),
         ]);
 
         // 2. ReactのStateを更新して、画面表示を最新にする
@@ -370,13 +388,21 @@ export default function Index() {
 
         // 同期時刻も更新
         if (cloudData.lastSyncedAt) {
-          setLastSyncedAt(new Date(cloudData.lastSyncedAt).toLocaleString('ja-JP'));
+          setLastSyncedAt(
+            new Date(cloudData.lastSyncedAt).toLocaleString("ja-JP"),
+          );
         }
 
-        Alert.alert("復元完了", "クラウドから最新データを正常に読み込みました！🚀");
+        Alert.alert(
+          "復元完了",
+          "クラウドから最新データを正常に読み込みました！🚀",
+        );
         setConfigModalVisible(false);
       } else {
-        Alert.alert("データなし", "クラウド上にバックアップが見つかりませんでした。一度保存（ホームに戻る操作）を行ってください。");
+        Alert.alert(
+          "データなし",
+          "クラウド上にバックアップが見つかりませんでした。一度保存（ホームに戻る操作）を行ってください。",
+        );
       }
     } catch (error) {
       console.error("Restore Error:", error);
@@ -538,7 +564,17 @@ export default function Index() {
     <SafeAreaView
       style={[styles.container, { backgroundColor: currentBgColor }]}
     >
-      <View style={[styles.header, { backgroundColor: currentBgColor, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: currentBgColor,
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+          },
+        ]}
+      >
         {/* 左側：カテゴリ選択（既存の機能） */}
         <TouchableOpacity
           style={styles.headerTitleContainer}
@@ -548,9 +584,16 @@ export default function Index() {
           <Text style={styles.headerPrefix}>INDEX / CATEGORY</Text>
           <View style={styles.headerMainRow}>
             <Text style={styles.headerText} numberOfLines={1}>
-              {activeTags.length === 0 ? "ALL_LAYERS" : activeTags.join(", ").toUpperCase()}
+              {activeTags.length === 0
+                ? "ALL_LAYERS"
+                : activeTags.join(", ").toUpperCase()}
             </Text>
-            <Ionicons name="chevron-down-outline" size={14} color="#C7C7CC" style={{ marginLeft: 6 }} />
+            <Ionicons
+              name="chevron-down-outline"
+              size={14}
+              color="#C7C7CC"
+              style={{ marginLeft: 6 }}
+            />
           </View>
         </TouchableOpacity>
 
@@ -892,13 +935,13 @@ export default function Index() {
                           styles.gridCard,
                           isSelected
                             ? {
-                              backgroundColor: layerMaster[layer],
-                              borderColor: layerMaster[layer],
-                            }
+                                backgroundColor: layerMaster[layer],
+                                borderColor: layerMaster[layer],
+                              }
                             : [
-                              styles.gridCardGhost,
-                              { borderColor: layerMaster[layer] + "40" },
-                            ],
+                                styles.gridCardGhost,
+                                { borderColor: layerMaster[layer] + "40" },
+                              ],
                         ]}
                         onPress={() => toggleTempTag(layer)}
                       >
@@ -1027,8 +1070,6 @@ export default function Index() {
         lastSyncedAt={lastSyncedAt}
         onRestore={handleRestore}
       />
-
-
     </SafeAreaView>
   );
 }
