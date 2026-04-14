@@ -182,10 +182,11 @@ export default function Index() {
 
             // Firestoreの「users/自分のID」という場所に上書き保存
             await setDoc(doc(db, "users", user.uid), {
-              scheduleData: schedule ? JSON.parse(schedule) : {},
-              layerMaster: layers ? JSON.parse(layers) : {},
-              tagMaster: tags ? JSON.parse(tags) : {},
-              presets: pre ? JSON.parse(pre) : {},
+              scheduleData: scheduleData, // 直接 State を使う
+              layerMaster: layerMaster,
+              tagMaster: tagMaster,
+              presets: presets,
+              activeTags: activeTags, // 表示カテゴリも保存
               lastSyncedAt: new Date().toISOString(),
             });
 
@@ -199,7 +200,10 @@ export default function Index() {
     );
 
     return () => subscription.remove();
-  }, []);
+  }, [scheduleData, layerMaster, tagMaster, presets, activeTags]);
+  [];
+
+
 
   useEffect(() => {
     const loadData = async () => {
@@ -226,6 +230,26 @@ export default function Index() {
     };
     loadData();
   }, []);
+
+  // データが更新されたら即座に端末の AsyncStorage に書き込む見張り役
+  useEffect(() => {
+    const syncToStorage = async () => {
+      try {
+        // 予定データが存在する場合のみ上書き保存
+        if (Object.keys(scheduleData).length > 0) {
+          await AsyncStorage.setItem("myScheduleData", JSON.stringify(scheduleData));
+        }
+        await AsyncStorage.setItem("layerMasterData", JSON.stringify(layerMaster));
+        await AsyncStorage.setItem("tagMasterData", JSON.stringify(tagMaster));
+        await AsyncStorage.setItem("filterPresets", JSON.stringify(presets));
+        await AsyncStorage.setItem("activeTags", JSON.stringify(activeTags));
+      } catch (e) {
+        console.error("Storage Sync Error:", e);
+      }
+    };
+    syncToStorage();
+  }, [scheduleData, layerMaster, tagMaster, presets, activeTags]);
+
 
   const markedDatesBase = useMemo(() => {
     const marked: any = {};
@@ -308,6 +332,56 @@ export default function Index() {
       return newData;
     });
     setHasUnsavedChanges(true);
+  };
+
+
+  //データ復元用
+  const handleRestore = async () => {
+    const user = auth.currentUser;
+    if (!user) {
+      Alert.alert("エラー", "ログイン状態が確認できません。一度アプリを再起動してください。");
+      return;
+    }
+
+    try {
+      console.log("復元処理を開始...");
+      const { getDoc, doc } = await import("firebase/firestore"); // 動的インポート
+      const docRef = doc(db, "users", user.uid);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const cloudData = docSnap.data();
+
+        // 1. AsyncStorage（端末の保存領域）を更新
+        await Promise.all([
+          AsyncStorage.setItem("myScheduleData", JSON.stringify(cloudData.scheduleData || {})),
+          AsyncStorage.setItem("layerMasterData", JSON.stringify(cloudData.layerMaster || {})),
+          AsyncStorage.setItem("tagMasterData", JSON.stringify(cloudData.tagMaster || {})),
+          AsyncStorage.setItem("filterPresets", JSON.stringify(cloudData.presets || {})),
+          AsyncStorage.setItem("activeTags", JSON.stringify(cloudData.activeTags || [])),
+        ]);
+
+        // 2. ReactのStateを更新して、画面表示を最新にする
+        setScheduleData(cloudData.scheduleData || {});
+        setLayerMaster(cloudData.layerMaster || {});
+        setTagMaster(cloudData.tagMaster || {});
+        setPresets(cloudData.presets || {});
+        setActiveTags(cloudData.activeTags || []);
+
+        // 同期時刻も更新
+        if (cloudData.lastSyncedAt) {
+          setLastSyncedAt(new Date(cloudData.lastSyncedAt).toLocaleString('ja-JP'));
+        }
+
+        Alert.alert("復元完了", "クラウドから最新データを正常に読み込みました！🚀");
+        setConfigModalVisible(false);
+      } else {
+        Alert.alert("データなし", "クラウド上にバックアップが見つかりませんでした。一度保存（ホームに戻る操作）を行ってください。");
+      }
+    } catch (error) {
+      console.error("Restore Error:", error);
+      Alert.alert("エラー", "復元に失敗しました。通信環境を確認してください。");
+    }
   };
 
   // 🌟 処理落ち解消の切り札：リスト計算の完全キャッシュ化
@@ -950,11 +1024,8 @@ export default function Index() {
       <ConfigModal
         visible={configModalVisible}
         onClose={() => setConfigModalVisible(false)}
-        lastSyncedAt={lastSyncedAt} // 🌟 変数を渡すように修正
-        onRestore={() => {
-          // 🌟 ここは後で一緒に書きましょう！
-          console.log("復元処理を開始します");
-        }}
+        lastSyncedAt={lastSyncedAt}
+        onRestore={handleRestore}
       />
 
 
