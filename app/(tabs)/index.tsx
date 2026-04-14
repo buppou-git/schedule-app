@@ -47,6 +47,8 @@ interface ScheduleItem {
   recurringGroupId?: string;
   repeatType?: "daily" | "weekly" | "monthly";
   isAllDay?: boolean;
+  startDate?: string;
+  endDate?: string;
   startTime?: string;
   endTime?: string;
 }
@@ -93,11 +95,8 @@ export default function Index() {
   const [tempActiveTags, setTempActiveTags] = useState<string[]>([]);
 
   const calendarKey = useMemo(() => activeMode, [activeMode]);
-
-  //フラグを管理する
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
-  //設定画面を追加する
   const [configModalVisible, setConfigModalVisible] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
 
@@ -125,11 +124,10 @@ export default function Index() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }, [tempActiveTags]);
 
-  // 🌟 モーダル競合回避ロジック（＋ボタン用）
   const handleOpenPresetModal = () => {
-    setFilterModalVisible(false); // 先にフィルター画面を閉じる
+    setFilterModalVisible(false); 
     setTimeout(() => {
-      setPresetModalVisible(true); // 完全に閉じてから次を開く
+      setPresetModalVisible(true); 
     }, 400);
   };
 
@@ -141,7 +139,7 @@ export default function Index() {
 
     setHasUnsavedChanges(true);
 
-    setActiveTags(tempActiveTags); // 🌟 保存と同時にカレンダーにも即反映
+    setActiveTags(tempActiveTags); 
     setTempPresetName("");
     setPresetModalVisible(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -157,24 +155,19 @@ export default function Index() {
   };
 
   useEffect(() => {
-    // 匿名ログイン（バックアップ用のIDを確保）
     signInAnonymously(auth).catch((err: any) =>
       console.error("Auth Error:", err),
     );
 
-    // アプリの状態（表示/非表示）の変化を監視
     const subscription = AppState.addEventListener(
       "change",
       async (nextAppState) => {
-        // ユーザーがホーム画面に戻った（background）瞬間にセーブ！
         if (nextAppState === "background") {
           const user = auth.currentUser;
           if (!user) return;
 
           try {
             console.log("Auto-save: クラウドへの保存を開始...");
-
-            // 現在のローカルデータをすべて取得
             const dataToSave = JSON.parse(
               JSON.stringify({
                 scheduleData,
@@ -186,9 +179,7 @@ export default function Index() {
               }),
             );
 
-            // Firestoreの「users/自分のID」という場所に上書き保存
             await setDoc(doc(db, "users", user.uid), dataToSave);
-
             console.log("Auto-save: 完了！🚀");
             setLastSyncedAt(new Date().toLocaleString("ja-JP"));
           } catch (error) {
@@ -227,11 +218,9 @@ export default function Index() {
     loadData();
   }, []);
 
-  // データが更新されたら即座に端末の AsyncStorage に書き込む見張り役
   useEffect(() => {
     const syncToStorage = async () => {
       try {
-        // 予定データが存在する場合のみ上書き保存
         if (Object.keys(scheduleData).length > 0) {
           await AsyncStorage.setItem(
             "myScheduleData",
@@ -272,11 +261,14 @@ export default function Index() {
               ? [item.tag]
               : [];
         itemTags.forEach((tag) => {
-          const info = tagMaster[tag] || { layer: "生活", color: "#999" };
+          const info = tagMaster[tag] || {
+            layer: tag,
+            color: layerMaster[tag] || "#999"
+          };
+          const isAllLayers = activeTags.length === 0;
           if (!isAllLayers && !activeTagsSet.has(info.layer)) return;
-          dayDots.add(
-            isAllLayers ? layerMaster[info.layer] || "#999" : info.color,
-          );
+
+          dayDots.add(info.color);
         });
       });
       if (dayDots.size > 0)
@@ -314,28 +306,44 @@ export default function Index() {
     [activeTags, layerMaster],
   );
 
+  const currentHeaderTitle = useMemo(() => {
+    if (activeTags.length === 0) return "ALL_LAYERS";
+
+    const sortedActive = [...activeTags].sort().join(",");
+    for (const [pName, pTags] of Object.entries(presets)) {
+      if ([...pTags].sort().join(",") === sortedActive) {
+        return pName.toUpperCase(); 
+      }
+    }
+    return activeTags.join(", ").toUpperCase();
+  }, [activeTags, presets]);
+
   const handleOpenNewModal = () => {
     setSelectedItem(null);
     setModalVisible(true);
   };
+  
   const openEditModal = (item: ScheduleItem) => {
     setSelectedItem(item);
     setModalVisible(true);
   };
+
   const toggleTodo = (date: string, id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setScheduleData((prev) => {
       const newData = { ...prev };
-      if (newData[date])
-        newData[date] = newData[date].map((i) =>
-          i.id === id ? { ...i, isDone: !i.isDone } : i,
-        );
+      
+      const currentStatus = newData[date]?.find(i => i.id === id)?.isDone;
+      const nextStatus = !currentStatus;
+
+      Object.keys(newData).forEach(d => {
+          newData[d] = newData[d].map(i => i.id === id ? { ...i, isDone: nextStatus } : i);
+      });
       return newData;
     });
     setHasUnsavedChanges(true);
   };
 
-  //データ復元用
   const handleRestore = async () => {
     const user = auth.currentUser;
     if (!user) {
@@ -348,14 +356,13 @@ export default function Index() {
 
     try {
       console.log("復元処理を開始...");
-      const { getDoc, doc } = await import("firebase/firestore"); // 動的インポート
+      const { getDoc, doc } = await import("firebase/firestore"); 
       const docRef = doc(db, "users", user.uid);
       const docSnap = await getDoc(docRef);
 
       if (docSnap.exists()) {
         const cloudData = docSnap.data();
 
-        // 1. AsyncStorage（端末の保存領域）を更新
         await Promise.all([
           AsyncStorage.setItem(
             "myScheduleData",
@@ -379,14 +386,12 @@ export default function Index() {
           ),
         ]);
 
-        // 2. ReactのStateを更新して、画面表示を最新にする
         setScheduleData(cloudData.scheduleData || {});
         setLayerMaster(cloudData.layerMaster || {});
         setTagMaster(cloudData.tagMaster || {});
         setPresets(cloudData.presets || {});
         setActiveTags(cloudData.activeTags || []);
 
-        // 同期時刻も更新
         if (cloudData.lastSyncedAt) {
           setLastSyncedAt(
             new Date(cloudData.lastSyncedAt).toLocaleString("ja-JP"),
@@ -410,7 +415,31 @@ export default function Index() {
     }
   };
 
-  // 🌟 処理落ち解消の切り札：リスト計算の完全キャッシュ化
+  // 🌟 詳細な期間表示のためのヘルパー関数
+  const formatEventTime = (item: ScheduleItem) => {
+    if (!item.startDate || !item.endDate) {
+      // 過去データ用のフォールバック
+      if (item.isAllDay) return "終日";
+      if (item.startTime) return `${item.startTime}${item.endTime ? ` - ${item.endTime}` : ""}`;
+      return "";
+    }
+
+    const sDateObj = new Date(item.startDate);
+    const eDateObj = new Date(item.endDate);
+    const isSameDay = sDateObj.getTime() === eDateObj.getTime();
+
+    if (item.isAllDay) {
+      if (isSameDay) return "終日";
+      return `${sDateObj.getMonth() + 1}/${sDateObj.getDate()} 〜 ${eDateObj.getMonth() + 1}/${eDateObj.getDate()} (終日)`;
+    } else {
+      if (isSameDay) {
+        return `${item.startTime}${item.endTime ? ` - ${item.endTime}` : ""}`;
+      } else {
+        return `${sDateObj.getMonth() + 1}/${sDateObj.getDate()} ${item.startTime || ""} 〜 ${eDateObj.getMonth() + 1}/${eDateObj.getDate()} ${item.endTime || ""}`;
+      }
+    }
+  };
+
   const { dayTasks, upcomingTasks, dayEvents } = useMemo(() => {
     const items = scheduleData[selectedDate] || [];
     const isAllLayers = activeTags.length === 0;
@@ -428,9 +457,10 @@ export default function Index() {
             : [];
       const matchLayer =
         isAllLayers ||
-        itemTags.some((tag) =>
-          activeTagsSet.has(tagMaster[tag]?.layer || "生活"),
-        );
+        itemTags.some((tag) => {
+          const parentLayer = tagMaster[tag]?.layer || tag;
+          return activeTagsSet.has(parentLayer);
+        });
       if (matchLayer) {
         if (item.isTodo) dTasks.push(item);
         if (item.isEvent) dEvents.push(item);
@@ -438,11 +468,17 @@ export default function Index() {
     });
 
     const uTasks: any[] = [];
+    // 🌟 重複排除用のSet
+    const dayTaskIds = new Set(dTasks.map(t => t.id));
+    const addedUpcomingIds = new Set<string>();
+
     if (activeMode === "todo") {
-      Object.keys(scheduleData).forEach((date) => {
+      const sortedDates = Object.keys(scheduleData).sort();
+      sortedDates.forEach((date) => {
         if (date > selectedDate) {
           scheduleData[date].forEach((task) => {
-            if (task.isTodo && !task.isDone) {
+            // 🌟 修正：すでにdayTasksにあるか、upcomingに追加済みのIDはスキップ！
+            if (task.isTodo && !task.isDone && !dayTaskIds.has(task.id) && !addedUpcomingIds.has(task.id)) {
               const itemTags =
                 task.tags && task.tags.length > 0
                   ? task.tags
@@ -451,17 +487,18 @@ export default function Index() {
                     : [];
               if (
                 isAllLayers ||
-                itemTags.some((tag) =>
-                  activeTagsSet.has(tagMaster[tag]?.layer || "生活"),
-                )
+                itemTags.some((tag) => {
+                  const parentLayer = tagMaster[tag]?.layer || tag;
+                  return activeTagsSet.has(parentLayer);
+                })
               ) {
                 uTasks.push({ ...task, date });
+                addedUpcomingIds.add(task.id);
               }
             }
           });
         }
       });
-      uTasks.sort((a, b) => a.date.localeCompare(b.date)); // 最後に1回だけソート
     }
 
     return { dayTasks: dTasks, upcomingTasks: uTasks, dayEvents: dEvents };
@@ -475,12 +512,22 @@ export default function Index() {
           ? [item.tag]
           : [];
     const displayColors = itemTags.map((tag: string) => {
-      const info = tagMaster[tag] || { layer: "生活", color: "#999" };
-      return activeTags.length === 0
-        ? layerMaster[info.layer] || "#999"
-        : info.color;
+      const color = tagMaster[tag]?.color || layerMaster[tag] || "#999";
+      return color;
     });
     const uniqueColors = Array.from(new Set(displayColors));
+    
+    const isPeriodTask = item.endDate && item.startDate !== item.endDate;
+    let daysLeft = null;
+    let isFinalDay = false;
+    
+    if (isPeriodTask && item.endDate) {
+      const targetD = new Date(selectedDate); // 🌟 今表示している日を基準に計算
+      const endD = new Date(item.endDate);
+      const diffTime = endD.getTime() - targetD.getTime();
+      daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      isFinalDay = daysLeft === 0;
+    }
 
     return (
       <TouchableOpacity
@@ -530,20 +577,26 @@ export default function Index() {
               ))}
             </ScrollView>
           </View>
+          
           <View style={styles.todoSubRow}>
-            {!item.isAllDay && item.startTime ? (
-              <View style={styles.todoTimeRow}>
-                <Ionicons name="time-outline" size={10} color="#8E8E93" />
-                <Text style={styles.todoTimeText}>
-                  {item.startTime}
-                  {item.endTime ? ` - ${item.endTime}` : ""}
-                </Text>
+            {isFinalDay && !item.isDone ? (
+              <View style={styles.deadlineBadgeUrgent}>
+                <Ionicons name="flame" size={10} color="#FFF" style={{ marginRight: 2 }}/>
+                <Text style={styles.deadlineBadgeTextUrgent}>TODAY: 最終日!</Text>
               </View>
-            ) : itemDate !== selectedDate ? (
-              <Text style={styles.todoTimeText}>
-                📅 {itemDate.split("-")[1]}/{itemDate.split("-")[2]}
-              </Text>
+            ) : daysLeft !== null && daysLeft > 0 && !item.isDone ? (
+              <View style={styles.deadlineBadgeSafe}>
+                <Ionicons name="leaf-outline" size={10} color="#34C759" style={{ marginRight: 2 }}/>
+                <Text style={styles.deadlineBadgeTextSafe}>残り {daysLeft} 日</Text>
+              </View>
             ) : null}
+            
+            <View style={styles.todoTimeRow}>
+              <Ionicons name="time-outline" size={10} color="#8E8E93" />
+              <Text style={styles.todoTimeText}>
+                {formatEventTime(item)} 
+              </Text>
+            </View>
           </View>
         </View>
         <TouchableOpacity
@@ -575,7 +628,6 @@ export default function Index() {
           },
         ]}
       >
-        {/* 左側：カテゴリ選択（既存の機能） */}
         <TouchableOpacity
           style={styles.headerTitleContainer}
           onPress={openFilterModal}
@@ -584,9 +636,7 @@ export default function Index() {
           <Text style={styles.headerPrefix}>INDEX / CATEGORY</Text>
           <View style={styles.headerMainRow}>
             <Text style={styles.headerText} numberOfLines={1}>
-              {activeTags.length === 0
-                ? "ALL_LAYERS"
-                : activeTags.join(", ").toUpperCase()}
+              {currentHeaderTitle}
             </Text>
             <Ionicons
               name="chevron-down-outline"
@@ -597,7 +647,6 @@ export default function Index() {
           </View>
         </TouchableOpacity>
 
-        {/* 右側：設定ボタン（新設！） */}
         <TouchableOpacity
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -619,9 +668,15 @@ export default function Index() {
         <View style={styles.calendarArea}>
           {activeMode === "money" ? (
             <View style={styles.weekCalendarWrapper}>
-              <Text style={styles.monthLabel}>
-                {parseInt(selectedDate.split("-")[1])}
-              </Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingRight: 20 }}>
+                <Text style={styles.monthLabel}>
+                  {parseInt(selectedDate.split("-")[1])}月
+                </Text>
+                {/* 🌟 ＋ボタンをここに移動！ */}
+                <TouchableOpacity onPress={handleOpenNewModal}>
+                  <Ionicons name="add-circle" size={30} color={currentSolidColor} />
+                </TouchableOpacity>
+              </View>
               <CalendarProvider
                 date={selectedDate}
                 onDateChanged={setSelectedDate}
@@ -642,12 +697,14 @@ export default function Index() {
               key={calendarKey}
               markingType={"multi-dot"}
               renderHeader={(date) => (
-                <View style={styles.monthHeaderContainer}>
-                  <Text
-                    style={[styles.monthformat, { color: currentSolidColor }]}
-                  >
-                    {date.getMonth() + 1}
+                <View style={[styles.monthHeaderContainer, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingRight: 15 }]}>
+                  <Text style={[styles.monthformat, { color: currentSolidColor }]}>
+                    {date.getMonth() + 1}月
                   </Text>
+                  {/* 🌟 ＋ボタンをここに移動！ */}
+                  <TouchableOpacity onPress={handleOpenNewModal}>
+                     <Ionicons name="add-circle" size={30} color={currentSolidColor} />
+                  </TouchableOpacity>
                 </View>
               )}
               horizontal
@@ -749,9 +806,10 @@ export default function Index() {
                           : [];
                     const displayColors = itemTags.map((tag: any) => {
                       const info = tagMaster[tag] || {
-                        layer: "生活",
-                        color: "#999",
+                        layer: tag,
+                        color: layerMaster[tag] || "#999",
                       };
+
                       return activeTags.length === 0
                         ? layerMaster[info.layer] || "#999"
                         : info.color;
@@ -785,12 +843,10 @@ export default function Index() {
                         </View>
                         <View style={styles.itemMain}>
                           <Text style={styles.itemTitle}>{item.title}</Text>
-                          {!item.isAllDay && item.startTime && (
-                            <Text style={styles.timeTextSmall}>
-                              {item.startTime}
-                              {item.endTime ? ` - ${item.endTime}` : ""}
-                            </Text>
-                          )}
+                          {/* 🌟 カレンダー上でも詳細な時間を表示！ */}
+                          <Text style={styles.timeTextSmall}>
+                            {formatEventTime(item)}
+                          </Text>
                         </View>
                       </TouchableOpacity>
                     );
@@ -884,7 +940,6 @@ export default function Index() {
                     );
                   })}
 
-                  {/* 🌟 競合回避済みの「＋」追加ボタン */}
                   {tempActiveTags.length > 0 && (
                     <TouchableOpacity
                       style={styles.addPresetBtn}
@@ -935,13 +990,13 @@ export default function Index() {
                           styles.gridCard,
                           isSelected
                             ? {
-                                backgroundColor: layerMaster[layer],
-                                borderColor: layerMaster[layer],
-                              }
+                              backgroundColor: layerMaster[layer],
+                              borderColor: layerMaster[layer],
+                            }
                             : [
-                                styles.gridCardGhost,
-                                { borderColor: layerMaster[layer] + "40" },
-                              ],
+                              styles.gridCardGhost,
+                              { borderColor: layerMaster[layer] + "40" },
+                            ],
                         ]}
                         onPress={() => toggleTempTag(layer)}
                       >
@@ -979,7 +1034,6 @@ export default function Index() {
         </TouchableOpacity>
       </Modal>
 
-      {/* 🌟 プリセット名の入力モーダル */}
       <Modal
         visible={presetModalVisible}
         transparent={true}
@@ -1011,7 +1065,7 @@ export default function Index() {
                       onPress={() => {
                         setPresetModalVisible(false);
                         setTempPresetName("");
-                        Keyboard.dismiss(); // 🌟 閉じる時もキーボードをしまう
+                        Keyboard.dismiss(); 
                       }}
                     >
                       <Text style={styles.namingCancelText}>CANCEL</Text>
@@ -1021,7 +1075,7 @@ export default function Index() {
                       style={styles.namingConfirmBtn}
                       onPress={() => {
                         confirmSavePreset();
-                        Keyboard.dismiss(); // 🌟 保存する時もキーボードをしまう
+                        Keyboard.dismiss(); 
                       }}
                     >
                       <Text style={styles.namingConfirmText}>SAVE</Text>
@@ -1055,15 +1109,8 @@ export default function Index() {
         setHasUnsavedChanges={setHasUnsavedChanges}
       />
 
-      <TouchableOpacity
-        style={[styles.fab, { backgroundColor: currentSolidColor }]}
-        onPress={handleOpenNewModal}
-      >
-        <Text style={styles.fabText}>＋</Text>
-      </TouchableOpacity>
       <StatusBar style="auto" />
 
-      {/*設定画面のモーダル */}
       <ConfigModal
         visible={configModalVisible}
         onClose={() => setConfigModalVisible(false)}
@@ -1119,18 +1166,6 @@ const styles = StyleSheet.create({
     paddingBottom: 5,
     fontWeight: "bold",
   },
-  fab: {
-    position: "absolute",
-    right: 20,
-    bottom: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: "center",
-    alignItems: "center",
-    elevation: 5,
-  },
-  fabText: { fontSize: 28, color: "#fff" },
 
   todoRoot: { paddingHorizontal: 5 },
   modernHeader: { marginBottom: 20, marginTop: 5 },
@@ -1207,7 +1242,7 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
   },
   miniTagText: { fontSize: 8, fontWeight: "bold" },
-  todoSubRow: { flexDirection: "row", alignItems: "center", marginTop: 4 },
+  todoSubRow: { flexDirection: "row", alignItems: "center", marginTop: 4, flexWrap: 'wrap', gap: 6 },
   todoTimeRow: { flexDirection: "row", alignItems: "center", gap: 2 },
   todoTimeText: { fontSize: 10, color: "#8E8E93", fontWeight: "500" },
   checkButton: {
@@ -1215,6 +1250,40 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     justifyContent: "center",
     alignItems: "center",
+  },
+  
+  deadlineBadgeUrgent: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FF3B30",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    shadowColor: "#FF3B30",
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  deadlineBadgeTextUrgent: {
+    color: "#FFF",
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+  deadlineBadgeSafe: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#E5F9E7",
+    borderWidth: 1,
+    borderColor: "#34C759",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  deadlineBadgeTextSafe: {
+    color: "#34C759",
+    fontSize: 9,
+    fontWeight: "700",
   },
 
   listItem: {
