@@ -3,17 +3,17 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import React, { useEffect, useState } from "react";
 import {
-    Alert,
-    Keyboard,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+  Alert,
+  Keyboard,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native";
 
 interface SubTask {
@@ -136,6 +136,29 @@ export default function ScheduleModal({
   const [subTasks, setSubTasks] = useState<SubTask[]>([]);
 
   const uiThemeColor = layerMaster[selectedLayer] || "#007AFF";
+
+  //辞書機能の実装
+  const titleHistory = useMemo(() => {
+    const titles = new Set<string>();
+    Object.values(scheduleData).forEach((dayItems: any) => {
+      dayItems.forEach((item: any) => {
+        if (item.title) titles.add(item.title);
+      });
+    });
+    return Array.from(titles);
+  }, [scheduleData]);
+
+  const suggestions = useMemo(() => {
+    const inputNorm = toHiragana(inputText.trim()); // 🌟 title ではなく inputText を使う
+    if (!inputNorm) return [];
+
+    return titleHistory
+      .filter((h) => {
+        const historyNorm = toHiragana(h);
+        return historyNorm.includes(inputNorm) && h !== inputText;
+      })
+      .slice(0, 5);
+  }, [inputText, titleHistory]);
 
   useEffect(() => {
     if (visible) {
@@ -264,6 +287,16 @@ export default function ScheduleModal({
     }
 
     const newData = { ...scheduleData };
+
+    //ひらがなとカタカナを変換して辞書機能の手助け
+    const toHiragana = (str: string) => {
+      return str
+        .replace(/[\u30a1-\u30f6]/g, (match) => {
+          const chr = match.charCodeAt(0) - 0x60;
+          return String.fromCharCode(chr);
+        })
+        .toLowerCase();
+    };
 
     // 🌟 修正：マルチレイヤー互換のために tags 配列も保存
     const itemData = {
@@ -398,7 +431,6 @@ export default function ScheduleModal({
                 </Text>
                 <Text style={styles.dateBadge}>{selectedDate}</Text>
               </View>
-
               <TextInput
                 style={styles.mainInput}
                 placeholder="予定のタイトル"
@@ -406,7 +438,37 @@ export default function ScheduleModal({
                 value={inputText}
                 onChangeText={setInputText}
               />
-
+              //予測辞書
+              {suggestions.length > 0 && (
+                <View style={styles.suggestionWrapper}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    {suggestions.map((suggestion: any, index: any) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={styles.suggestionBadge}
+                        onPress={() => {
+                          Haptics.impactAsync(
+                            Haptics.ImpactFeedbackStyle.Light,
+                          );
+                          setInputText(suggestion); // 🌟 タップでタイトルを上書き
+                        }}
+                      >
+                        <Ionicons
+                          name="time-outline"
+                          size={12}
+                          color="#8E8E93"
+                          style={{ marginRight: 4 }}
+                        />
+                        <Text style={styles.suggestionText}>{suggestion}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
               <View style={styles.timeSection}>
                 <View style={styles.switchRow}>
                   <View style={styles.iconLabel}>
@@ -456,7 +518,6 @@ export default function ScheduleModal({
                   </View>
                 )}
               </View>
-
               <Text style={styles.label}>カレンダーの種類</Text>
               <View style={styles.layerContainer}>
                 {Object.keys(layerMaster).map((layer) => (
@@ -481,7 +542,6 @@ export default function ScheduleModal({
                   </TouchableOpacity>
                 ))}
               </View>
-
               <View style={styles.tagSection}>
                 <Text style={styles.label}>
                   属性（＋で新規作成 / 長押しで編集）
@@ -595,7 +655,6 @@ export default function ScheduleModal({
                   </View>
                 )}
               </View>
-
               <View
                 style={[
                   styles.optionSection,
@@ -1052,7 +1111,6 @@ export default function ScheduleModal({
                   </View>
                 )}
               </View>
-
               <View style={styles.actionButtons}>
                 <TouchableOpacity onPress={onClose} style={styles.cancelBtn}>
                   <Text style={{ color: "#999" }}>キャンセル</Text>
@@ -1310,4 +1368,25 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   microChipText: { fontSize: 10, color: "#666", fontWeight: "bold" },
+  suggestionWrapper: {
+    marginTop: -5,
+    marginBottom: 15,
+    height: 36,
+  },
+  suggestionBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F2F2F7",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: "#E5E5EA",
+  },
+  suggestionText: {
+    fontSize: 13,
+    color: "#1C1C1E",
+    fontWeight: "600",
+  },
 });
