@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Slider from "@react-native-community/slider";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useMemo, useState } from "react";
+//fadfa
 import {
   Alert,
   Dimensions,
