@@ -87,6 +87,9 @@ export default function Index() {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ScheduleItem | null>(null);
   const [activeMode, setActiveMode] = useState("calendar");
+  // 🌟 追加：家計簿画面の「日別詳細 / 予算管理」のモードを親(index)で管理する
+  const [isMoneySummaryMode, setIsMoneySummaryMode] = useState(false);
+
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [layerModalVisible, setLayerModalVisible] = useState(false);
@@ -125,9 +128,9 @@ export default function Index() {
   }, [tempActiveTags]);
 
   const handleOpenPresetModal = () => {
-    setFilterModalVisible(false); 
+    setFilterModalVisible(false);
     setTimeout(() => {
-      setPresetModalVisible(true); 
+      setPresetModalVisible(true);
     }, 400);
   };
 
@@ -139,7 +142,7 @@ export default function Index() {
 
     setHasUnsavedChanges(true);
 
-    setActiveTags(tempActiveTags); 
+    setActiveTags(tempActiveTags);
     setTempPresetName("");
     setPresetModalVisible(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -263,7 +266,7 @@ export default function Index() {
         itemTags.forEach((tag) => {
           const info = tagMaster[tag] || {
             layer: tag,
-            color: layerMaster[tag] || "#999"
+            color: layerMaster[tag] || "#999",
           };
           const isAllLayers = activeTags.length === 0;
           if (!isAllLayers && !activeTagsSet.has(info.layer)) return;
@@ -312,7 +315,7 @@ export default function Index() {
     const sortedActive = [...activeTags].sort().join(",");
     for (const [pName, pTags] of Object.entries(presets)) {
       if ([...pTags].sort().join(",") === sortedActive) {
-        return pName.toUpperCase(); 
+        return pName.toUpperCase();
       }
     }
     return activeTags.join(", ").toUpperCase();
@@ -322,7 +325,7 @@ export default function Index() {
     setSelectedItem(null);
     setModalVisible(true);
   };
-  
+
   const openEditModal = (item: ScheduleItem) => {
     setSelectedItem(item);
     setModalVisible(true);
@@ -332,12 +335,14 @@ export default function Index() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setScheduleData((prev) => {
       const newData = { ...prev };
-      
-      const currentStatus = newData[date]?.find(i => i.id === id)?.isDone;
+
+      const currentStatus = newData[date]?.find((i) => i.id === id)?.isDone;
       const nextStatus = !currentStatus;
 
-      Object.keys(newData).forEach(d => {
-          newData[d] = newData[d].map(i => i.id === id ? { ...i, isDone: nextStatus } : i);
+      Object.keys(newData).forEach((d) => {
+        newData[d] = newData[d].map((i) =>
+          i.id === id ? { ...i, isDone: nextStatus } : i,
+        );
       });
       return newData;
     });
@@ -356,7 +361,7 @@ export default function Index() {
 
     try {
       console.log("復元処理を開始...");
-      const { getDoc, doc } = await import("firebase/firestore"); 
+      const { getDoc, doc } = await import("firebase/firestore");
       const docRef = doc(db, "users", user.uid);
       const docSnap = await getDoc(docRef);
 
@@ -415,12 +420,11 @@ export default function Index() {
     }
   };
 
-  // 🌟 詳細な期間表示のためのヘルパー関数
   const formatEventTime = (item: ScheduleItem) => {
     if (!item.startDate || !item.endDate) {
-      // 過去データ用のフォールバック
       if (item.isAllDay) return "終日";
-      if (item.startTime) return `${item.startTime}${item.endTime ? ` - ${item.endTime}` : ""}`;
+      if (item.startTime)
+        return `${item.startTime}${item.endTime ? ` - ${item.endTime}` : ""}`;
       return "";
     }
 
@@ -468,8 +472,7 @@ export default function Index() {
     });
 
     const uTasks: any[] = [];
-    // 🌟 重複排除用のSet
-    const dayTaskIds = new Set(dTasks.map(t => t.id));
+    const dayTaskIds = new Set(dTasks.map((t) => t.id));
     const addedUpcomingIds = new Set<string>();
 
     if (activeMode === "todo") {
@@ -477,8 +480,12 @@ export default function Index() {
       sortedDates.forEach((date) => {
         if (date > selectedDate) {
           scheduleData[date].forEach((task) => {
-            // 🌟 修正：すでにdayTasksにあるか、upcomingに追加済みのIDはスキップ！
-            if (task.isTodo && !task.isDone && !dayTaskIds.has(task.id) && !addedUpcomingIds.has(task.id)) {
+            if (
+              task.isTodo &&
+              !task.isDone &&
+              !dayTaskIds.has(task.id) &&
+              !addedUpcomingIds.has(task.id)
+            ) {
               const itemTags =
                 task.tags && task.tags.length > 0
                   ? task.tags
@@ -516,13 +523,13 @@ export default function Index() {
       return color;
     });
     const uniqueColors = Array.from(new Set(displayColors));
-    
+
     const isPeriodTask = item.endDate && item.startDate !== item.endDate;
     let daysLeft = null;
     let isFinalDay = false;
-    
+
     if (isPeriodTask && item.endDate) {
-      const targetD = new Date(selectedDate); // 🌟 今表示している日を基準に計算
+      const targetD = new Date(selectedDate);
       const endD = new Date(item.endDate);
       const diffTime = endD.getTime() - targetD.getTime();
       daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -577,25 +584,37 @@ export default function Index() {
               ))}
             </ScrollView>
           </View>
-          
+
           <View style={styles.todoSubRow}>
             {isFinalDay && !item.isDone ? (
               <View style={styles.deadlineBadgeUrgent}>
-                <Ionicons name="flame" size={10} color="#FFF" style={{ marginRight: 2 }}/>
-                <Text style={styles.deadlineBadgeTextUrgent}>TODAY: 最終日!</Text>
+                <Ionicons
+                  name="flame"
+                  size={10}
+                  color="#FFF"
+                  style={{ marginRight: 2 }}
+                />
+                <Text style={styles.deadlineBadgeTextUrgent}>
+                  TODAY: 最終日!
+                </Text>
               </View>
             ) : daysLeft !== null && daysLeft > 0 && !item.isDone ? (
               <View style={styles.deadlineBadgeSafe}>
-                <Ionicons name="leaf-outline" size={10} color="#34C759" style={{ marginRight: 2 }}/>
-                <Text style={styles.deadlineBadgeTextSafe}>残り {daysLeft} 日</Text>
+                <Ionicons
+                  name="leaf-outline"
+                  size={10}
+                  color="#34C759"
+                  style={{ marginRight: 2 }}
+                />
+                <Text style={styles.deadlineBadgeTextSafe}>
+                  残り {daysLeft} 日
+                </Text>
               </View>
             ) : null}
-            
+
             <View style={styles.todoTimeRow}>
               <Ionicons name="time-outline" size={10} color="#8E8E93" />
-              <Text style={styles.todoTimeText}>
-                {formatEventTime(item)} 
-              </Text>
+              <Text style={styles.todoTimeText}>{formatEventTime(item)}</Text>
             </View>
           </View>
         </View>
@@ -667,43 +686,114 @@ export default function Index() {
       <View style={styles.mainContent}>
         <View style={styles.calendarArea}>
           {activeMode === "money" ? (
-            <View style={styles.weekCalendarWrapper}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingRight: 20 }}>
-                <Text style={styles.monthLabel}>
-                  {parseInt(selectedDate.split("-")[1])}月
-                </Text>
-                {/* 🌟 ＋ボタンをここに移動！ */}
-                <TouchableOpacity onPress={handleOpenNewModal}>
-                  <Ionicons name="add-circle" size={30} color={currentSolidColor} />
+            <>
+              {/* 🌟 1. カレンダーの上にタブを配置！ */}
+              <View
+                style={[
+                  styles.toggleContainer,
+                  { marginHorizontal: 15, marginTop: 10 },
+                ]}
+              >
+                <TouchableOpacity
+                  style={[
+                    styles.toggleBtn,
+                    !isMoneySummaryMode && styles.toggleActive,
+                  ]}
+                  onPress={() => setIsMoneySummaryMode(false)}
+                >
+                  <View style={styles.toggleItem}>
+                    <Ionicons
+                      name="list"
+                      size={16}
+                      color={!isMoneySummaryMode ? "#1C1C1E" : "#8E8E93"}
+                    />
+                    <Text style={styles.toggleText}>日別詳細</Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.toggleBtn,
+                    isMoneySummaryMode && styles.toggleActive,
+                  ]}
+                  onPress={() => setIsMoneySummaryMode(true)}
+                >
+                  <View style={styles.toggleItem}>
+                    <Ionicons
+                      name="pie-chart"
+                      size={15}
+                      color={isMoneySummaryMode ? "#1C1C1E" : "#8E8E93"}
+                    />
+                    <Text style={styles.toggleText}>予算管理</Text>
+                  </View>
                 </TouchableOpacity>
               </View>
-              <CalendarProvider
-                date={selectedDate}
-                onDateChanged={setSelectedDate}
-              >
-                <WeekCalendar
-                  firstDay={1}
-                  markedDates={currentMarkedDates}
-                  theme={{
-                    calendarBackground: "transparent",
-                    todayTextColor: currentSolidColor,
-                    selectedDayBackgroundColor: currentSolidColor,
-                  }}
-                />
-              </CalendarProvider>
-            </View>
+
+              {/* 🌟 2. 日別詳細の時（!isMoneySummaryMode）だけカレンダーを表示 */}
+              {!isMoneySummaryMode && (
+                <View style={styles.weekCalendarWrapper}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      paddingRight: 20,
+                    }}
+                  >
+                    <Text style={styles.monthLabel}>
+                      {parseInt(selectedDate.split("-")[1])}月
+                    </Text>
+                    <TouchableOpacity onPress={handleOpenNewModal}>
+                      <Ionicons
+                        name="add-circle"
+                        size={30}
+                        color={currentSolidColor}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                  <CalendarProvider
+                    date={selectedDate}
+                    onDateChanged={setSelectedDate}
+                  >
+                    <WeekCalendar
+                      firstDay={1}
+                      markedDates={currentMarkedDates}
+                      theme={{
+                        calendarBackground: "transparent",
+                        todayTextColor: currentSolidColor,
+                        selectedDayBackgroundColor: currentSolidColor,
+                      }}
+                    />
+                  </CalendarProvider>
+                </View>
+              )}
+            </>
           ) : (
             <CalendarList
               key={calendarKey}
               markingType={"multi-dot"}
               renderHeader={(date) => (
-                <View style={[styles.monthHeaderContainer, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingRight: 15 }]}>
-                  <Text style={[styles.monthformat, { color: currentSolidColor }]}>
+                <View
+                  style={[
+                    styles.monthHeaderContainer,
+                    {
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      paddingRight: 15,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[styles.monthformat, { color: currentSolidColor }]}
+                  >
                     {date.getMonth() + 1}月
                   </Text>
-                  {/* 🌟 ＋ボタンをここに移動！ */}
                   <TouchableOpacity onPress={handleOpenNewModal}>
-                     <Ionicons name="add-circle" size={30} color={currentSolidColor} />
+                    <Ionicons
+                      name="add-circle"
+                      size={30}
+                      color={currentSolidColor}
+                    />
                   </TouchableOpacity>
                 </View>
               )}
@@ -736,6 +826,7 @@ export default function Index() {
                     layerMaster={layerMaster}
                     setTagMaster={setTagMaster}
                     setHasUnsavedChanges={setHasUnsavedChanges}
+                    isSummaryMode={isMoneySummaryMode} // 🌟 子コンポーネントに状態を渡す
                   />
                 );
               }
@@ -843,7 +934,6 @@ export default function Index() {
                         </View>
                         <View style={styles.itemMain}>
                           <Text style={styles.itemTitle}>{item.title}</Text>
-                          {/* 🌟 カレンダー上でも詳細な時間を表示！ */}
                           <Text style={styles.timeTextSmall}>
                             {formatEventTime(item)}
                           </Text>
@@ -990,13 +1080,13 @@ export default function Index() {
                           styles.gridCard,
                           isSelected
                             ? {
-                              backgroundColor: layerMaster[layer],
-                              borderColor: layerMaster[layer],
-                            }
+                                backgroundColor: layerMaster[layer],
+                                borderColor: layerMaster[layer],
+                              }
                             : [
-                              styles.gridCardGhost,
-                              { borderColor: layerMaster[layer] + "40" },
-                            ],
+                                styles.gridCardGhost,
+                                { borderColor: layerMaster[layer] + "40" },
+                              ],
                         ]}
                         onPress={() => toggleTempTag(layer)}
                       >
@@ -1065,7 +1155,7 @@ export default function Index() {
                       onPress={() => {
                         setPresetModalVisible(false);
                         setTempPresetName("");
-                        Keyboard.dismiss(); 
+                        Keyboard.dismiss();
                       }}
                     >
                       <Text style={styles.namingCancelText}>CANCEL</Text>
@@ -1075,7 +1165,7 @@ export default function Index() {
                       style={styles.namingConfirmBtn}
                       onPress={() => {
                         confirmSavePreset();
-                        Keyboard.dismiss(); 
+                        Keyboard.dismiss();
                       }}
                     >
                       <Text style={styles.namingConfirmText}>SAVE</Text>
@@ -1167,6 +1257,30 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
 
+  // 🌟 追加：モード切り替えタブのスタイル
+  toggleContainer: {
+    flexDirection: "row",
+    backgroundColor: "#F2F2F7",
+    borderRadius: 12,
+    padding: 3,
+    marginBottom: 10,
+  },
+  toggleBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: "center",
+    borderRadius: 10,
+  },
+  toggleItem: { flexDirection: "row", alignItems: "center", gap: 6 },
+  toggleActive: {
+    backgroundColor: "#fff",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  toggleText: { color: "#8E8E93", fontWeight: "bold", fontSize: 13 },
+
   todoRoot: { paddingHorizontal: 5 },
   modernHeader: { marginBottom: 20, marginTop: 5 },
   headerLabelRow: {
@@ -1242,7 +1356,13 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
   },
   miniTagText: { fontSize: 8, fontWeight: "bold" },
-  todoSubRow: { flexDirection: "row", alignItems: "center", marginTop: 4, flexWrap: 'wrap', gap: 6 },
+  todoSubRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+    flexWrap: "wrap",
+    gap: 6,
+  },
   todoTimeRow: { flexDirection: "row", alignItems: "center", gap: 2 },
   todoTimeText: { fontSize: 10, color: "#8E8E93", fontWeight: "500" },
   checkButton: {
@@ -1251,7 +1371,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  
+
   deadlineBadgeUrgent: {
     flexDirection: "row",
     alignItems: "center",
