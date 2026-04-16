@@ -3,7 +3,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Slider from "@react-native-community/slider";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useMemo, useState } from "react";
-//fadfa
 import {
   Alert,
   Dimensions,
@@ -64,23 +63,11 @@ export default function MoneyDashboard({
   const [dashboardMode, setDashboardMode] = useState<"macro" | "micro">(
     "macro",
   );
-  const [selectedDrillDownLayer, setSelectedDrillDownLayer] = useState<
-    string | null
-  >(null);
-
-  const [isHistoryModalVisible, setIsHistoryModalVisible] = useState(false);
-  const [currentModalMonth, setCurrentModalMonth] = useState(
-    selectedDate.substring(0, 7),
-  );
   const [isSettingMode, setIsSettingMode] = useState(false);
   const [isManualInput, setIsManualInput] = useState(false);
-
-  const [selectedFilterTag, setSelectedFilterTag] = useState<string | null>(
-    null,
-  );
-  const [chartGroupBy, setChartGroupBy] = useState<
-    "layer" | "category" | "tag"
-  >("layer");
+  const [expandedLayers, setExpandedLayers] = useState<{
+    [key: string]: boolean;
+  }>({});
 
   const [inputAmount, setInputAmount] = useState("");
   const [selectedMainTag, setSelectedMainTag] = useState("食費");
@@ -96,11 +83,6 @@ export default function MoneyDashboard({
   const [subTagBudgets, setSubTagBudgets] = useState<{ [key: string]: number }>(
     {},
   );
-  const [expandedLayers, setExpandedLayers] = useState<{
-    [key: string]: boolean;
-  }>({});
-
-  // 🌟 追加：各レイヤーの予算管理を有効/無効にする設定（デフォルトは全てtrue扱い）
   const [layerBudgetEnabled, setLayerBudgetEnabled] = useState<{
     [key: string]: boolean;
   }>({});
@@ -111,90 +93,122 @@ export default function MoneyDashboard({
     ALL_LAYERS: ["食費", "交通", "日用品", "交際費", "趣味", "その他"],
   });
 
+  const [isHistoryModalVisible, setIsHistoryModalVisible] = useState(false);
+  const [currentModalMonth, setCurrentModalMonth] = useState(
+    selectedDate.substring(0, 7),
+  );
+  const [selectedFilterTag, setSelectedFilterTag] = useState<string | null>(
+    null,
+  );
+  const [chartGroupBy, setChartGroupBy] = useState<
+    "layer" | "category" | "tag"
+  >("layer");
   const [editQuickTagModal, setEditQuickTagModal] = useState(false);
   const [editingTagIndex, setEditingTagIndex] = useState<number | null>(null);
   const [tempQuickTagText, setTempQuickTagText] = useState("");
   const [editingLayer, setEditingLayer] = useState("ALL_LAYERS");
 
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingItem, setEditingItem] = useState<{
+    item: ScheduleItem;
+    date: string;
+  } | null>(null);
+  const [editAmount, setEditAmount] = useState("");
+  const [editTitle, setEditTitle] = useState("");
+
   const isSingleFilter = activeTags.length === 1;
   const currentActiveLayer = isSingleFilter ? activeTags[0] : null;
 
-  // 🌟 修正：有効になっているレイヤーだけを計算対象にする
+  const toggleManualMode = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (!isManualInput && selectedSubTag) {
+      setManualTag(selectedSubTag);
+    }
+    setIsManualInput(!isManualInput);
+  };
+
+  const toggleLayerExpansion = (layer: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setExpandedLayers((prev) => ({ ...prev, [layer]: !prev[layer] }));
+  };
+
+  const { layerActuals, subTagActuals } = useMemo(() => {
+    const lActuals: Record<string, number> = {};
+    const sActuals: Record<string, number> = {};
+    const monthStr = selectedDate.substring(0, 7);
+
+    Object.keys(scheduleData).forEach((date) => {
+      if (date.startsWith(monthStr)) {
+        scheduleData[date].forEach((item) => {
+          if (item.isExpense) {
+            const itemTag = item.tags?.[0] || item.tag || "未分類";
+            const itemLayer = tagMaster[itemTag]?.layer || itemTag;
+            lActuals[itemLayer] = (lActuals[itemLayer] || 0) + item.amount;
+            sActuals[itemTag] = (sActuals[itemTag] || 0) + item.amount;
+          }
+        });
+      }
+    });
+    return { layerActuals: lActuals, subTagActuals: sActuals };
+  }, [scheduleData, selectedDate, tagMaster]);
+
   const globalBudgetCalc = useMemo(() => {
-    const totalAllocated = Object.keys(layerMaster).reduce((sum, layer) => {
-      // 設定で無効化されているレイヤーは除外
-      if (layerBudgetEnabled[layer] === false) return sum;
-      return sum + (layerBudgets[layer] || 0);
-    }, 0);
-    const unallocatedBuffer = monthlyBudget - totalAllocated;
-    const isOverflow = unallocatedBuffer < 0;
-    return { totalAllocated, unallocatedBuffer, isOverflow };
-  }, [monthlyBudget, layerBudgets, layerMaster, layerBudgetEnabled]);
-
-  const singleLayerBudgetCalc = useMemo(() => {
-    if (!currentActiveLayer || layerBudgetEnabled[currentActiveLayer] === false)
-      return { totalAllocated: 0, unallocatedBuffer: 0, isOverflow: false };
-
-    const layerBudget = layerBudgets[currentActiveLayer] || 0;
-    const layerSubTags = Object.keys(tagMaster).filter(
-      (t) => tagMaster[t].layer === currentActiveLayer,
-    );
-    const totalAllocated = layerSubTags.reduce(
-      (sum, sub) => sum + (subTagBudgets[sub] || 0),
+    const totalAllocated = Object.keys(layerMaster).reduce(
+      (sum, l) =>
+        layerBudgetEnabled[l] !== false ? sum + (layerBudgets[l] || 0) : sum,
       0,
     );
-    const unallocatedBuffer = layerBudget - totalAllocated;
-    const isOverflow = unallocatedBuffer < 0;
-    return { totalAllocated, unallocatedBuffer, isOverflow };
+
+    const commonActual =
+      layerBudgetEnabled["共通"] !== false ? layerActuals["共通"] || 0 : 0;
+    const unallocatedBuffer = monthlyBudget - totalAllocated - commonActual;
+
+    return {
+      totalAllocated,
+      commonActual,
+      unallocatedBuffer,
+      isOverflow: unallocatedBuffer < 0,
+    };
   }, [
-    currentActiveLayer,
+    monthlyBudget,
     layerBudgets,
-    subTagBudgets,
-    tagMaster,
+    layerMaster,
     layerBudgetEnabled,
+    layerActuals,
   ]);
 
-  const getLayerActual = (layerName: string) => {
-    let actual = 0;
-    const monthStr = selectedDate.substring(0, 7);
-    Object.keys(scheduleData).forEach((date) => {
-      if (date.startsWith(monthStr)) {
-        scheduleData[date].forEach((item) => {
-          if (item.isExpense) {
-            const itemTag =
-              item.tags && item.tags.length > 0 ? item.tags[0] : item.tag || "";
-            const itemLayer = tagMaster[itemTag]?.layer || "共通";
-            if (itemLayer === layerName) actual += item.amount;
-          }
-        });
-      }
-    });
-    return actual;
-  };
-
-  const getSubTagActual = (tagName: string) => {
-    let actual = 0;
-    const monthStr = selectedDate.substring(0, 7);
-    Object.keys(scheduleData).forEach((date) => {
-      if (date.startsWith(monthStr)) {
-        scheduleData[date].forEach((item) => {
-          if (item.isExpense) {
-            const itemTag =
-              item.tags && item.tags.length > 0 ? item.tags[0] : item.tag || "";
-            if (itemTag === tagName) actual += item.amount;
-          }
-        });
-      }
-    });
-    return actual;
-  };
+  const singleLayerBudgetCalc = useMemo(() => {
+    if (!currentActiveLayer) return { totalAllocated: 0, unallocatedBuffer: 0 };
+    const budget = layerBudgets[currentActiveLayer] || 0;
+    const subTags = Object.keys(tagMaster).filter(
+      (t) => tagMaster[t].layer === currentActiveLayer,
+    );
+    const total = subTags.reduce((sum, s) => sum + (subTagBudgets[s] || 0), 0);
+    return {
+      totalAllocated: total,
+      unallocatedBuffer: budget - total,
+      isOverflow: budget < total,
+    };
+  }, [currentActiveLayer, layerBudgets, subTagBudgets, tagMaster]);
 
   useEffect(() => {
-    const loadQuickTags = async () => {
-      const saved = await AsyncStorage.getItem("quickMainTagsData");
-      if (saved) setQuickMainTags(JSON.parse(saved));
+    const load = async () => {
+      const [b, p, lb, sb, le, q] = await Promise.all([
+        AsyncStorage.getItem("myMonthlyBudget"),
+        AsyncStorage.getItem("myPayday"),
+        AsyncStorage.getItem("layerBudgetsData"),
+        AsyncStorage.getItem("subTagBudgetsData"),
+        AsyncStorage.getItem("layerBudgetEnabledData"),
+        AsyncStorage.getItem("quickMainTagsData"),
+      ]);
+      if (b) setMonthlyBudget(parseInt(b));
+      if (p) setPayday(parseInt(p));
+      if (lb) setLayerBudgets(JSON.parse(lb));
+      if (sb) setSubTagBudgets(JSON.parse(sb));
+      if (le) setLayerBudgetEnabled(JSON.parse(le));
+      if (q) setQuickMainTags(JSON.parse(q));
     };
-    loadQuickTags();
+    load();
   }, []);
 
   const handleLongPressQuickTag = (
@@ -231,125 +245,52 @@ export default function MoneyDashboard({
     setEditQuickTagModal(false);
   };
 
-  const screenWidth = Dimensions.get("window").width;
-  const halfWidth = (screenWidth - 40) / 2;
-
-  const currentLayer = activeTags[0] || "default";
-  const themeColor = isSingleFilter
-    ? layerMaster[currentLayer] || "#1C1C1E"
-    : "#1C1C1E";
-  const palette = [
-    "#FF6B6B",
-    "#4ECDC4",
-    "#45B7D1",
-    "#F9CA24",
-    "#6AB04C",
-    "#E056FD",
-    "#FFBE76",
-  ];
-
-  const displayLayers = useMemo(() => {
-    if (activeTags.length > 0) return activeTags;
-    return ["ALL_LAYERS", ...Object.keys(layerMaster)];
-  }, [activeTags, layerMaster]);
-
-  useEffect(() => {
-    setSelectedFilterTag(null);
-    setChartGroupBy(activeTags.length !== 1 ? "layer" : "category");
-  }, [selectedDate, activeTags]);
-
-  useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        const savedBudget = await AsyncStorage.getItem("myMonthlyBudget");
-        const savedPayday = await AsyncStorage.getItem("myPayday");
-        const savedLayerBudgets =
-          await AsyncStorage.getItem("layerBudgetsData");
-        const savedSubTagBudgets =
-          await AsyncStorage.getItem("subTagBudgetsData");
-        const savedLayerBudgetEnabled = await AsyncStorage.getItem(
-          "layerBudgetEnabledData",
-        );
-
-        if (savedBudget !== null) setMonthlyBudget(parseInt(savedBudget));
-        if (savedPayday !== null) setPayday(parseInt(savedPayday));
-        if (savedLayerBudgets !== null)
-          setLayerBudgets(JSON.parse(savedLayerBudgets));
-        if (savedSubTagBudgets !== null)
-          setSubTagBudgets(JSON.parse(savedSubTagBudgets));
-        if (savedLayerBudgetEnabled !== null) {
-          setLayerBudgetEnabled(JSON.parse(savedLayerBudgetEnabled));
-        }
-      } catch (error) {
-        console.error(error);
-      }
-    };
-    loadSettings();
-  }, []);
-
-  const toggleManualMode = () => {
-    if (!isManualInput && selectedSubTag) setManualTag(selectedSubTag);
-    setIsManualInput(!isManualInput);
-  };
-
-  const toggleLayerExpansion = (layer: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setExpandedLayers((prev) => ({ ...prev, [layer]: !prev[layer] }));
-  };
-
-  const handleAddExpense = (targetLayer: string, layerColor: string) => {
+  const handleAddExpense = (target: string, color: string) => {
     const amountNum = parseInt(inputAmount);
-    const finalTag = isManualInput ? manualTag.trim() : selectedSubTag;
-    const finalTitle =
-      isManualInput && manualTitle.trim()
-        ? manualTitle.trim()
-        : selectedMainTag;
+    if (isNaN(amountNum) || amountNum <= 0)
+      return Alert.alert("入力不足", "金額を入力してください。");
 
-    if (!selectedMainTag || isNaN(amountNum) || amountNum <= 0)
-      return Alert.alert("入力不足", "金額と項目を入力してください。");
+    const isAll = target === "ALL_LAYERS";
+    let fTag = isManualInput ? manualTag.trim() : selectedSubTag;
+    if (!fTag) fTag = isAll ? selectedMainTag : target;
 
-    if (finalTag && !tagMaster[finalTag]) {
-      const assignLayer = targetLayer === "ALL_LAYERS" ? "共通" : targetLayer;
+    if (fTag && !tagMaster[fTag]) {
+      const assignLayer = isAll ? "共通" : target;
       const newTagMaster = {
         ...tagMaster,
-        [finalTag]: { layer: assignLayer, color: layerColor },
+        [fTag]: { layer: assignLayer, color: color },
       };
       setTagMaster(newTagMaster);
-      setHasUnsavedChanges(true);
       AsyncStorage.setItem("tagMasterData", JSON.stringify(newTagMaster));
     }
 
     const newItem: ScheduleItem = {
       id: Date.now().toString(),
-      category: selectedMainTag,
-      tag: finalTag || undefined,
-      tags: finalTag ? [finalTag] : [],
-      title: finalTitle,
+      category: selectedMainTag || "未分類",
+      tag: fTag,
+      tags: [fTag],
+      title: isManualInput && manualTitle ? manualTitle : selectedMainTag,
       amount: amountNum,
       isDone: false,
-      color: (finalTag && tagMaster[finalTag]?.color) || layerColor,
+      color: tagMaster[fTag]?.color || color,
       isEvent: false,
       isTodo: false,
       isExpense: true,
     };
 
-    const newData = { ...scheduleData };
-    newData[selectedDate] = [...(newData[selectedDate] || []), newItem];
-    setScheduleData(newData);
-    setHasUnsavedChanges(true);
+    const newData = {
+      ...scheduleData,
+      [selectedDate]: [...(scheduleData[selectedDate] || []), newItem],
+    };
     setInputAmount("");
     setManualTitle("");
     setManualTag("");
     Keyboard.dismiss();
+    setTimeout(() => {
+      setScheduleData(newData);
+      setHasUnsavedChanges(true);
+    }, 100);
   };
-
-  const [editModalVisible, setEditModalVisible] = useState(false);
-  const [editingItem, setEditingItem] = useState<{
-    item: ScheduleItem;
-    date: string;
-  } | null>(null);
-  const [editAmount, setEditAmount] = useState("");
-  const [editTitle, setEditTitle] = useState("");
 
   const handleOpenEdit = (item: ScheduleItem, date: string) => {
     setEditingItem({ item, date });
@@ -369,9 +310,11 @@ export default function MoneyDashboard({
         ? { ...i, amount: newAmount, title: editTitle }
         : i,
     );
-    setScheduleData(newData);
-    setHasUnsavedChanges(true);
     setEditModalVisible(false);
+    setTimeout(() => {
+      setScheduleData(newData);
+      setHasUnsavedChanges(true);
+    }, 100);
   };
 
   const getStatsForMonth = (monthStr: string) => {
@@ -403,6 +346,7 @@ export default function MoneyDashboard({
   };
 
   const lineChartData = useMemo(() => {
+    if (!isHistoryModalVisible) return { labels: [], datasets: [{ data: [] }] };
     const labels: string[] = [];
     const data: number[] = [];
     for (let i = 5; i >= 0; i--) {
@@ -413,10 +357,15 @@ export default function MoneyDashboard({
       data.push(getStatsForMonth(mStr).total || 0);
     }
     return { labels, datasets: [{ data }] };
-  }, [scheduleData, activeTags, selectedFilterTag, chartGroupBy]);
+  }, [
+    scheduleData,
+    activeTags,
+    selectedFilterTag,
+    chartGroupBy,
+    isHistoryModalVisible,
+  ]);
 
   const mainStats = useMemo(() => {
-    const s = getStatsForMonth(selectedDate.substring(0, 7));
     let dTotal = 0;
     (scheduleData[selectedDate] || []).forEach((item) => {
       if (!item.isExpense) return;
@@ -426,15 +375,8 @@ export default function MoneyDashboard({
       if (activeTags.length > 0 && !activeTags.includes(itemLayer)) return;
       dTotal += item.amount;
     });
-    return { ...s, dailyTotal: dTotal };
-  }, [
-    selectedDate,
-    scheduleData,
-    activeTags,
-    tagMaster,
-    chartGroupBy,
-    selectedFilterTag,
-  ]);
+    return { dailyTotal: dTotal };
+  }, [selectedDate, scheduleData, activeTags, tagMaster]);
 
   const stats = useMemo(() => {
     return getStatsForMonth(selectedDate.substring(0, 7));
@@ -449,6 +391,7 @@ export default function MoneyDashboard({
   ]);
 
   const filteredHistory = useMemo(() => {
+    if (!isHistoryModalVisible) return [];
     const days: { date: string; items: ScheduleItem[] }[] = [];
     Object.keys(scheduleData)
       .filter((d) => d.startsWith(currentModalMonth))
@@ -467,13 +410,45 @@ export default function MoneyDashboard({
         if (items.length > 0) days.push({ date, items });
       });
     return days;
-  }, [scheduleData, currentModalMonth, activeTags, selectedFilterTag]);
+  }, [
+    scheduleData,
+    currentModalMonth,
+    activeTags,
+    selectedFilterTag,
+    isHistoryModalVisible,
+  ]);
+
+  const screenWidth = Dimensions.get("window").width;
+
+  // はみ出し修正：正確なコンテナ幅の計算
+  const containerWidth = screenWidth - 30; // paddingHorizontal: 15 * 2
+  const exactCardWidth = containerWidth * 0.56;
+
+  const themeColor = currentActiveLayer
+    ? layerMaster[currentActiveLayer]
+    : "#1C1C1E";
+  const palette = [
+    "#FF6B6B",
+    "#4ECDC4",
+    "#45B7D1",
+    "#F9CA24",
+    "#6AB04C",
+    "#E056FD",
+    "#FFBE76",
+  ];
+  const displayLayers = useMemo(
+    () =>
+      activeTags.length > 0
+        ? activeTags
+        : ["ALL_LAYERS", ...Object.keys(layerMaster)],
+    [activeTags, layerMaster],
+  );
 
   const activeLimit =
     currentActiveLayer && layerBudgets[currentActiveLayer]
       ? layerBudgets[currentActiveLayer]
       : monthlyBudget;
-  const progress = Math.min(stats.total / activeLimit, 1);
+  const progress = Math.min(stats.total / (activeLimit || 1), 1);
   const statusColor = stats.total > activeLimit ? "#FF3B30" : themeColor;
 
   return (
@@ -502,48 +477,47 @@ export default function MoneyDashboard({
           </View>
 
           {isSettingMode ? (
-            <View style={styles.settingArea}>
+            <ScrollView
+              style={styles.settingArea}
+              showsVerticalScrollIndicator={false}
+            >
               <Text style={styles.settingLabel}>給料日指定</Text>
               <TextInput
                 style={styles.settingInput}
                 keyboardType="numeric"
-                placeholder="25"
                 value={payday.toString()}
                 onChangeText={(t) => {
                   setPayday(parseInt(t) || 25);
                   AsyncStorage.setItem("myPayday", t);
                 }}
               />
-              <Text style={styles.settingHintText}>
-                ※ 全体予算の金額設定は「予算調整（ミクロ）」画面に移動しました。
-              </Text>
-
-              {/* 🌟 追加：レイヤーごとの予算管理有効/無効トグル */}
               <View style={styles.divider} />
               <Text style={[styles.settingLabel, { marginTop: 10 }]}>
-                予算スライダーの表示（レイヤー別）
+                予算スライダーの表示切替
               </Text>
-              {Object.keys(layerMaster).map((layer) => (
-                <View key={layer} style={styles.settingSwitchRow}>
-                  <Text style={styles.settingSwitchLabel}>{layer}</Text>
+              {[...Object.keys(layerMaster), "共通"].map((l) => (
+                <View key={l} style={styles.settingSwitchRow}>
+                  <Text style={styles.settingSwitchLabel}>{l}</Text>
                   <Switch
-                    value={layerBudgetEnabled[layer] !== false} // デフォルトはtrue扱い
-                    onValueChange={(val) => {
-                      const next = { ...layerBudgetEnabled, [layer]: val };
-                      setLayerBudgetEnabled(next);
+                    value={layerBudgetEnabled[l] !== false}
+                    onValueChange={(v) => {
+                      const n = { ...layerBudgetEnabled, [l]: v };
+                      setLayerBudgetEnabled(n);
                       AsyncStorage.setItem(
                         "layerBudgetEnabledData",
-                        JSON.stringify(next),
+                        JSON.stringify(n),
                       );
                     }}
-                    trackColor={{ false: "#E5E5EA", true: layerMaster[layer] }}
+                    trackColor={{
+                      false: "#E5E5EA",
+                      true: layerMaster[l] || "#8E8E93",
+                    }}
                   />
                 </View>
               ))}
-            </View>
+            </ScrollView>
           ) : (
             <>
-              {/* マクロ・ミクロ切り替え */}
               <View style={styles.dashboardToggleRow}>
                 <TouchableOpacity
                   style={[
@@ -560,7 +534,7 @@ export default function MoneyDashboard({
                       dashboardMode === "macro" && { color: "#FFF" },
                     ]}
                   >
-                    実績俯瞰 (マクロ)
+                    実績俯瞰
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -578,20 +552,22 @@ export default function MoneyDashboard({
                       dashboardMode === "micro" && { color: "#FFF" },
                     ]}
                   >
-                    予算調整 (ミクロ)
+                    予算調整
                   </Text>
                 </TouchableOpacity>
               </View>
 
               {dashboardMode === "macro" ? (
-                /* --- マクロモード --- */
-                <View style={styles.macroArea}>
+                <ScrollView
+                  style={styles.macroArea}
+                  showsVerticalScrollIndicator={false}
+                >
                   <View style={styles.progressSection}>
                     <View style={styles.progressLabelRow}>
                       <Text style={styles.progressLabel}>
                         {selectedFilterTag
                           ? `${selectedFilterTag} の総額`
-                          : currentLayer || "今月の総支出"}
+                          : currentActiveLayer || "今月の総支出"}
                       </Text>
                       <Text
                         style={[styles.progressPercent, { color: statusColor }]}
@@ -683,9 +659,8 @@ export default function MoneyDashboard({
                                 ? "#8E8E93"
                                 : layerMaster[key] ||
                                   palette[index % palette.length]
-                              : chartGroupBy === "tag"
-                                ? tagMaster[key]?.color || "#CCC"
-                                : palette[index % palette.length],
+                              : tagMaster[key]?.color ||
+                                palette[index % palette.length],
                           legendFontColor: "#666",
                           legendFontSize: 11,
                         }))}
@@ -701,24 +676,18 @@ export default function MoneyDashboard({
                       <Text style={styles.noDataText}>データがありません</Text>
                     )}
                   </View>
-                </View>
+                </ScrollView>
               ) : (
-                /* --- ミクロモード --- */
                 <ScrollView
                   style={styles.microArea}
                   showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
                 >
-                  {!isSingleFilter ? (
-                    // 🌍 GLOBAL モード (全レイヤー表示 + サブタグ入れ子)
+                  {!currentActiveLayer ? (
+                    // 🌍 GLOBAL モード
                     <>
                       <View style={styles.masterBudgetHeader}>
-                        <Text
-                          style={{
-                            fontWeight: "bold",
-                            color: "#1C1C1E",
-                            fontSize: 16,
-                          }}
-                        >
+                        <Text style={styles.masterTitle}>
                           全体予算 (ALL LAYERS)
                         </Text>
                         <View style={styles.masterInputWrapper}>
@@ -734,65 +703,69 @@ export default function MoneyDashboard({
                           />
                         </View>
                       </View>
-
                       <View style={styles.masterStackContainer}>
                         <View
-                          style={[styles.masterStackLayer, { opacity: 0.3 }]}
+                          style={[styles.masterStackLayer, { opacity: 0.2 }]}
                         >
-                          {Object.keys(layerMaster).map((layer) => {
-                            if (layerBudgetEnabled[layer] === false)
-                              return null; // 🌟 無効レイヤーは表示しない
-                            const b = layerBudgets[layer] || 0;
-                            const w =
-                              monthlyBudget > 0 ? (b / monthlyBudget) * 100 : 0;
-                            return (
-                              <View
-                                key={`bg-${layer}`}
-                                style={{
-                                  width: `${w}%`,
-                                  height: "100%",
-                                  backgroundColor: layerMaster[layer],
-                                }}
-                              />
-                            );
-                          })}
+                          {Object.keys(layerMaster).map(
+                            (l) =>
+                              layerBudgetEnabled[l] !== false && (
+                                <View
+                                  key={`bg-${l}`}
+                                  style={{
+                                    width: `${((layerBudgets[l] || 0) / monthlyBudget) * 100}%`,
+                                    height: "100%",
+                                    backgroundColor: layerMaster[l],
+                                  }}
+                                />
+                              ),
+                          )}
+                          {layerBudgetEnabled["共通"] !== false && (
+                            <View
+                              style={{
+                                width: `${((layerActuals["共通"] || 0) / monthlyBudget) * 100}%`,
+                                height: "100%",
+                                backgroundColor: "#8E8E93",
+                              }}
+                            />
+                          )}
                         </View>
                         <View style={styles.masterStackLayer}>
-                          {Object.keys(layerMaster).map((layer) => {
-                            if (layerBudgetEnabled[layer] === false)
-                              return null; // 🌟 無効レイヤーは表示しない
-                            const actual = getLayerActual(layer);
-                            const w =
-                              monthlyBudget > 0
-                                ? (actual / monthlyBudget) * 100
-                                : 0;
-                            return (
-                              <View
-                                key={`fg-${layer}`}
-                                style={{
-                                  width: `${w}%`,
-                                  height: "100%",
-                                  backgroundColor: layerMaster[layer],
-                                  borderRightWidth: 1,
-                                  borderColor: "#FFF",
-                                }}
-                              />
-                            );
-                          })}
+                          {Object.keys(layerMaster).map(
+                            (l) =>
+                              layerBudgetEnabled[l] !== false && (
+                                <View
+                                  key={`fg-${l}`}
+                                  style={{
+                                    width: `${((layerActuals[l] || 0) / monthlyBudget) * 100}%`,
+                                    height: "100%",
+                                    backgroundColor: layerMaster[l],
+                                    borderRightWidth: 1,
+                                    borderColor: "#FFF",
+                                  }}
+                                />
+                              ),
+                          )}
+                          {layerBudgetEnabled["共通"] !== false && (
+                            <View
+                              style={{
+                                width: `${((layerActuals["共通"] || 0) / monthlyBudget) * 100}%`,
+                                height: "100%",
+                                backgroundColor: "#8E8E93",
+                                borderRightWidth: 1,
+                                borderColor: "#FFF",
+                              }}
+                            />
+                          )}
                         </View>
                       </View>
 
-                      {/* 🌟 警告部分のスタイリッシュ化 */}
                       <View style={styles.masterProgressLabelRow}>
-                        <Text
-                          style={{
-                            fontSize: 11,
-                            color: "#666",
-                            fontWeight: "600",
-                          }}
-                        >
-                          割当済み: ¥
-                          {globalBudgetCalc.totalAllocated.toLocaleString()}
+                        <Text style={{ fontSize: 11, color: "#666" }}>
+                          割当: ¥
+                          {globalBudgetCalc.totalAllocated.toLocaleString()} /
+                          共通: ¥
+                          {globalBudgetCalc.commonActual.toLocaleString()}
                         </Text>
                         {globalBudgetCalc.isOverflow ? (
                           <View style={styles.warningBadge}>
@@ -821,46 +794,24 @@ export default function MoneyDashboard({
                           </Text>
                         )}
                       </View>
-
                       <View style={styles.divider} />
 
-                      {/* 各レイヤーのスライダー */}
-                      {Object.keys(layerMaster).map((layer) => {
-                        // 🌟 無効に設定されているレイヤーはスキップ！
-                        if (layerBudgetEnabled[layer] === false) return null;
-
-                        const budget = layerBudgets[layer] || 0;
-                        const actual = getLayerActual(layer);
-                        const layerColor = layerMaster[layer];
-                        const isOver = actual > budget;
-
-                        const validMasterBudget =
-                          monthlyBudget > 0 ? monthlyBudget : 1;
-                        const budgetRatio = Math.min(
-                          budget / validMasterBudget,
-                          1,
-                        );
-                        const actualRatio = Math.min(
-                          actual / validMasterBudget,
-                          1,
-                        );
-                        const limitAmount =
-                          budget +
-                          Math.max(0, globalBudgetCalc.unallocatedBuffer);
-                        const limitRatio = Math.min(
-                          limitAmount / validMasterBudget,
-                          1,
-                        );
-
+                      {Object.keys(layerMaster).map((l) => {
+                        if (layerBudgetEnabled[l] === false) return null;
+                        const b = layerBudgets[l] || 0;
+                        const a = layerActuals[l] || 0;
+                        const color = layerMaster[l];
+                        const limit =
+                          b + Math.max(0, globalBudgetCalc.unallocatedBuffer);
                         const layerSubTags = Object.keys(tagMaster).filter(
-                          (t) => tagMaster[t].layer === layer,
+                          (t) => tagMaster[t].layer === l,
                         );
 
                         return (
-                          <View key={layer} style={styles.sliderCard}>
+                          <View key={l} style={styles.sliderCard}>
                             <TouchableOpacity
                               style={styles.sliderHeader}
-                              onPress={() => toggleLayerExpansion(layer)}
+                              onPress={() => toggleLayerExpansion(l)}
                               activeOpacity={0.7}
                             >
                               <View
@@ -872,525 +823,432 @@ export default function MoneyDashboard({
                                 <Text
                                   style={{
                                     fontWeight: "bold",
-                                    color: layerColor,
+                                    color,
                                     fontSize: 16,
                                   }}
                                 >
-                                  {layer}
+                                  {l}
                                 </Text>
                                 {layerSubTags.length > 0 && (
                                   <Ionicons
                                     name={
-                                      expandedLayers[layer]
+                                      expandedLayers[l]
                                         ? "chevron-down"
                                         : "chevron-forward"
                                     }
                                     size={16}
-                                    color={layerColor}
+                                    color={color}
                                     style={{ marginLeft: 4 }}
                                   />
                                 )}
                               </View>
-                              <Text style={{ fontSize: 12, color: "#666" }}>
-                                実績 ¥{actual.toLocaleString()} / 予算 ¥
-                                {budget.toLocaleString()}
+                              <Text style={styles.sliderSubText}>
+                                実績 ¥{a.toLocaleString()} / 予算 ¥
+                                {b.toLocaleString()}
                               </Text>
                             </TouchableOpacity>
-
                             <View style={styles.absoluteScaleBar}>
                               <View
                                 style={{
                                   position: "absolute",
-                                  width: `${limitRatio * 100}%`,
+                                  width: `${Math.min(limit / (monthlyBudget || 1), 1) * 100}%`,
                                   height: "100%",
-                                  backgroundColor: layerColor + "20",
+                                  backgroundColor: color + "1A",
                                 }}
                               />
                               <View
                                 style={{
                                   position: "absolute",
-                                  width: `${budgetRatio * 100}%`,
+                                  width: `${Math.min(b / (monthlyBudget || 1), 1) * 100}%`,
                                   height: "100%",
-                                  borderRightWidth: 2,
-                                  borderColor: layerColor,
-                                  backgroundColor: layerColor + "10",
+                                  backgroundColor: color + "3A",
                                 }}
                               />
                               <View
                                 style={{
                                   position: "absolute",
-                                  width: `${actualRatio * 100}%`,
+                                  width: `${Math.min(a / (monthlyBudget || 1), 1) * 100}%`,
                                   height: "100%",
-                                  backgroundColor: isOver
-                                    ? "#FF3B30"
-                                    : layerColor,
+                                  backgroundColor: a > b ? "#FF3B30" : color,
                                 }}
                               />
                             </View>
-
                             <Slider
-                              style={{
-                                width: "100%",
-                                height: 35,
-                                marginTop: 5,
-                              }}
+                              style={{ height: 40 }}
                               minimumValue={0}
                               maximumValue={monthlyBudget}
                               step={1000}
-                              value={budget}
+                              value={b}
+                              thumbTintColor={color}
                               minimumTrackTintColor="transparent"
                               maximumTrackTintColor="transparent"
-                              thumbTintColor={layerColor}
                               onValueChange={(val) => {
-                                const newBudgets = {
-                                  ...layerBudgets,
-                                  [layer]: val,
-                                };
-                                setLayerBudgets(newBudgets);
+                                const n = { ...layerBudgets, [l]: val };
+                                setLayerBudgets(n);
                                 AsyncStorage.setItem(
                                   "layerBudgetsData",
-                                  JSON.stringify(newBudgets),
+                                  JSON.stringify(n),
                                 );
                               }}
                             />
 
-                            {expandedLayers[layer] &&
-                              layerSubTags.length > 0 && (
-                                <View style={styles.subTagBudgetArea}>
-                                  {layerSubTags.map((sub) => {
-                                    const subBudget = subTagBudgets[sub] || 0;
-                                    const subActual = getSubTagActual(sub);
-                                    const subColor =
-                                      tagMaster[sub]?.color || layerColor;
-                                    const isSubOver = subActual > subBudget;
+                            {expandedLayers[l] &&
+                              layerSubTags.map((sub) => {
+                                const sb = subTagBudgets[sub] || 0;
+                                const sa = subTagActuals[sub] || 0;
+                                const sc = tagMaster[sub]?.color || color;
+                                const validLayerB = b || 1;
+                                const layerUnallocated =
+                                  b -
+                                  layerSubTags.reduce(
+                                    (s, t) => s + (subTagBudgets[t] || 0),
+                                    0,
+                                  );
+                                const slimit =
+                                  sb + Math.max(0, layerUnallocated);
 
-                                    const subTotalAllocated =
-                                      layerSubTags.reduce(
-                                        (sum, s) =>
-                                          sum + (subTagBudgets[s] || 0),
-                                        0,
-                                      );
-                                    const layerUnallocated =
-                                      budget - subTotalAllocated;
-                                    const validLayerBudget =
-                                      budget > 0 ? budget : 1;
-
-                                    const subBudgetRatio = Math.min(
-                                      subBudget / validLayerBudget,
-                                      1,
-                                    );
-                                    const subActualRatio = Math.min(
-                                      subActual / validLayerBudget,
-                                      1,
-                                    );
-                                    const subLimitAmount =
-                                      subBudget + Math.max(0, layerUnallocated);
-                                    const subLimitRatio = Math.min(
-                                      subLimitAmount / validLayerBudget,
-                                      1,
-                                    );
-
-                                    return (
-                                      <View
-                                        key={sub}
-                                        style={styles.subTagAdjustRow}
+                                return (
+                                  <View
+                                    key={sub}
+                                    style={styles.subTagAdjustRow}
+                                  >
+                                    <View style={styles.subTagHeader}>
+                                      <Text
+                                        style={{
+                                          fontSize: 13,
+                                          color: "#555",
+                                          fontWeight: "bold",
+                                        }}
                                       >
-                                        <View style={styles.subTagHeader}>
-                                          <Text
-                                            style={{
-                                              fontSize: 13,
-                                              fontWeight: "bold",
-                                              color: "#555",
-                                            }}
-                                          >
-                                            ↳ {sub}
-                                          </Text>
-                                          <Text
-                                            style={{
-                                              fontSize: 10,
-                                              color: "#888",
-                                            }}
-                                          >
-                                            実績 ¥{subActual.toLocaleString()} /
-                                            枠 ¥{subBudget.toLocaleString()}
-                                          </Text>
-                                        </View>
-
-                                        <View
-                                          style={[
-                                            styles.absoluteScaleBar,
-                                            { height: 8, borderRadius: 4 },
-                                          ]}
-                                        >
-                                          <View
-                                            style={{
-                                              position: "absolute",
-                                              width: `${subLimitRatio * 100}%`,
-                                              height: "100%",
-                                              backgroundColor: subColor + "20",
-                                            }}
-                                          />
-                                          <View
-                                            style={{
-                                              position: "absolute",
-                                              width: `${subBudgetRatio * 100}%`,
-                                              height: "100%",
-                                              borderRightWidth: 1.5,
-                                              borderColor: subColor,
-                                            }}
-                                          />
-                                          <View
-                                            style={{
-                                              position: "absolute",
-                                              width: `${subActualRatio * 100}%`,
-                                              height: "100%",
-                                              backgroundColor: isSubOver
-                                                ? "#FF3B30"
-                                                : subColor,
-                                            }}
-                                          />
-                                        </View>
-
-                                        <Slider
-                                          style={{
-                                            width: "100%",
-                                            height: 25,
-                                            marginTop: 2,
-                                          }}
-                                          minimumValue={0}
-                                          maximumValue={validLayerBudget}
-                                          step={500}
-                                          value={subBudget}
-                                          minimumTrackTintColor="transparent"
-                                          maximumTrackTintColor="transparent"
-                                          thumbTintColor={subColor}
-                                          onValueChange={(val) => {
-                                            const newSubBudgets = {
-                                              ...subTagBudgets,
-                                              [sub]: val,
-                                            };
-                                            setSubTagBudgets(newSubBudgets);
-                                            AsyncStorage.setItem(
-                                              "subTagBudgetsData",
-                                              JSON.stringify(newSubBudgets),
-                                            );
-                                          }}
-                                        />
-                                      </View>
-                                    );
-                                  })}
-                                </View>
-                              )}
+                                        ↳ {sub}
+                                      </Text>
+                                      <Text
+                                        style={{ fontSize: 10, color: "#888" }}
+                                      >
+                                        ¥{sa.toLocaleString()} / ¥
+                                        {sb.toLocaleString()}
+                                      </Text>
+                                    </View>
+                                    <View
+                                      style={[
+                                        styles.absoluteScaleBar,
+                                        { height: 8, borderRadius: 4 },
+                                      ]}
+                                    >
+                                      <View
+                                        style={{
+                                          position: "absolute",
+                                          width: `${Math.min(slimit / validLayerB, 1) * 100}%`,
+                                          height: "100%",
+                                          backgroundColor: sc + "1A",
+                                        }}
+                                      />
+                                      <View
+                                        style={{
+                                          position: "absolute",
+                                          width: `${Math.min(sb / validLayerB, 1) * 100}%`,
+                                          height: "100%",
+                                          backgroundColor: sc + "3A",
+                                        }}
+                                      />
+                                      <View
+                                        style={{
+                                          position: "absolute",
+                                          width: `${Math.min(sa / validLayerB, 1) * 100}%`,
+                                          height: "100%",
+                                          backgroundColor:
+                                            sa > sb ? "#FF3B30" : sc,
+                                        }}
+                                      />
+                                    </View>
+                                    <Slider
+                                      style={{
+                                        width: "100%",
+                                        height: 25,
+                                        marginTop: 2,
+                                      }}
+                                      minimumValue={0}
+                                      maximumValue={validLayerB}
+                                      step={500}
+                                      value={sb}
+                                      minimumTrackTintColor="transparent"
+                                      maximumTrackTintColor="transparent"
+                                      thumbTintColor={sc}
+                                      onValueChange={(val) => {
+                                        const n = {
+                                          ...subTagBudgets,
+                                          [sub]: val,
+                                        };
+                                        setSubTagBudgets(n);
+                                        AsyncStorage.setItem(
+                                          "subTagBudgetsData",
+                                          JSON.stringify(n),
+                                        );
+                                      }}
+                                    />
+                                  </View>
+                                );
+                              })}
                           </View>
                         );
                       })}
+
+                      {/* 🌟 共通出費枠（薄いガイド線なし ＋ スライダーあり） */}
+                      {layerBudgetEnabled["共通"] !== false &&
+                        (() => {
+                          const a = layerActuals["共通"] || 0;
+                          const b = layerBudgets["共通"] || 0; // 🌟 共通の予算
+                          const validMaster = monthlyBudget || 1;
+
+                          return (
+                            <View style={styles.sliderCard}>
+                              <View style={styles.sliderHeader}>
+                                <Text
+                                  style={{
+                                    fontWeight: "bold",
+                                    color: "#8E8E93",
+                                    fontSize: 16,
+                                  }}
+                                >
+                                  共通出費 (未分類)
+                                </Text>
+                                <Text style={styles.sliderSubText}>
+                                  実績 ¥{a.toLocaleString()}
+                                </Text>
+                              </View>
+                              <View style={styles.absoluteScaleBar}>
+                                {/* 🌟 実績バーのみ表示（薄いガイド線はなし） */}
+                                <View
+                                  style={{
+                                    position: "absolute",
+                                    width: `${Math.min(a / validMaster, 1) * 100}%`,
+                                    height: "100%",
+                                    backgroundColor: "#8E8E93",
+                                  }}
+                                />
+                              </View>
+                            </View>
+                          );
+                        })()}
                     </>
                   ) : (
-                    // 🎸 SINGLE LAYER モード
+                    /* --- シングルレイヤーモード --- */
                     <>
-                      {/* 🌟 シングルモード時も、設定で無効にされている場合は警告を出す */}
-                      {layerBudgetEnabled[currentActiveLayer!] === false ? (
-                        <View
-                          style={{
-                            padding: 20,
-                            alignItems: "center",
-                            marginTop: 20,
-                          }}
-                        >
-                          <Ionicons
-                            name="eye-off-outline"
-                            size={40}
-                            color="#C7C7CC"
+                      <View style={styles.masterBudgetHeader}>
+                        <Text style={styles.masterTitle}>
+                          {currentActiveLayer} 予算
+                        </Text>
+                        <View style={styles.masterInputWrapper}>
+                          <Text style={styles.currencySymbol}>¥</Text>
+                          <TextInput
+                            style={styles.masterBudgetInput}
+                            keyboardType="numeric"
+                            value={(
+                              layerBudgets[currentActiveLayer!] || 0
+                            ).toString()}
+                            onChangeText={(t) => {
+                              const n = {
+                                ...layerBudgets,
+                                [currentActiveLayer!]: parseInt(t) || 0,
+                              };
+                              setLayerBudgets(n);
+                              AsyncStorage.setItem(
+                                "layerBudgetsData",
+                                JSON.stringify(n),
+                              );
+                            }}
                           />
-                          <Text
-                            style={{
-                              marginTop: 10,
-                              color: "#8E8E93",
-                              fontWeight: "bold",
-                            }}
-                          >
-                            このレイヤーは予算管理がオフになっています
-                          </Text>
-                          <Text
-                            style={{
-                              fontSize: 11,
-                              color: "#AEAEB2",
-                              marginTop: 5,
-                            }}
-                          >
-                            右上の設定アイコン(⚙️)から有効化できます
-                          </Text>
                         </View>
-                      ) : (
-                        <>
-                          <View style={styles.masterBudgetHeader}>
-                            <Text
-                              style={{
-                                fontWeight: "bold",
-                                color: themeColor,
-                                fontSize: 16,
-                              }}
-                            >
-                              {currentActiveLayer} 予算
-                            </Text>
-                            <View style={styles.masterInputWrapper}>
-                              <Text style={styles.currencySymbol}>¥</Text>
-                              <TextInput
-                                style={styles.masterBudgetInput}
-                                keyboardType="numeric"
-                                value={(
-                                  layerBudgets[currentActiveLayer!] || 0
-                                ).toString()}
-                                onChangeText={(t) => {
-                                  const newBudgets = {
-                                    ...layerBudgets,
-                                    [currentActiveLayer!]: parseInt(t) || 0,
-                                  };
-                                  setLayerBudgets(newBudgets);
-                                  AsyncStorage.setItem(
-                                    "layerBudgetsData",
-                                    JSON.stringify(newBudgets),
-                                  );
-                                }}
-                              />
-                            </View>
-                          </View>
+                      </View>
 
-                          {(() => {
-                            const layerSubTags = Object.keys(tagMaster).filter(
-                              (t) => tagMaster[t].layer === currentActiveLayer,
-                            );
-                            const layerBudget =
-                              layerBudgets[currentActiveLayer!] || 0;
+                      {(() => {
+                        const layerSubTags = Object.keys(tagMaster).filter(
+                          (t) => tagMaster[t].layer === currentActiveLayer,
+                        );
+                        const layerBudget =
+                          layerBudgets[currentActiveLayer!] || 0;
+                        const validB = layerBudget || 1;
 
-                            return (
-                              <>
-                                <View style={styles.masterStackContainer}>
+                        return (
+                          <>
+                            <View style={styles.masterStackContainer}>
+                              <View
+                                style={[
+                                  styles.masterStackLayer,
+                                  { opacity: 0.2 },
+                                ]}
+                              >
+                                {layerSubTags.map((sub) => (
                                   <View
-                                    style={[
-                                      styles.masterStackLayer,
-                                      { opacity: 0.3 },
-                                    ]}
-                                  >
-                                    {layerSubTags.map((sub) => {
-                                      const b = subTagBudgets[sub] || 0;
-                                      const w =
-                                        layerBudget > 0
-                                          ? (b / layerBudget) * 100
-                                          : 0;
-                                      return (
-                                        <View
-                                          key={`bg-${sub}`}
-                                          style={{
-                                            width: `${w}%`,
-                                            height: "100%",
-                                            backgroundColor:
-                                              tagMaster[sub]?.color ||
-                                              themeColor,
-                                          }}
-                                        />
-                                      );
-                                    })}
-                                  </View>
-                                  <View style={styles.masterStackLayer}>
-                                    {layerSubTags.map((sub) => {
-                                      const actual = getSubTagActual(sub);
-                                      const w =
-                                        layerBudget > 0
-                                          ? (actual / layerBudget) * 100
-                                          : 0;
-                                      return (
-                                        <View
-                                          key={`fg-${sub}`}
-                                          style={{
-                                            width: `${w}%`,
-                                            height: "100%",
-                                            backgroundColor:
-                                              tagMaster[sub]?.color ||
-                                              themeColor,
-                                            borderRightWidth: 1,
-                                            borderColor: "#FFF",
-                                          }}
-                                        />
-                                      );
-                                    })}
-                                  </View>
-                                </View>
-
-                                {/* 🌟 警告部分のスタイリッシュ化 */}
-                                <View style={styles.masterProgressLabelRow}>
-                                  <Text
+                                    key={`bg-${sub}`}
                                     style={{
-                                      fontSize: 11,
-                                      color: "#666",
-                                      fontWeight: "600",
+                                      width: `${((subTagBudgets[sub] || 0) / validB) * 100}%`,
+                                      height: "100%",
+                                      backgroundColor:
+                                        tagMaster[sub]?.color || themeColor,
                                     }}
-                                  >
-                                    割当済み: ¥
-                                    {singleLayerBudgetCalc.totalAllocated.toLocaleString()}
+                                  />
+                                ))}
+                              </View>
+                              <View style={styles.masterStackLayer}>
+                                {layerSubTags.map((sub) => (
+                                  <View
+                                    key={`fg-${sub}`}
+                                    style={{
+                                      width: `${((subTagActuals[sub] || 0) / validB) * 100}%`,
+                                      height: "100%",
+                                      backgroundColor:
+                                        tagMaster[sub]?.color || themeColor,
+                                      borderRightWidth: 1,
+                                      borderColor: "#FFF",
+                                    }}
+                                  />
+                                ))}
+                              </View>
+                            </View>
+
+                            <View style={styles.masterProgressLabelRow}>
+                              <Text style={{ fontSize: 11, color: "#666" }}>
+                                割当済み: ¥
+                                {singleLayerBudgetCalc.totalAllocated.toLocaleString()}
+                              </Text>
+                              {singleLayerBudgetCalc.isOverflow ? (
+                                <View style={styles.warningBadge}>
+                                  <Ionicons
+                                    name="alert-circle"
+                                    size={14}
+                                    color="#FF3B30"
+                                  />
+                                  <Text style={styles.warningText}>
+                                    超過: ¥
+                                    {Math.abs(
+                                      singleLayerBudgetCalc.unallocatedBuffer,
+                                    ).toLocaleString()}
                                   </Text>
-                                  {singleLayerBudgetCalc.isOverflow ? (
-                                    <View style={styles.warningBadge}>
-                                      <Ionicons
-                                        name="alert-circle"
-                                        size={14}
-                                        color="#FF3B30"
-                                      />
-                                      <Text style={styles.warningText}>
-                                        超過: ¥
-                                        {Math.abs(
-                                          singleLayerBudgetCalc.unallocatedBuffer,
-                                        ).toLocaleString()}
+                                </View>
+                              ) : (
+                                <Text
+                                  style={{
+                                    fontSize: 12,
+                                    color: themeColor,
+                                    fontWeight: "bold",
+                                  }}
+                                >
+                                  残り枠: ¥
+                                  {singleLayerBudgetCalc.unallocatedBuffer.toLocaleString()}
+                                </Text>
+                              )}
+                            </View>
+
+                            <View style={styles.divider} />
+
+                            {layerSubTags.length === 0 ? (
+                              <Text
+                                style={{
+                                  fontSize: 12,
+                                  color: "#999",
+                                  marginTop: 10,
+                                }}
+                              >
+                                サブタグを登録してリソースを最適化しましょう。
+                              </Text>
+                            ) : (
+                              layerSubTags.map((sub) => {
+                                const sb = subTagBudgets[sub] || 0;
+                                const sa = subTagActuals[sub] || 0;
+                                const sc = tagMaster[sub]?.color || themeColor;
+                                const slimit =
+                                  sb +
+                                  Math.max(
+                                    0,
+                                    singleLayerBudgetCalc.unallocatedBuffer,
+                                  );
+                                const isOver = sa > sb;
+
+                                return (
+                                  <View key={sub} style={styles.sliderCard}>
+                                    <View style={styles.sliderHeader}>
+                                      <Text
+                                        style={{
+                                          fontWeight: "bold",
+                                          color: "#333",
+                                          fontSize: 15,
+                                        }}
+                                      >
+                                        {sub}
+                                      </Text>
+                                      <Text style={styles.sliderSubText}>
+                                        実績 ¥{sa.toLocaleString()} / 予算 ¥
+                                        {sb.toLocaleString()}
                                       </Text>
                                     </View>
-                                  ) : (
-                                    <Text
-                                      style={{
-                                        fontSize: 12,
-                                        color: themeColor,
-                                        fontWeight: "bold",
-                                      }}
+
+                                    <View
+                                      style={[
+                                        styles.absoluteScaleBar,
+                                        { height: 10, borderRadius: 5 },
+                                      ]}
                                     >
-                                      残り枠: ¥
-                                      {singleLayerBudgetCalc.unallocatedBuffer.toLocaleString()}
-                                    </Text>
-                                  )}
-                                </View>
+                                      <View
+                                        style={{
+                                          position: "absolute",
+                                          width: `${Math.min(slimit / validB, 1) * 100}%`,
+                                          height: "100%",
+                                          backgroundColor: sc + "1A",
+                                        }}
+                                      />
+                                      <View
+                                        style={{
+                                          position: "absolute",
+                                          width: `${Math.min(sb / validB, 1) * 100}%`,
+                                          height: "100%",
+                                          backgroundColor: sc + "3A",
+                                        }}
+                                      />
+                                      <View
+                                        style={{
+                                          position: "absolute",
+                                          width: `${Math.min(sa / validB, 1) * 100}%`,
+                                          height: "100%",
+                                          backgroundColor: isOver
+                                            ? "#FF3B30"
+                                            : sc,
+                                        }}
+                                      />
+                                    </View>
 
-                                <View style={styles.divider} />
-
-                                {layerSubTags.length === 0 ? (
-                                  <Text
-                                    style={{
-                                      fontSize: 12,
-                                      color: "#999",
-                                      marginTop: 10,
-                                    }}
-                                  >
-                                    このカテゴリにはサブタグが登録されていません。
-                                  </Text>
-                                ) : (
-                                  layerSubTags.map((sub) => {
-                                    const budget = subTagBudgets[sub] || 0;
-                                    const actual = getSubTagActual(sub);
-                                    const subColor =
-                                      tagMaster[sub]?.color || themeColor;
-                                    const isOver = actual > budget;
-
-                                    const validLayerBudget =
-                                      layerBudget > 0 ? layerBudget : 1;
-                                    const budgetRatio = Math.min(
-                                      budget / validLayerBudget,
-                                      1,
-                                    );
-                                    const actualRatio = Math.min(
-                                      actual / validLayerBudget,
-                                      1,
-                                    );
-                                    const limitAmount =
-                                      budget +
-                                      Math.max(
-                                        0,
-                                        singleLayerBudgetCalc.unallocatedBuffer,
-                                      );
-                                    const limitRatio = Math.min(
-                                      limitAmount / validLayerBudget,
-                                      1,
-                                    );
-
-                                    return (
-                                      <View key={sub} style={styles.sliderCard}>
-                                        <View style={styles.sliderHeader}>
-                                          <Text
-                                            style={{
-                                              fontWeight: "bold",
-                                              color: "#333",
-                                              fontSize: 15,
-                                            }}
-                                          >
-                                            {sub}
-                                          </Text>
-                                          <Text
-                                            style={{
-                                              fontSize: 11,
-                                              color: "#666",
-                                            }}
-                                          >
-                                            実績 ¥{actual.toLocaleString()} /
-                                            予算 ¥{budget.toLocaleString()}
-                                          </Text>
-                                        </View>
-
-                                        <View
-                                          style={[
-                                            styles.absoluteScaleBar,
-                                            { height: 10, borderRadius: 5 },
-                                          ]}
-                                        >
-                                          <View
-                                            style={{
-                                              position: "absolute",
-                                              width: `${limitRatio * 100}%`,
-                                              height: "100%",
-                                              backgroundColor: subColor + "20",
-                                            }}
-                                          />
-                                          <View
-                                            style={{
-                                              position: "absolute",
-                                              width: `${budgetRatio * 100}%`,
-                                              height: "100%",
-                                              borderRightWidth: 2,
-                                              borderColor: subColor,
-                                              backgroundColor: subColor + "10",
-                                            }}
-                                          />
-                                          <View
-                                            style={{
-                                              position: "absolute",
-                                              width: `${actualRatio * 100}%`,
-                                              height: "100%",
-                                              backgroundColor: isOver
-                                                ? "#FF3B30"
-                                                : subColor,
-                                            }}
-                                          />
-                                        </View>
-
-                                        <Slider
-                                          style={{
-                                            width: "100%",
-                                            height: 35,
-                                            marginTop: 5,
-                                          }}
-                                          minimumValue={0}
-                                          maximumValue={layerBudget}
-                                          step={500}
-                                          value={budget}
-                                          minimumTrackTintColor="transparent"
-                                          maximumTrackTintColor="transparent"
-                                          thumbTintColor={subColor}
-                                          onValueChange={(val) => {
-                                            const newBudgets = {
-                                              ...subTagBudgets,
-                                              [sub]: val,
-                                            };
-                                            setSubTagBudgets(newBudgets);
-                                            AsyncStorage.setItem(
-                                              "subTagBudgetsData",
-                                              JSON.stringify(newBudgets),
-                                            );
-                                          }}
-                                        />
-                                      </View>
-                                    );
-                                  })
-                                )}
-                              </>
-                            );
-                          })()}
-                        </>
-                      )}
+                                    <Slider
+                                      style={{
+                                        width: "100%",
+                                        height: 35,
+                                        marginTop: 5,
+                                      }}
+                                      minimumValue={0}
+                                      maximumValue={layerBudget}
+                                      step={500}
+                                      value={sb}
+                                      minimumTrackTintColor="transparent"
+                                      maximumTrackTintColor="transparent"
+                                      thumbTintColor={sc}
+                                      onValueChange={(val) => {
+                                        const n = {
+                                          ...subTagBudgets,
+                                          [sub]: val,
+                                        };
+                                        setSubTagBudgets(n);
+                                        AsyncStorage.setItem(
+                                          "subTagBudgetsData",
+                                          JSON.stringify(n),
+                                        );
+                                      }}
+                                    />
+                                  </View>
+                                );
+                              })
+                            )}
+                          </>
+                        );
+                      })()}
                     </>
                   )}
                 </ScrollView>
@@ -1401,7 +1259,8 @@ export default function MoneyDashboard({
       ) : (
         /* --- 日別詳細モード --- */
         <View style={styles.dailyContainer}>
-          <View style={[styles.dailyHalf, { width: halfWidth }]}>
+          {/* 🌟 修正：左半分のコンテナに width を明示 */}
+          <View style={[styles.dailyLeft, { width: "40%" }]}>
             <View style={styles.iconTextRowSmall}>
               <Ionicons name="receipt-outline" size={12} color={themeColor} />
               <Text style={[styles.dailyLabel, { color: themeColor }]}>
@@ -1411,58 +1270,51 @@ export default function MoneyDashboard({
             <Text style={styles.dailyTotalText}>
               ¥{mainStats.dailyTotal.toLocaleString()}
             </Text>
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
               {(scheduleData[selectedDate] || [])
-                .filter((item) => {
-                  if (!item.isExpense) return false;
+                .filter((i) => i.isExpense)
+                .map((i) => {
                   const itemTag =
-                    item.tags && item.tags.length > 0
-                      ? item.tags[0]
-                      : item.tag || "";
+                    i.tags && i.tags.length > 0 ? i.tags[0] : i.tag || "";
                   const itemLayer = tagMaster[itemTag]?.layer || "共通";
                   if (activeTags.length > 0 && !activeTags.includes(itemLayer))
-                    return false;
-                  return true;
-                })
-                .map((item) => {
-                  const itemTag =
-                    item.tags && item.tags.length > 0
-                      ? item.tags[0]
-                      : item.tag || "";
+                    return null;
                   return (
                     <TouchableOpacity
-                      key={item.id}
+                      key={i.id}
                       style={styles.dailyItemRow}
-                      onPress={() => handleOpenEdit(item, selectedDate)}
+                      onPress={() => handleOpenEdit(i, selectedDate)}
                     >
                       <View style={styles.dailyItemInfo}>
                         <View
                           style={[
                             styles.dailyItemDot,
-                            { backgroundColor: item.color },
+                            { backgroundColor: i.color },
                           ]}
                         />
                         <View style={{ flex: 1 }}>
                           <Text
-                            style={[
-                              styles.dailyItemText,
-                              { fontWeight: "bold", color: themeColor },
-                            ]}
+                            style={{
+                              fontWeight: "bold",
+                              fontSize: 11,
+                              color: themeColor,
+                            }}
                             numberOfLines={1}
                           >
-                            {itemTag || item.category || "未分類"}
+                            {itemTag || i.category}
                           </Text>
                           <Text
                             style={{ fontSize: 9, color: "#888" }}
                             numberOfLines={1}
                           >
-                            {itemTag ? `${item.category} ` : ""}
-                            {item.title !== item.category &&
-                              (itemTag ? `- ${item.title}` : item.title)}
+                            {i.title !== i.category && i.title}
                           </Text>
                         </View>
                         <Text style={styles.dailyItemAmount}>
-                          ¥{item.amount.toLocaleString()}
+                          ¥{i.amount.toLocaleString()}
                         </Text>
                       </View>
                     </TouchableOpacity>
@@ -1471,139 +1323,87 @@ export default function MoneyDashboard({
             </ScrollView>
           </View>
 
-          <View
-            style={[
-              styles.dailyHalf,
-              {
-                width: halfWidth,
-                padding: 0,
-                borderWidth: 0,
-                backgroundColor: "transparent",
-              },
-            ]}
-          >
+          <View style={{ width: "4%" }} />
+
+          {/* 🌟 修正：右半分のコンテナに flex: 1 を指定し、画面外へのはみ出しを防ぐ */}
+          <View style={[styles.dailyRight, { width: "65%" }]}>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              snapToInterval={halfWidth}
+              snapToInterval={exactCardWidth + 10}
               decelerationRate="fast"
               contentContainerStyle={{ paddingRight: 10 }}
+              keyboardShouldPersistTaps="handled"
             >
-              {displayLayers.map((layer) => {
-                const baseColor =
-                  layer === "ALL_LAYERS"
-                    ? "#8E8E93"
-                    : layerMaster[layer] || themeColor;
-                const lightBgColor = baseColor + "15";
-                const cardQuickTags =
-                  quickMainTags[layer] || quickMainTags["ALL_LAYERS"] || [];
-                const cardSubTags =
-                  layer === "ALL_LAYERS"
-                    ? Object.keys(tagMaster).filter(
-                        (t) => tagMaster[t].layer === "共通",
-                      )
-                    : Object.keys(tagMaster).filter(
-                        (t) => tagMaster[t].layer === layer,
-                      );
+              {displayLayers.map((l) => {
+                const c =
+                  l === "ALL_LAYERS" ? "#8E8E93" : layerMaster[l] || themeColor;
+                const isAll = l === "ALL_LAYERS";
+                const qTags =
+                  quickMainTags[l] || quickMainTags["ALL_LAYERS"] || [];
+                const sTags = isAll
+                  ? Object.keys(tagMaster).filter(
+                      (t) => tagMaster[t].layer === "共通",
+                    )
+                  : Object.keys(tagMaster).filter(
+                      (t) => tagMaster[t].layer === l,
+                    );
 
                 return (
                   <View
-                    key={layer}
+                    key={l}
                     style={[
                       styles.inputCard,
                       {
-                        width: halfWidth - 10,
-                        backgroundColor: lightBgColor,
-                        borderColor: baseColor + "30",
-                        borderWidth: 1,
+                        width: exactCardWidth,
+                        backgroundColor: c + "15",
+                        borderColor: c + "30",
                       },
                     ]}
                   >
                     <View style={styles.inputHeaderRow}>
-                      <Text
-                        style={[styles.inputCardTitle, { color: baseColor }]}
-                      >
-                        {layer === "ALL_LAYERS"
-                          ? "全体入力（共通出費）"
-                          : layer}
+                      <Text style={[styles.inputCardTitle, { color: c }]}>
+                        {isAll ? "全体/共通" : l}
                       </Text>
-                      <TouchableOpacity onPress={toggleManualMode}>
-                        <Ionicons
-                          name={isManualInput ? "flash" : "create-outline"}
-                          size={16}
-                          color={baseColor}
-                        />
-                      </TouchableOpacity>
+                      {!isAll && (
+                        <TouchableOpacity onPress={toggleManualMode}>
+                          <Ionicons
+                            name={isManualInput ? "flash" : "create-outline"}
+                            size={16}
+                            color={c}
+                          />
+                        </TouchableOpacity>
+                      )}
                     </View>
-
                     <TextInput
                       style={[
                         styles.quickInput,
-                        {
-                          color: baseColor,
-                          borderColor: baseColor + "40",
-                          borderWidth: 1,
-                        },
+                        { color: c, borderColor: c + "40", borderWidth: 1 },
                       ]}
                       placeholder="¥ 0"
-                      placeholderTextColor={baseColor + "80"}
                       keyboardType="numeric"
                       value={inputAmount}
                       onChangeText={setInputAmount}
                     />
-
                     <View style={{ flex: 1, justifyContent: "space-between" }}>
                       <View>
-                        <View style={styles.layerQuickChipsGrid}>
-                          {cardQuickTags.map((tag, index) => {
-                            const isSelected = selectedMainTag === tag;
-                            return (
-                              <TouchableOpacity
-                                key={tag}
-                                style={[
-                                  styles.layerQuickChip3Col,
-                                  {
-                                    backgroundColor: isSelected
-                                      ? baseColor
-                                      : "#FFF",
-                                    borderColor: isSelected
-                                      ? baseColor
-                                      : baseColor + "30",
-                                  },
-                                ]}
-                                onPress={() => setSelectedMainTag(tag)}
-                                onLongPress={() =>
-                                  handleLongPressQuickTag(index, tag, layer)
-                                }
-                              >
-                                <Text
-                                  style={[
-                                    styles.layerQuickChipText,
-                                    { color: isSelected ? "#FFF" : baseColor },
-                                  ]}
-                                  numberOfLines={1}
-                                  adjustsFontSizeToFit
-                                >
-                                  {tag}
-                                </Text>
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </View>
-
-                        {isManualInput ? (
+                        {isAll || isManualInput ? (
                           <View style={{ gap: 4, marginTop: 4 }}>
                             <TextInput
                               style={[
                                 styles.smallManualInput,
                                 {
-                                  color: baseColor,
-                                  borderColor: baseColor + "30",
+                                  color: c,
+                                  borderColor: c + "30",
                                   borderWidth: 1,
                                 },
                               ]}
-                              placeholder="属性を手入力"
-                              placeholderTextColor={baseColor + "60"}
+                              placeholder={
+                                isAll
+                                  ? "属性(空欄でカテゴリ)"
+                                  : "属性(空欄でレイヤー名)"
+                              }
+                              placeholderTextColor={c + "60"}
                               value={manualTag}
                               onChangeText={setManualTag}
                             />
@@ -1611,44 +1411,77 @@ export default function MoneyDashboard({
                               style={[
                                 styles.smallManualInput,
                                 {
-                                  color: baseColor,
-                                  borderColor: baseColor + "30",
+                                  color: c,
+                                  borderColor: c + "30",
                                   borderWidth: 1,
                                 },
                               ]}
                               placeholder="詳細メモ (任意)"
-                              placeholderTextColor={baseColor + "60"}
+                              placeholderTextColor={c + "60"}
                               value={manualTitle}
                               onChangeText={setManualTitle}
                             />
                           </View>
                         ) : (
-                          <View
-                            style={[
-                              styles.subTagSection,
-                              { borderTopColor: baseColor + "30" },
-                            ]}
-                          >
-                            <ScrollView
-                              horizontal
-                              showsHorizontalScrollIndicator={false}
-                              style={styles.subTagScroll}
+                          <>
+                            <View style={styles.layerQuickChipsGrid}>
+                              {qTags.map((tag, idx) => (
+                                <TouchableOpacity
+                                  key={tag}
+                                  style={[
+                                    styles.layerQuickChip3Col,
+                                    {
+                                      backgroundColor:
+                                        selectedMainTag === tag ? c : "#FFF",
+                                      borderColor:
+                                        selectedMainTag === tag ? c : c + "30",
+                                    },
+                                  ]}
+                                  onPress={() => setSelectedMainTag(tag)}
+                                  onLongPress={() =>
+                                    handleLongPressQuickTag(idx, tag, l)
+                                  }
+                                >
+                                  <Text
+                                    style={[
+                                      styles.layerQuickChipText,
+                                      {
+                                        color:
+                                          selectedMainTag === tag ? "#FFF" : c,
+                                      },
+                                    ]}
+                                    numberOfLines={1}
+                                  >
+                                    {tag}
+                                  </Text>
+                                </TouchableOpacity>
+                              ))}
+                            </View>
+                            <View
+                              style={[
+                                styles.subTagSection,
+                                { borderTopColor: c + "30" },
+                              ]}
                             >
-                              {cardSubTags.length > 0 ? (
-                                cardSubTags.map((sub) => {
-                                  const isSelected = selectedSubTag === sub;
-                                  return (
+                              <ScrollView
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                style={styles.subTagScroll}
+                                keyboardShouldPersistTaps="handled"
+                              >
+                                {sTags.length > 0 ? (
+                                  sTags.map((sub) => (
                                     <TouchableOpacity
                                       key={sub}
                                       style={[
                                         styles.subChip,
                                         {
-                                          backgroundColor: isSelected
-                                            ? baseColor
-                                            : "#FFF",
-                                          borderColor: isSelected
-                                            ? baseColor
-                                            : baseColor + "30",
+                                          backgroundColor:
+                                            selectedSubTag === sub ? c : "#FFF",
+                                          borderColor:
+                                            selectedSubTag === sub
+                                              ? c
+                                              : c + "30",
                                         },
                                       ]}
                                       onPress={() => setSelectedSubTag(sub)}
@@ -1657,38 +1490,35 @@ export default function MoneyDashboard({
                                         style={[
                                           styles.subChipText,
                                           {
-                                            color: isSelected
-                                              ? "#FFF"
-                                              : baseColor,
+                                            color:
+                                              selectedSubTag === sub
+                                                ? "#FFF"
+                                                : c,
                                           },
                                         ]}
                                       >
                                         {sub}
                                       </Text>
                                     </TouchableOpacity>
-                                  );
-                                })
-                              ) : (
-                                <Text
-                                  style={[
-                                    styles.noSubTagText,
-                                    { color: baseColor + "80" },
-                                  ]}
-                                >
-                                  右上の📝から追加(任意)
-                                </Text>
-                              )}
-                            </ScrollView>
-                          </View>
+                                  ))
+                                ) : (
+                                  <Text
+                                    style={[
+                                      styles.noSubTagText,
+                                      { color: c + "80" },
+                                    ]}
+                                  >
+                                    📝から属性追加
+                                  </Text>
+                                )}
+                              </ScrollView>
+                            </View>
+                          </>
                         )}
                       </View>
-
                       <TouchableOpacity
-                        style={[
-                          styles.addExecuteBtn,
-                          { backgroundColor: baseColor },
-                        ]}
-                        onPress={() => handleAddExpense(layer, baseColor)}
+                        style={[styles.addExecuteBtn, { backgroundColor: c }]}
+                        onPress={() => handleAddExpense(l, c)}
                       >
                         <Ionicons
                           name="checkmark-done"
@@ -1742,37 +1572,7 @@ export default function MoneyDashboard({
                 style={styles.lineChartStyle}
               />
             </View>
-            <View style={styles.monthNavigator}>
-              <TouchableOpacity
-                onPress={() => {
-                  const [y, m] = currentModalMonth.split("-").map(Number);
-                  const d = new Date(y, m - 2, 1);
-                  setCurrentModalMonth(
-                    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
-                  );
-                }}
-                style={styles.navBtn}
-              >
-                <Ionicons name="chevron-back" size={24} color={themeColor} />
-              </TouchableOpacity>
-              <View style={styles.monthDisplay}>
-                <Text style={styles.monthDisplayText}>
-                  {currentModalMonth.replace("-", "年")}月
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => {
-                  const [y, m] = currentModalMonth.split("-").map(Number);
-                  const d = new Date(y, m, 1);
-                  setCurrentModalMonth(
-                    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
-                  );
-                }}
-                style={styles.navBtn}
-              >
-                <Ionicons name="chevron-forward" size={24} color={themeColor} />
-              </TouchableOpacity>
-            </View>
+            {/* 履歴リスト */}
             {filteredHistory.map((dayGroup) => (
               <View key={dayGroup.date} style={styles.dayGroup}>
                 <View style={styles.dayHeader}>
@@ -1917,28 +1717,6 @@ export default function MoneyDashboard({
 
 const styles = StyleSheet.create({
   container: { width: "100%", paddingHorizontal: 15 },
-  toggleContainer: {
-    flexDirection: "row",
-    backgroundColor: "#F2F2F7",
-    borderRadius: 12,
-    padding: 3,
-    marginBottom: 15,
-  },
-  toggleBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: "center",
-    borderRadius: 10,
-  },
-  toggleItem: { flexDirection: "row", alignItems: "center", gap: 6 },
-  toggleActive: {
-    backgroundColor: "#fff",
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-  },
-  toggleText: { color: "#8E8E93", fontWeight: "bold", fontSize: 13 },
   summaryCard: {
     backgroundColor: "#fff",
     borderRadius: 20,
@@ -1950,55 +1728,24 @@ const styles = StyleSheet.create({
   summaryHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 10,
+    marginBottom: 15,
   },
   paydayText: { fontSize: 14, fontWeight: "bold" },
-  progressSection: { marginBottom: 15, marginTop: 10 },
-  progressLabelRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "baseline",
-    marginBottom: 5,
-  },
-  progressLabel: { fontSize: 11, color: "#999", fontWeight: "bold" },
-  progressPercent: { fontSize: 24, fontWeight: "900" },
-  progressBarBg: {
-    height: 10,
-    backgroundColor: "#F2F2F7",
-    borderRadius: 5,
-    overflow: "hidden",
-  },
-  progressBarFill: { height: "100%", borderRadius: 5 },
-  chartArea: { alignItems: "center", marginBottom: 10, marginTop: 10 },
-  chartToggleRow: {
+  dashboardToggleRow: {
     flexDirection: "row",
     backgroundColor: "#F2F2F7",
     borderRadius: 8,
-    padding: 2,
-    marginBottom: 10,
+    padding: 3,
+    marginBottom: 15,
   },
-  chartToggleBtn: {
+  dashToggleBtn: {
     flex: 1,
-    paddingVertical: 6,
+    paddingVertical: 8,
     alignItems: "center",
     borderRadius: 6,
   },
-  chartToggleText: { fontSize: 11, fontWeight: "bold", color: "#666" },
-  noDataText: { color: "#CCC", marginVertical: 30, fontSize: 12 },
-  fullHistoryButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    paddingVertical: 15,
-    borderTopWidth: 1,
-    borderTopColor: "#F2F2F7",
-    marginTop: 10,
-  },
-  fullHistoryButtonText: { fontWeight: "bold", fontSize: 14 },
+  dashToggleText: { fontSize: 12, fontWeight: "bold", color: "#8E8E93" },
 
-  // 🌟 設定エリアのスタイル
   settingArea: { paddingVertical: 5 },
   settingLabel: {
     fontSize: 12,
@@ -2016,13 +1763,6 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     fontSize: 16,
   },
-  settingHintText: {
-    fontSize: 10,
-    color: "#8E8E93",
-    marginTop: -10,
-    marginBottom: 15,
-    marginLeft: 4,
-  },
   settingSwitchRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -2032,29 +1772,19 @@ const styles = StyleSheet.create({
     borderBottomColor: "#F2F2F7",
   },
   settingSwitchLabel: { fontSize: 14, fontWeight: "600", color: "#1C1C1E" },
-
-  dashboardToggleRow: {
-    flexDirection: "row",
-    backgroundColor: "#F2F2F7",
-    borderRadius: 8,
-    padding: 3,
+  settingHintText: {
+    fontSize: 10,
+    color: "#8E8E93",
+    marginTop: -10,
     marginBottom: 15,
+    marginLeft: 4,
   },
-  dashToggleBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: "center",
-    borderRadius: 6,
-  },
-  dashToggleText: { fontSize: 12, fontWeight: "bold", color: "#8E8E93" },
-  macroArea: { width: "100%" },
-  microArea: { width: "100%" },
 
   masterBudgetHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 10,
   },
   masterInputWrapper: {
     flexDirection: "row",
@@ -2071,42 +1801,21 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginRight: 4,
   },
+  masterTitle: { fontWeight: "bold", fontSize: 16, color: "#1C1C1E" },
   masterBudgetInput: {
     flex: 1,
     fontSize: 16,
     fontWeight: "bold",
     color: "#1C1C1E",
+    textAlign: "right",
   },
-  masterProgressLabelRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-
-  // 🌟 警告バッジ
-  warningBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFEBEA",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  warningText: {
-    fontSize: 12,
-    color: "#FF3B30",
-    fontWeight: "bold",
-    marginLeft: 4,
-  },
-
   masterStackContainer: {
     height: 16,
     backgroundColor: "#E5E5EA",
     borderRadius: 8,
     overflow: "hidden",
-    marginBottom: 8,
     position: "relative",
+    marginBottom: 10,
   },
   masterStackLayer: {
     flexDirection: "row",
@@ -2116,25 +1825,76 @@ const styles = StyleSheet.create({
     height: "100%",
     width: "100%",
   },
-
-  divider: { height: 1, backgroundColor: "#F2F2F7", marginBottom: 15 },
-
-  sliderCard: { backgroundColor: "#FFF", paddingBottom: 15 },
-  sliderHeader: {
+  masterProgressLabelRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 4,
+    marginBottom: 20,
   },
 
+  sliderCard: { marginBottom: 15 },
+  sliderHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 5,
+    alignItems: "center",
+  },
+  sliderSubText: { fontSize: 11, color: "#999" },
   absoluteScaleBar: {
+    height: 12,
     width: "100%",
     backgroundColor: "#F8F8FA",
+    borderRadius: 6,
     overflow: "hidden",
     position: "relative",
-    height: 12,
-    borderRadius: 6,
   },
+
+  // 🌟 width: "100%" を追加
+  dailyContainer: {
+    flexDirection: "row",
+    height: 320,
+    //gap: 10,
+    width: "100%",
+    justifyContent: "space-between",
+  },
+
+  dailyLeft: {
+    backgroundColor: "#fff",
+    padding: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#E5E5EA",
+    overflow: "hidden",
+  },
+
+  dailyRight: { backgroundColor: "transparent", overflow: "hidden" },
+
+  // 🌟 justifyContent を追加
+  inputCard: {
+    padding: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    height: "100%",
+    marginRight: 10,
+    justifyContent: "space-between",
+  },
+  quickInput: {
+    backgroundColor: "#FFF",
+    borderRadius: 12,
+    padding: 8,
+    fontSize: 18,
+    textAlign: "center",
+    marginVertical: 10,
+    fontWeight: "bold",
+  },
+  addBtn: { paddingVertical: 10, borderRadius: 12, alignItems: "center" },
+  dailyItemDot: { width: 6, height: 6, borderRadius: 3, marginRight: 6 },
+  dailyItemRow: {
+    paddingVertical: 6,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#F2F2F7",
+  },
+  dailyItemInfo: { flexDirection: "row", alignItems: "center" },
 
   subTagBudgetArea: {
     marginTop: 10,
@@ -2151,37 +1911,35 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
 
-  dailyContainer: {
+  warningBadge: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    width: "100%",
-    height: 320,
+    alignItems: "center",
+    backgroundColor: "#FFEBEA",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
-  dailyHalf: {
-    backgroundColor: "#fff",
-    padding: 12,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#E5E5EA",
-    overflow: "hidden",
+  warningText: {
+    fontSize: 12,
+    color: "#FF3B30",
+    fontWeight: "bold",
+    marginLeft: 4,
   },
-  dailyRightBg: { backgroundColor: "#F8FFF9" },
+  iconTextRowSmall: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 4,
+  },
+  dailyLabel: { fontSize: 10, fontWeight: "bold", marginBottom: 2 },
   dailyTotalText: {
     fontSize: 22,
     fontWeight: "bold",
     color: "#333",
     marginBottom: 5,
   },
-  dailyItemRow: {
-    paddingVertical: 6,
-    borderBottomWidth: 0.5,
-    borderBottomColor: "#F2F2F7",
-  },
-  dailyItemInfo: { flexDirection: "row", alignItems: "center" },
-  dailyItemDot: { width: 6, height: 6, borderRadius: 3, marginRight: 6 },
   dailyItemText: { fontSize: 11, color: "#555", flex: 1 },
   dailyItemAmount: { fontSize: 11, color: "#333", fontWeight: "600" },
-  inputCard: { padding: 10, borderRadius: 20, marginRight: 10 },
   inputHeaderRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -2189,52 +1947,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   inputCardTitle: { fontSize: 13, fontWeight: "900", letterSpacing: 0.5 },
-  quickInput: {
-    backgroundColor: "#FFF",
-    borderRadius: 12,
-    padding: 8,
-    fontSize: 18,
-    marginBottom: 10,
-    textAlign: "center",
-    fontWeight: "bold",
-  },
-  layerQuickChipsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 4,
-    marginBottom: 6,
-  },
-  layerQuickChip3Col: {
-    width: "31.5%",
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  layerQuickChipText: { fontSize: 10, fontWeight: "bold" },
-  subTagSection: { borderTopWidth: 1, paddingTop: 8, marginTop: 4 },
-  subTagScroll: { flexDirection: "row", height: 35 },
-  subChip: {
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 15,
-    marginRight: 6,
-    height: 28,
-    justifyContent: "center",
-  },
-  subChipText: { fontSize: 10, fontWeight: "bold" },
-  noSubTagText: { fontSize: 10, fontStyle: "italic", paddingTop: 5 },
-  smallManualInput: {
-    backgroundColor: "#FFF",
-    borderRadius: 8,
-    padding: 8,
-    fontSize: 12,
-    marginBottom: 6,
-    textAlign: "center",
-    fontWeight: "600",
-  },
   addExecuteBtn: {
     marginTop: 5,
     paddingVertical: 10,
@@ -2245,14 +1957,7 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 2,
   },
-  dailyLabel: { fontSize: 10, fontWeight: "bold", marginBottom: 2 },
-  iconTextRowSmall: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginBottom: 4,
-  },
-  iconTextRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+
   historyModalContainer: {
     flex: 1,
     backgroundColor: "#F2F2F7",
@@ -2356,4 +2061,82 @@ const styles = StyleSheet.create({
   },
   saveBtn: { paddingHorizontal: 25, paddingVertical: 12, borderRadius: 15 },
   saveText: { color: "#fff", fontWeight: "bold" },
+  iconTextRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  divider: { height: 1, backgroundColor: "#F2F2F7", marginBottom: 15 },
+  progressSection: { marginBottom: 15, marginTop: 10 },
+  progressLabelRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    marginBottom: 5,
+  },
+  progressLabel: { fontSize: 11, color: "#999", fontWeight: "bold" },
+  progressPercent: { fontSize: 24, fontWeight: "900" },
+  progressBarBg: {
+    height: 10,
+    backgroundColor: "#F2F2F7",
+    borderRadius: 5,
+    overflow: "hidden",
+  },
+  progressBarFill: { height: "100%", borderRadius: 5 },
+  chartToggleRow: {
+    flexDirection: "row",
+    backgroundColor: "#F2F2F7",
+    borderRadius: 8,
+    padding: 2,
+    marginBottom: 10,
+  },
+  chartToggleBtn: {
+    flex: 1,
+    paddingVertical: 6,
+    alignItems: "center",
+    borderRadius: 6,
+  },
+  chartToggleText: { fontSize: 11, fontWeight: "bold", color: "#666" },
+  chartArea: { alignItems: "center", marginBottom: 10, marginTop: 10 },
+  noDataText: {
+    color: "#CCC",
+    marginVertical: 30,
+    fontSize: 12,
+    textAlign: "center",
+  },
+  macroArea: { width: "100%" },
+  microArea: { width: "100%" },
+  layerQuickChipsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+    marginBottom: 6,
+  },
+  layerQuickChip3Col: {
+    width: "31.5%",
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  layerQuickChipText: { fontSize: 10, fontWeight: "bold" },
+  subTagSection: { borderTopWidth: 1, paddingTop: 8, marginTop: 4 },
+  subTagScroll: { flexDirection: "row", height: 35 },
+  subChip: {
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 15,
+    marginRight: 6,
+    height: 28,
+    justifyContent: "center",
+  },
+  subChipText: { fontSize: 10, fontWeight: "bold" },
+  noSubTagText: { fontSize: 10, fontStyle: "italic", paddingTop: 5 },
+  smallManualInput: {
+    backgroundColor: "#FFF",
+    borderRadius: 8,
+    padding: 8,
+    fontSize: 12,
+    marginBottom: 6,
+    textAlign: "center",
+    fontWeight: "600",
+  },
 });
