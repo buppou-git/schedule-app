@@ -6,7 +6,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Keyboard,
   Modal,
   ScrollView,
   StyleSheet,
@@ -14,6 +13,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View
 } from "react-native";
 
@@ -64,17 +64,6 @@ interface ScheduleModalProps {
   setHasUnsavedChanges: (val: boolean) => void;
 }
 
-const COLOR_PALETTE = ["#FF3B30", "#FF9500", "#FFCC00", "#34C759", "#5AC8FA", "#007AFF", "#5856D6", "#AF52DE", "#FF2D55", "#A2845E"];
-
-const getNextDate = (dateStr: string, type: string, count: number) => {
-  if (type === "none" || count === 0) return dateStr;
-  const d = new Date(dateStr);
-  if (type === "daily") d.setDate(d.getDate() + count);
-  if (type === "weekly") d.setDate(d.getDate() + count * 7);
-  if (type === "monthly") d.setMonth(d.getMonth() + count);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
-
 const formatTime = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 
 export default function ScheduleModal({
@@ -113,9 +102,6 @@ export default function ScheduleModal({
   const [quickMainTags, setQuickMainTags] = useState<{[key: string]: string[]}>({
     ALL_LAYERS: ["食費", "交通", "日用品", "交際費", "趣味", "その他"],
   });
-  const [editQuickTagModal, setEditQuickTagModal] = useState(false);
-  const [editingTagIndex, setEditingTagIndex] = useState<number | null>(null);
-  const [tempQuickTagText, setTempQuickTagText] = useState("");
   const [readingMaster, setReadingMaster] = useState<{[title: string]: string}>({});
 
   const uiThemeColor = layerMaster[selectedLayer] || "#007AFF";
@@ -178,13 +164,13 @@ export default function ScheduleModal({
   const toHiragana = (str: string) => str.replace(/[\u30a1-\u30f6]/g, m => String.fromCharCode(m.charCodeAt(0) - 0x60)).toLowerCase();
 
   const titleHistory = useMemo(() => {
-    if (!visible) return [];
+    if (!isReady) return [];
     const titles = new Set<string>();
     for (const d in scheduleData) {
       scheduleData[d].forEach((i: any) => i.title && titles.add(i.title));
     }
     return Array.from(titles);
-  }, [scheduleData, visible]);
+  }, [scheduleData, isReady]);
 
   const suggestions = useMemo(() => {
     const s = inputText.trim();
@@ -236,8 +222,9 @@ export default function ScheduleModal({
     setTimeout(() => { setScheduleData(newData); setHasUnsavedChanges(true); }, 300);
   };
 
-  // --- メモ化された重いUIセクション ---
-  const formContent = useMemo(() => {
+  // 🌟 究極の軽量化①：重い「時間」と「属性」だけをメモ化
+  const timeAndTagSection = useMemo(() => {
+    if (!isReady) return <View style={{ minHeight: 200 }} />;
     return (
       <View>
         <View style={styles.timeSection}>
@@ -249,7 +236,8 @@ export default function ScheduleModal({
           </View>
           <View style={styles.switchRow}>
             <Text style={styles.switchLabel}>終日</Text>
-            <Switch value={isAllDay} onValueChange={setIsAllDay} trackColor={{ true: uiThemeColor }} />
+            {/* 🌟 修正：スイッチの色をハッキリさせる（オフ時は濃いグレーに） */}
+            <Switch value={isAllDay} onValueChange={setIsAllDay} trackColor={{ false: "#C7C7CC", true: uiThemeColor }} ios_backgroundColor="#E5E5EA" />
           </View>
           <View style={styles.timePickerContainer}>
             <View style={styles.timeRow}>
@@ -287,113 +275,109 @@ export default function ScheduleModal({
             ))}
           </ScrollView>
         </View>
+      </View>
+    );
+  }, [isReady, isAllDay, startDate, endDate, startTime, endTime, uiThemeColor, layerMaster, selectedLayer, tagMaster, tagInput, tagColor, isCreatingNewTag]);
 
-        <View style={[styles.optionSection, { borderLeftColor: uiThemeColor }]}>
-          <View style={styles.switchRow}><Text style={styles.switchLabel}>予定として表示</Text><Switch value={isEvent} onValueChange={setIsEvent} trackColor={{ true: uiThemeColor }} /></View>
-          <View style={styles.switchRow}><Text style={styles.switchLabel}>ToDoリストに表示</Text><Switch value={isTodo} onValueChange={setIsTodo} trackColor={{ true: uiThemeColor }} /></View>
-          <View style={styles.switchRow}><Text style={styles.switchLabel}>支出を記録</Text><Switch value={isExpense} onValueChange={setIsExpense} trackColor={{ true: uiThemeColor }} /></View>
-          {isExpense && (
-            <View>
-              <TextInput style={styles.input} placeholder="金額 (¥)" keyboardType="numeric" value={inputAmount} onChangeText={setInputAmount} />
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
-                {currentQuickTags.map(cat => (
-                  <TouchableOpacity key={cat} style={[styles.layerChip, selectedCategory === cat && { backgroundColor: uiThemeColor }]} onPress={() => setSelectedCategory(cat)}>
-                    <Text style={[styles.layerChipText, selectedCategory === cat && { color: "#fff" }]}>{cat}</Text>
+  // 🌟 究極の軽量化②：サブタスクだけを独立してメモ化
+  const subTaskSection = useMemo(() => {
+    if (!isReady) return null;
+    return (
+      <View>
+        <TouchableOpacity style={[styles.subTaskToggleBtn, { borderColor: uiThemeColor }]} onPress={() => setShowSubTasks(!showSubTasks)}>
+          <Ionicons name={showSubTasks ? "chevron-up" : "list-outline"} size={18} color={uiThemeColor} />
+          <Text style={{ color: uiThemeColor, fontWeight: "bold", marginLeft: 8 }}>{showSubTasks ? "サブタスク入力を閉じる" : "サブタスクを追加..."}</Text>
+        </TouchableOpacity>
+
+        {showSubTasks && (
+          <View style={styles.expandingInput}>
+            {subTasks.map((task, idx) => (
+              <View key={task.id} style={[styles.subTaskCard, { borderLeftColor: uiThemeColor }]}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                  <TextInput style={styles.subTaskInput} placeholder="やる事..." placeholderTextColor="#BBB" value={task.title} onChangeText={t => { const n = [...subTasks]; n[idx].title = t; setSubTasks(n); }} />
+                  <TouchableOpacity onPress={() => setSubTasks(subTasks.filter(t => t.id !== task.id))}>
+                    <Ionicons name="close-circle" size={20} color="#FF3B30" />
                   </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          )}
-
-<TouchableOpacity style={[styles.subTaskToggleBtn, { borderColor: uiThemeColor }]} onPress={() => setShowSubTasks(!showSubTasks)}>
-            <Ionicons name={showSubTasks ? "chevron-up" : "list-outline"} size={18} color={uiThemeColor} />
-            <Text style={{ color: uiThemeColor, fontWeight: "bold", marginLeft: 8 }}>{showSubTasks ? "サブタスク入力を閉じる" : "サブタスクを追加..."}</Text>
-          </TouchableOpacity>
-
-          {showSubTasks && (
-            <View style={styles.expandingInput}>
-              {subTasks.map((task, idx) => (
-                <View key={task.id} style={[styles.subTaskCard, { borderLeftColor: uiThemeColor }]}>
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                    <TextInput style={styles.subTaskInput} placeholder="やる事..." placeholderTextColor="#BBB" value={task.title} onChangeText={t => { const n = [...subTasks]; n[idx].title = t; setSubTasks(n); }} />
-                    <TouchableOpacity onPress={() => setSubTasks(subTasks.filter(t => t.id !== task.id))}>
-                      <Ionicons name="close-circle" size={20} color="#FF3B30" />
-                    </TouchableOpacity>
+                </View>
+                <View style={styles.subTaskControls}>
+                  <View style={[styles.datePickerContainer, { backgroundColor: uiThemeColor + "1A" }]}>
+                    <Ionicons name="calendar-outline" size={14} color={uiThemeColor} style={{ marginRight: 5 }} />
+                    <DateTimePicker value={task.date} mode="date" display="compact" onChange={(e, d) => { if (d) { const n = [...subTasks]; n[idx].date = d; setSubTasks(n); } }} style={{ width: 100 }} />
                   </View>
-                  <View style={styles.subTaskControls}>
-                    <View style={[styles.datePickerContainer, { backgroundColor: uiThemeColor + "1A" }]}>
-                      <Ionicons name="calendar-outline" size={14} color={uiThemeColor} style={{ marginRight: 5 }} />
-                      <DateTimePicker value={task.date} mode="date" display="compact" onChange={(e, d) => { if (d) { const n = [...subTasks]; n[idx].date = d; setSubTasks(n); } }} style={{ width: 100 }} />
-                    </View>
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <Ionicons name="logo-yen" size={14} color={task.isExpense ? uiThemeColor : "#BBB"} />
+                    {/* 🌟 修正：スイッチの色をハッキリさせる */}
+                    <Switch value={task.isExpense} onValueChange={v => { const n = [...subTasks]; n[idx].isExpense = v; setSubTasks(n); }} trackColor={{ false: "#C7C7CC", true: uiThemeColor }} ios_backgroundColor="#E5E5EA" style={{ transform: [{ scaleX: 0.7 }, { scaleY: 0.7 }] }} />
+                  </View>
+                </View>
+                
+                <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8, justifyContent: "space-between" }}>
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <Ionicons name="time-outline" size={14} color={task.isAllDay === false ? uiThemeColor : "#BBB"} />
+                    {/* 🌟 修正：スイッチの色をハッキリさせる */}
+                    <Switch value={task.isAllDay === false} onValueChange={v => { const n = [...subTasks]; n[idx].isAllDay = !v; setSubTasks(n); }} trackColor={{ false: "#C7C7CC", true: uiThemeColor }} ios_backgroundColor="#E5E5EA" style={{ transform: [{ scaleX: 0.6 }, { scaleY: 0.6 }] }} />
+                  </View>
+                  {task.isAllDay === false && (
                     <View style={{ flexDirection: "row", alignItems: "center" }}>
-                      <Ionicons name="logo-yen" size={14} color={task.isExpense ? uiThemeColor : "#BBB"} />
-                      <Switch value={task.isExpense} onValueChange={v => { const n = [...subTasks]; n[idx].isExpense = v; setSubTasks(n); }} trackColor={{ true: uiThemeColor, false: "#a9a9a9" }} style={{ transform: [{ scaleX: 0.7 }, { scaleY: 0.7 }] }} />
-                    </View>
-                  </View>
-                  
-                  <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8, justifyContent: "space-between" }}>
-                    <View style={{ flexDirection: "row", alignItems: "center" }}>
-                      <Ionicons name="time-outline" size={14} color={task.isAllDay === false ? uiThemeColor : "#BBB"} />
-                      <Switch value={task.isAllDay === false} onValueChange={v => { const n = [...subTasks]; n[idx].isAllDay = !v; setSubTasks(n); }} trackColor={{ true: uiThemeColor, false: "#a9a9a9" }} style={{ transform: [{ scaleX: 0.6 }, { scaleY: 0.6 }] }} />
-                    </View>
-                    {task.isAllDay === false && (
-                      <View style={{ flexDirection: "row", alignItems: "center" }}>
-                        <DateTimePicker value={task.startTime!} mode="time" display="default" onChange={(e, d) => { if (d) { const n = [...subTasks]; n[idx].startTime = d; setSubTasks(n); } }} style={{ width: 75 }} />
-                        <Text style={{ color: "#666" }}>-</Text>
-                        <DateTimePicker value={task.endTime!} mode="time" display="default" onChange={(e, d) => { if (d) { const n = [...subTasks]; n[idx].endTime = d; setSubTasks(n); } }} style={{ width: 75 }} />
-                      </View>
-                    )}
-                  </View>
-
-                  {task.isExpense && (
-                    <View style={styles.subTaskAmountContainer}>
-                      <View style={{ flexDirection: "row", alignItems: "center" }}>
-                        <Text style={[styles.yenSymbol, { color: uiThemeColor }]}>¥</Text>
-                        <TextInput style={styles.subTaskAmountInput} placeholder="0" placeholderTextColor="#BBB" keyboardType="numeric" value={task.amount > 0 ? task.amount.toString() : ""} onChangeText={v => { const n = [...subTasks]; n[idx].amount = parseInt(v) || 0; setSubTasks(n); }} />
-                      </View>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
-                        {currentQuickTags.map((cat, index) => (
-                          <TouchableOpacity key={cat} style={[styles.microChip, task.category === cat && { backgroundColor: uiThemeColor }]} onPress={() => { const n = [...subTasks]; n[idx].category = cat; setSubTasks(n); }}>
-                            <Text style={[styles.microChipText, task.category === cat && { color: "#fff" }]}>{cat}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
+                      <DateTimePicker value={task.startTime!} mode="time" display="default" onChange={(e, d) => { if (d) { const n = [...subTasks]; n[idx].startTime = d; setSubTasks(n); } }} style={{ width: 75 }} />
+                      <Text style={{ color: "#666" }}>-</Text>
+                      <DateTimePicker value={task.endTime!} mode="time" display="default" onChange={(e, d) => { if (d) { const n = [...subTasks]; n[idx].endTime = d; setSubTasks(n); } }} style={{ width: 75 }} />
                     </View>
                   )}
                 </View>
-              ))}
-              <TouchableOpacity style={styles.addSubTaskBtn} onPress={() => {
-                const s = new Date(); s.setHours(10, 0, 0, 0);
-                const e = new Date(); e.setHours(11, 0, 0, 0);
-                setSubTasks([...subTasks, { id: Date.now(), title: "", date: new Date(selectedDate), amount: 0, isExpense: false, category: selectedCategory, isAllDay: true, startTime: s, endTime: e }]);
-              }}>
-                <Ionicons name="add-circle" size={22} color={uiThemeColor} />
-                <Text style={{ color: uiThemeColor, fontWeight: "bold", marginLeft: 8 }}>子タスクを追加</Text>
-              </TouchableOpacity>
-            </View>
-          )}
 
-
-
-        </View>
+                {task.isExpense && (
+                  <View style={styles.subTaskAmountContainer}>
+                    <View style={{ flexDirection: "row", alignItems: "center" }}>
+                      <Text style={[styles.yenSymbol, { color: uiThemeColor }]}>¥</Text>
+                      <TextInput style={styles.subTaskAmountInput} placeholder="0" placeholderTextColor="#BBB" keyboardType="numeric" value={task.amount > 0 ? task.amount.toString() : ""} onChangeText={v => { const n = [...subTasks]; n[idx].amount = parseInt(v) || 0; setSubTasks(n); }} />
+                    </View>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+                      {currentQuickTags.map((cat, index) => (
+                        <TouchableOpacity key={cat} style={[styles.microChip, task.category === cat && { backgroundColor: uiThemeColor }]} onPress={() => { const n = [...subTasks]; n[idx].category = cat; setSubTasks(n); }}>
+                          <Text style={[styles.microChipText, task.category === cat && { color: "#fff" }]}>{cat}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
+            ))}
+            <TouchableOpacity style={styles.addSubTaskBtn} onPress={() => {
+              const s = new Date(); s.setHours(10, 0, 0, 0);
+              const e = new Date(); e.setHours(11, 0, 0, 0);
+              setSubTasks([...subTasks, { id: Date.now(), title: "", date: new Date(selectedDate), amount: 0, isExpense: false, category: selectedCategory, isAllDay: true, startTime: s, endTime: e }]);
+            }}>
+              <Ionicons name="add-circle" size={22} color={uiThemeColor} />
+              <Text style={{ color: uiThemeColor, fontWeight: "bold", marginLeft: 8 }}>子タスクを追加</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     );
-  }, [isAllDay, startDate, endDate, startTime, endTime, uiThemeColor, layerMaster, selectedLayer, tagMaster, tagInput, tagColor, isCreatingNewTag, selectedItem, repeatType, isEvent, isTodo, isExpense, inputAmount, selectedCategory, showSubTasks, subTasks, currentQuickTags, selectedDate]);
+  }, [isReady, showSubTasks, subTasks, uiThemeColor, currentQuickTags, selectedCategory, selectedDate]);
 
-  // --- メイン描画 ---
-  return (
-    <Modal visible={visible} animationType="slide" transparent={true} onShow={() => setIsReady(true)}>
-      <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
-        <TouchableOpacity activeOpacity={1} onPress={Keyboard.dismiss} style={[styles.modalContent, { borderTopWidth: 8, borderTopColor: uiThemeColor }]}>
-          {!isReady ? (
-            <View style={{ flex: 1, justifyContent: "center" }}><ActivityIndicator size="large" color={uiThemeColor} /></View>
-          ) : (
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+  // --- // --- メイン描画 ---
+      return (
+        <Modal visible={visible} animationType="slide" transparent={true} onShow={() => setIsReady(true)}>
+          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
+            
+            {/* 🌟 修正：スクロールを邪魔していた TouchableOpacity をやめる！ */}
+            <TouchableWithoutFeedback>
+              <View style={[styles.modalContent, { borderTopWidth: 8, borderTopColor: uiThemeColor }]}>
+                {!isReady ? (
+                  <View style={{ flex: 1, justifyContent: "center" }}><ActivityIndicator size="large" color={uiThemeColor} /></View>
+                ) : (
+                  <ScrollView 
+                    showsVerticalScrollIndicator={false} 
+                    keyboardShouldPersistTaps="handled"
+                    keyboardDismissMode="on-drag" // 🌟 魔法の設定：指でスクロールした瞬間にキーボードを自動で閉じる
+                  >
               <View style={styles.headerRow}>
                 <Text style={[styles.modalTitle, { color: uiThemeColor }]}>{selectedItem ? "予定を編集" : "新規作成"}</Text>
                 <Text style={styles.dateBadge}>{selectedDate}</Text>
               </View>
-              <TextInput style={styles.mainInput} placeholder="予定のタイトル" value={inputText} onChangeText={setInputText} />
+              <TextInput style={styles.mainInput} placeholder="予定のタイトル" placeholderTextColor="#AEAEB2" value={inputText} onChangeText={setInputText} />
               
               {suggestions.length > 0 && (
                 <View style={styles.suggestionWrapper}>
@@ -407,8 +391,41 @@ export default function ScheduleModal({
                 </View>
               )}
 
-              {/* 🌟 メモ化された重いUIをここに配置 */}
-              {formContent}
+              {/* 🌟 1. 時間と属性（重い） */}
+              {timeAndTagSection}
+
+              {/* 🌟 2. スイッチと金額（軽いのでここで直接描画） */}
+              <View style={[styles.optionSection, { borderLeftColor: uiThemeColor }]}>
+                <View style={styles.switchRow}>
+                  <Text style={styles.switchLabel}>予定として表示</Text>
+                  {/* 🌟 修正：スイッチの色をハッキリさせる */}
+                  <Switch value={isEvent} onValueChange={setIsEvent} trackColor={{ false: "#C7C7CC", true: uiThemeColor }} ios_backgroundColor="#E5E5EA" />
+                </View>
+                <View style={styles.switchRow}>
+                  <Text style={styles.switchLabel}>ToDoリストに表示</Text>
+                  <Switch value={isTodo} onValueChange={setIsTodo} trackColor={{ false: "#C7C7CC", true: uiThemeColor }} ios_backgroundColor="#E5E5EA" />
+                </View>
+                <View style={styles.switchRow}>
+                  <Text style={styles.switchLabel}>支出を記録</Text>
+                  <Switch value={isExpense} onValueChange={setIsExpense} trackColor={{ false: "#C7C7CC", true: uiThemeColor }} ios_backgroundColor="#E5E5EA" />
+                </View>
+
+                {isExpense && (
+                  <View>
+                    <TextInput style={styles.input} placeholder="金額 (¥)" placeholderTextColor="#AEAEB2" keyboardType="numeric" value={inputAmount} onChangeText={setInputAmount} />
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+                      {currentQuickTags.map(cat => (
+                        <TouchableOpacity key={cat} style={[styles.layerChip, selectedCategory === cat && { backgroundColor: uiThemeColor }]} onPress={() => setSelectedCategory(cat)}>
+                          <Text style={[styles.layerChipText, selectedCategory === cat && { color: "#fff" }]}>{cat}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                {/* 🌟 3. サブタスク（重い） */}
+                {subTaskSection}
+              </View>
 
               <View style={styles.actionButtons}>
                 <TouchableOpacity onPress={onClose} style={styles.cancelBtn}><Text style={{ color: "#999" }}>キャンセル</Text></TouchableOpacity>
@@ -422,7 +439,8 @@ export default function ScheduleModal({
               )}
             </ScrollView>
           )}
-        </TouchableOpacity>
+        </View>
+        </TouchableWithoutFeedback>
       </TouchableOpacity>
     </Modal>
   );
@@ -439,10 +457,10 @@ const styles = StyleSheet.create({
   timePreviewRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: 10, gap: 5 },
   timePreviewText: { fontSize: 13, fontWeight: "bold" },
   switchRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
-  switchLabel: { fontSize: 14, color: "#3A3A3C" },
+  switchLabel: { fontSize: 14, color: "#1C1C1E", fontWeight: "600" }, // 🌟 濃く太く
   timePickerContainer: { borderTopWidth: 1, borderTopColor: "#EEE", paddingTop: 10 },
   timeRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  timeLabel: { fontSize: 12, color: "#666" },
+  timeLabel: { fontSize: 12, color: "#1C1C1E", fontWeight: "600" }, // 🌟 濃く太く
   label: { fontSize: 11, fontWeight: "bold", color: "#666", marginBottom: 8, textTransform: "uppercase" },
   layerContainer: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 15 },
   layerChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, backgroundColor: "#F2F2F7" },
@@ -452,7 +470,16 @@ const styles = StyleSheet.create({
   tagChip: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 15, backgroundColor: "#FFF", borderWidth: 1, borderColor: "#EEE", marginRight: 8 },
   tagText: { fontSize: 12, fontWeight: "600" },
   optionSection: { backgroundColor: "#F8F8FA", padding: 12, borderRadius: 15, borderLeftWidth: 4, marginBottom: 15 },
-  input: { backgroundColor: "#FFF", padding: 10, borderRadius: 8, borderWidth: 1, borderColor: "#EEE", marginTop: 10 },
+  input: { 
+    backgroundColor: "#FFF", 
+    padding: 10, 
+    borderRadius: 8, 
+    borderWidth: 1, 
+    borderColor: "#EEE", 
+    marginTop: 10,
+    color: "#1C1C1E",    // 🌟 文字を濃くする
+    fontWeight: "bold"   // 🌟 文字を太くする
+  },
   actionButtons: { flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 15 },
   cancelBtn: { padding: 10 },
   saveBtn: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12 },
