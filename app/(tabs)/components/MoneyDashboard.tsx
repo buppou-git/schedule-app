@@ -346,7 +346,7 @@ export default function MoneyDashboard({
   };
 
   const lineChartData = useMemo(() => {
-    if (!isHistoryModalVisible) return { labels: [], datasets: [{ data: [] }] };
+    // 🌟 修正：モーダルが閉じていても、空配列を返さずに0で埋めた配列を作る
     const labels: string[] = [];
     const data: number[] = [];
     for (let i = 5; i >= 0; i--) {
@@ -357,13 +357,7 @@ export default function MoneyDashboard({
       data.push(getStatsForMonth(mStr).total || 0);
     }
     return { labels, datasets: [{ data }] };
-  }, [
-    scheduleData,
-    activeTags,
-    selectedFilterTag,
-    chartGroupBy,
-    isHistoryModalVisible,
-  ]);
+  }, [scheduleData, activeTags, selectedFilterTag, chartGroupBy]);
 
   const mainStats = useMemo(() => {
     let dTotal = 0;
@@ -422,7 +416,7 @@ export default function MoneyDashboard({
 
   // はみ出し修正：正確なコンテナ幅の計算
   const containerWidth = screenWidth - 30; // paddingHorizontal: 15 * 2
-  const exactCardWidth = containerWidth * 0.56;
+  const exactCardWidth = containerWidth * 0.58;
 
   const themeColor = currentActiveLayer
     ? layerMaster[currentActiveLayer]
@@ -658,9 +652,9 @@ export default function MoneyDashboard({
                               ? key === "共通"
                                 ? "#8E8E93"
                                 : layerMaster[key] ||
-                                  palette[index % palette.length]
+                                palette[index % palette.length]
                               : tagMaster[key]?.color ||
-                                palette[index % palette.length],
+                              palette[index % palette.length],
                           legendFontColor: "#666",
                           legendFontSize: 11,
                         }))}
@@ -676,6 +670,18 @@ export default function MoneyDashboard({
                       <Text style={styles.noDataText}>データがありません</Text>
                     )}
                   </View>
+
+                  <TouchableOpacity
+                    style={[styles.historyOpenBtn, { borderColor: themeColor }]}
+                    onPress={() => setIsHistoryModalVisible(true)}
+                  >
+                    <Ionicons name="analytics" size={18} color={themeColor} />
+                    <Text style={[styles.historyOpenBtnText, { color: themeColor }]}>
+                      支出推移と履歴レポートを見る
+                    </Text>
+                  </TouchableOpacity>
+
+
                 </ScrollView>
               ) : (
                 <ScrollView
@@ -1343,11 +1349,11 @@ export default function MoneyDashboard({
                   quickMainTags[l] || quickMainTags["ALL_LAYERS"] || [];
                 const sTags = isAll
                   ? Object.keys(tagMaster).filter(
-                      (t) => tagMaster[t].layer === "共通",
-                    )
+                    (t) => tagMaster[t].layer === "共通",
+                  )
                   : Object.keys(tagMaster).filter(
-                      (t) => tagMaster[t].layer === l,
-                    );
+                    (t) => tagMaster[t].layer === l,
+                  );
 
                 return (
                   <View
@@ -1551,26 +1557,27 @@ export default function MoneyDashboard({
           <ScrollView style={styles.modalScroll}>
             <View style={styles.analysisCard}>
               <Text style={styles.analysisTitle}>支出推移 (過去6ヶ月)</Text>
-              <LineChart
-                data={lineChartData}
-                width={screenWidth - 40}
-                height={160}
-                chartConfig={{
-                  backgroundColor: "#fff",
-                  backgroundGradientFrom: "#fff",
-                  backgroundGradientTo: "#fff",
-                  decimalPlaces: 0,
-                  color: () => themeColor,
-                  labelColor: () => `#333`,
-                  propsForDots: {
-                    r: "5",
-                    strokeWidth: "2",
-                    stroke: themeColor,
-                  },
-                }}
-                bezier
-                style={styles.lineChartStyle}
-              />
+              {/* 🌟 修正：データが2つ以上ある時だけグラフを描画し、クラッシュを防ぐ */}
+              {lineChartData.datasets[0].data.length > 1 ? (
+                <LineChart
+                  data={lineChartData}
+                  width={screenWidth - 40}
+                  height={160}
+                  chartConfig={{
+                    backgroundColor: "#fff",
+                    backgroundGradientFrom: "#fff",
+                    backgroundGradientTo: "#fff",
+                    decimalPlaces: 0,
+                    color: () => themeColor,
+                    labelColor: () => `#333`,
+                    propsForDots: { r: "5", strokeWidth: "2", stroke: themeColor }
+                  }}
+                  bezier
+                  style={styles.lineChartStyle}
+                />
+              ) : (
+                <Text style={styles.noDataText}>データがありません</Text>
+              )}
             </View>
             {/* 履歴リスト */}
             {filteredHistory.map((dayGroup) => (
@@ -2138,5 +2145,23 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     textAlign: "center",
     fontWeight: "600",
+  },
+
+  historyOpenBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderRadius: 12,
+    marginHorizontal: 15,
+    marginTop: 5,
+    marginBottom: 20,
+    backgroundColor: "#fff",
+  },
+  historyOpenBtnText: {
+    fontSize: 13,
+    fontWeight: "bold",
+    marginLeft: 8,
   },
 });

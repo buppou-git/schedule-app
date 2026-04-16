@@ -769,8 +769,13 @@ export default function Index() {
             </>
           ) : (
             <CalendarList
+              current={selectedDate}
               key={calendarKey}
               markingType={"multi-dot"}
+              pastScrollRange={6}     // 過去6ヶ月分だけ裏で準備する（デフォルトは50）
+              futureScrollRange={6}   // 未来6ヶ月分だけ裏で準備する（デフォルトは50）
+              initialNumToRender={1}  // 起動時はまず「今月」の1ヶ月分だけを最優先で描画する
+              windowSize={3}          // メモリに保持する見えない画面の数を減らす
               renderHeader={(date) => (
                 <View
                   style={[
@@ -812,7 +817,10 @@ export default function Index() {
           <ScrollView
             style={styles.scheduleList}
             contentContainerStyle={{ paddingBottom: 120 }}
-            removeClippedSubviews={true}
+            removeClippedSubviews={false}
+
+            scrollEventThrottle={16}
+            keyboardShouldPersistTaps="handled"
           >
             {(() => {
               if (activeMode === "money") {
