@@ -30,6 +30,8 @@ interface SubTask {
   isExpense: boolean;
   category?: string;
   endTime?: Date;
+  reminderOption?: string;
+  notificationId?: string;
 }
 
 interface ScheduleItem {
@@ -452,6 +454,44 @@ export default function ScheduleModal({
       }
     }
 
+    // 🌟 修正：全子タスクの通知をループで予約する
+    const updatedSubTasks = await Promise.all(
+      subTasks.map(async (task) => {
+        // 既存の通知があれば一旦キャンセル
+        if (task.notificationId) {
+          await cancelItemNotification(task.notificationId);
+        }
+
+        let newNotifId = undefined;
+
+        // 日時が設定されており、かつ通知が「なし」以外の場合
+        if (
+          task.hasDateTime &&
+          task.endTime &&
+          task.reminderOption &&
+          task.reminderOption !== "none"
+        ) {
+          let triggerDate = new Date(task.endTime);
+
+          // オプションに応じて通知時間を計算
+          if (task.reminderOption === "1hour")
+            triggerDate.setHours(triggerDate.getHours() - 1);
+          else if (task.reminderOption === "1day")
+            triggerDate.setDate(triggerDate.getDate() - 1);
+
+          // 未来の時間なら予約実行
+          if (triggerDate > new Date()) {
+            const id = await scheduleItemNotification(
+              `子タスク: ${task.title}`,
+              triggerDate,
+            );
+            if (id) newNotifId = id;
+          }
+        }
+        return { ...task, notificationId: newNotifId };
+      }),
+    );
+
     const newData = { ...scheduleData };
     const sStr = startDate.toISOString().split("T")[0];
     const itemData = {
@@ -473,6 +513,7 @@ export default function ScheduleModal({
       notificationIds: finalNotificationIds,
       reminderOptions: selectedReminders,
       customReminderTimes: customReminderTimes.map((d) => d.toISOString()),
+      subTasks: updatedSubTasks,
     };
 
     if (selectedItem) {
@@ -711,7 +752,7 @@ export default function ScheduleModal({
                   </TouchableOpacity>
                 </View>
 
-                {/* 🌟 2. 究極にスマートな日時設定UI */}
+                {/* 🌟 2. 日時設定UI */}
                 {!task.hasDateTime ? (
                   <TouchableOpacity
                     style={[
@@ -721,6 +762,7 @@ export default function ScheduleModal({
                     onPress={() => {
                       const n = [...subTasks];
                       n[idx].hasDateTime = true;
+                      n[idx].reminderOption = "1day"; // 🌟 デフォルトを「1日前」に設定
                       if (!n[idx].date) n[idx].date = new Date(selectedDate);
                       if (!n[idx].endTime) {
                         const future = new Date();
@@ -741,53 +783,105 @@ export default function ScheduleModal({
                     </Text>
                   </TouchableOpacity>
                 ) : (
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      marginTop: 12,
-                      marginBottom: 4,
-                      gap: 8,
-                    }}
-                  >
-                    {/* おしゃれなボタンが横に並びます */}
-                    <ModernDatePicker
-                      value={task.date}
-                      mode="date"
-                      onChange={(d) => {
-                        const n = [...subTasks];
-                        n[idx].date = d;
-                        setSubTasks(n);
-                      }}
-                      themeColor={uiThemeColor}
-                      icon="calendar-outline"
-                    />
-                    <ModernDatePicker
-                      value={task.endTime || new Date()}
-                      mode="time"
-                      onChange={(d) => {
-                        const n = [...subTasks];
-                        n[idx].endTime = d;
-                        setSubTasks(n);
-                      }}
-                      themeColor={uiThemeColor}
-                      icon="time-outline"
-                    />
-
-                    <TouchableOpacity
-                      style={{ marginLeft: 6 }}
-                      onPress={() => {
-                        const n = [...subTasks];
-                        n[idx].hasDateTime = false;
-                        setSubTasks(n);
+                  /* 🌟 修正：<> (フラグメント) で囲んで、複数の要素を1つにまとめる */
+                  <>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        marginTop: 12,
+                        marginBottom: 4,
+                        gap: 8,
                       }}
                     >
-                      <Ionicons name="close-circle" size={20} color="#C7C7CC" />
-                    </TouchableOpacity>
-                  </View>
+                      <ModernDatePicker
+                        value={task.date}
+                        mode="date"
+                        onChange={(d) => {
+                          const n = [...subTasks];
+                          n[idx].date = d;
+                          setSubTasks(n);
+                        }}
+                        themeColor={uiThemeColor}
+                        icon="calendar-outline"
+                      />
+                      <ModernDatePicker
+                        value={task.endTime || new Date()}
+                        mode="time"
+                        onChange={(d) => {
+                          const n = [...subTasks];
+                          n[idx].endTime = d;
+                          setSubTasks(n);
+                        }}
+                        themeColor={uiThemeColor}
+                        icon="time-outline"
+                      />
+
+                      <TouchableOpacity
+                        style={{ marginLeft: 6 }}
+                        onPress={() => {
+                          const n = [...subTasks];
+                          n[idx].hasDateTime = false;
+                          setSubTasks(n);
+                        }}
+                      >
+                        <Ionicons
+                          name="close-circle"
+                          size={20}
+                          color="#C7C7CC"
+                        />
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* 🌟 修正：通知リマインチップ（「なし」付き） */}
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        flexWrap: "wrap",
+                        marginTop: 8,
+                        gap: 6,
+                      }}
+                    >
+                      {[
+                        { label: "なし", v: "none" },
+                        { label: "当日", v: "exact" },
+                        { label: "1時間前", v: "1hour" },
+                        { label: "1日前", v: "1day" },
+                      ].map((opt) => (
+                        <TouchableOpacity
+                          key={opt.v}
+                          style={[
+                            styles.miniReminderChip,
+                            task.reminderOption === opt.v && {
+                              backgroundColor: uiThemeColor,
+                              borderColor: uiThemeColor,
+                            },
+                          ]}
+                          onPress={() => {
+                            const n = [...subTasks];
+                            n[idx].reminderOption = opt.v;
+                            setSubTasks(n);
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 10,
+                              fontWeight: "bold",
+                              color:
+                                task.reminderOption === opt.v
+                                  ? "#FFF"
+                                  : "#8E8E93",
+                            }}
+                          >
+                            {opt.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </>
                 )}
 
-                {/* 🌟 3. 復活！金銭（支出）設定 */}
+                {/* 🌟 3. 金銭（支出）設定（ここを subTasks.map の内側に移動！） */}
                 <View
                   style={{
                     flexDirection: "row",
@@ -1568,5 +1662,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#F0F0F5",
+  },
+  miniReminderChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: "#FFF",
+    borderWidth: 1,
+    borderColor: "#E5E5EA",
   },
 });
