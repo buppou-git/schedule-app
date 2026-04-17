@@ -3,6 +3,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import { StatusBar } from "expo-status-bar";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ScheduleItem,
+  useScheduleManager,
+} from "../../hooks/useScheduleManager";
 
 //データベース関係
 import { signInAnonymously } from "firebase/auth";
@@ -32,27 +36,6 @@ import {
   WeekCalendar,
 } from "react-native-calendars";
 
-interface ScheduleItem {
-  id: string;
-  title: string;
-  tag?: string;
-  tags?: string[];
-  amount: number;
-  isDone: boolean;
-  color: string;
-  isEvent: boolean;
-  isTodo: boolean;
-  isExpense: boolean;
-  category?: string;
-  recurringGroupId?: string;
-  repeatType?: "daily" | "weekly" | "monthly";
-  isAllDay?: boolean;
-  startDate?: string;
-  endDate?: string;
-  startTime?: string;
-  endTime?: string;
-}
-
 import ConfigModal from "./components/ConfigModal";
 import LayerManagementModal from "./components/LayerManagementModal";
 import MoneyDashboard from "./components/MoneyDashboard";
@@ -75,9 +58,9 @@ const getPastelColor = (hex: string) => {
 
 export default function Index() {
   const [selectedDate, setSelectedDate] = useState(getTodayString());
-  const [scheduleData, setScheduleData] = useState<{
-    [key: string]: ScheduleItem[];
-  }>({});
+
+  const { scheduleData, setScheduleData, lastSyncedAt } = useScheduleManager();
+
   const [layerMaster, setLayerMaster] = useState<{ [key: string]: string }>({});
   const [tagMaster, setTagMaster] = useState<{
     [key: string]: { layer: string; color: string };
@@ -101,7 +84,6 @@ export default function Index() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const [configModalVisible, setConfigModalVisible] = useState(false);
-  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
 
   const openFilterModal = useCallback(() => {
     setTempActiveTags(activeTags);
@@ -184,7 +166,6 @@ export default function Index() {
 
             await setDoc(doc(db, "users", user.uid), dataToSave);
             console.log("Auto-save: 完了！🚀");
-            setLastSyncedAt(new Date().toLocaleString("ja-JP"));
           } catch (error) {
             console.error("Auto-save Error:", error);
           }
@@ -198,13 +179,12 @@ export default function Index() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [data, layers, pre, tags] = await Promise.all([
-          AsyncStorage.getItem("myScheduleData"),
+        // 🌟 scheduleData の読み込みは新しいファイルに任せるので、ここからは削除！
+        const [layers, pre, tags] = await Promise.all([
           AsyncStorage.getItem("layerMasterData"),
           AsyncStorage.getItem("filterPresets"),
           AsyncStorage.getItem("tagMasterData"),
         ]);
-        if (data) setScheduleData(JSON.parse(data));
         if (layers) setLayerMaster(JSON.parse(layers));
         else
           setLayerMaster({
@@ -224,12 +204,6 @@ export default function Index() {
   useEffect(() => {
     const syncToStorage = async () => {
       try {
-        if (Object.keys(scheduleData).length > 0) {
-          await AsyncStorage.setItem(
-            "myScheduleData",
-            JSON.stringify(scheduleData),
-          );
-        }
         await AsyncStorage.setItem(
           "layerMasterData",
           JSON.stringify(layerMaster),
@@ -242,7 +216,8 @@ export default function Index() {
       }
     };
     syncToStorage();
-  }, [scheduleData, layerMaster, tagMaster, presets, activeTags]);
+    // 🌟 ポイント：依存配列から scheduleData を外してスッキリさせています
+  }, [layerMaster, tagMaster, presets, activeTags]);
 
   const markedDatesBase = useMemo(() => {
     const marked: any = {};
@@ -333,19 +308,20 @@ export default function Index() {
 
   const toggleTodo = (date: string, id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setScheduleData((prev) => {
-      const newData = { ...prev };
 
-      const currentStatus = newData[date]?.find((i) => i.id === id)?.isDone;
-      const nextStatus = !currentStatus;
+    // 🌟 prevではなく、直接現在の scheduleData をコピーして使う
+    const newData = { ...scheduleData };
+    const currentStatus = newData[date]?.find((i) => i.id === id)?.isDone;
+    const nextStatus = !currentStatus;
 
-      Object.keys(newData).forEach((d) => {
-        newData[d] = newData[d].map((i) =>
-          i.id === id ? { ...i, isDone: nextStatus } : i,
-        );
-      });
-      return newData;
+    Object.keys(newData).forEach((d) => {
+      newData[d] = newData[d].map((i) =>
+        i.id === id ? { ...i, isDone: nextStatus } : i,
+      );
     });
+
+    // 新しいデータをセット
+    setScheduleData(newData);
     setHasUnsavedChanges(true);
   };
 
@@ -396,12 +372,6 @@ export default function Index() {
         setTagMaster(cloudData.tagMaster || {});
         setPresets(cloudData.presets || {});
         setActiveTags(cloudData.activeTags || []);
-
-        if (cloudData.lastSyncedAt) {
-          setLastSyncedAt(
-            new Date(cloudData.lastSyncedAt).toLocaleString("ja-JP"),
-          );
-        }
 
         Alert.alert(
           "復元完了",
@@ -772,10 +742,10 @@ export default function Index() {
               current={selectedDate}
               key={calendarKey}
               markingType={"multi-dot"}
-              pastScrollRange={6}     // 過去6ヶ月分だけ裏で準備する（デフォルトは50）
-              futureScrollRange={6}   // 未来6ヶ月分だけ裏で準備する（デフォルトは50）
-              initialNumToRender={1}  // 起動時はまず「今月」の1ヶ月分だけを最優先で描画する
-              windowSize={3}          // メモリに保持する見えない画面の数を減らす
+              pastScrollRange={6} // 過去6ヶ月分だけ裏で準備する（デフォルトは50）
+              futureScrollRange={6} // 未来6ヶ月分だけ裏で準備する（デフォルトは50）
+              initialNumToRender={1} // 起動時はまず「今月」の1ヶ月分だけを最優先で描画する
+              windowSize={3} // メモリに保持する見えない画面の数を減らす
               renderHeader={(date) => (
                 <View
                   style={[
@@ -818,7 +788,6 @@ export default function Index() {
             style={styles.scheduleList}
             contentContainerStyle={{ paddingBottom: 120 }}
             removeClippedSubviews={false}
-
             scrollEventThrottle={16}
             keyboardShouldPersistTaps="handled"
           >
