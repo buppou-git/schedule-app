@@ -24,6 +24,7 @@ export interface ScheduleItem {
   endDate?: string;
   startTime?: string;
   endTime?: string;
+  notificationId?: string;
 }
 
 export const useScheduleManager = () => {

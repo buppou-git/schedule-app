@@ -1,103 +1,260 @@
-// components/ConfigModal.tsx
 import { Ionicons } from "@expo/vector-icons";
-import React from 'react';
-import { Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import DateTimePicker from "@react-native-community/datetimepicker";
+import React, { useState } from "react";
+import {
+  Modal,
+  Platform,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
+} from "react-native";
+import { useNotificationManager } from "../../../hooks/useNotificationManager";
 
-export default function ConfigModal({ visible, onClose, lastSyncedAt, onRestore }: any) {
+interface ConfigModalProps {
+  visible: boolean;
+  onClose: () => void;
+  lastSyncedAt: string | null;
+  onRestore: () => void;
+}
+
+export default function ConfigModal({
+  visible,
+  onClose,
+  lastSyncedAt,
+  onRestore,
+}: ConfigModalProps) {
+  // 🌟 さっき作った「通知の脳みそ」を呼び出す！
+  const {
+    isNotificationEnabled,
+    notificationTime,
+    scheduleDailyNotification,
+    cancelNotification,
+  } = useNotificationManager();
+
+  // Android用の時計モーダル表示フラグ
+  const [showTimePickerAndroid, setShowTimePickerAndroid] = useState(false);
+
+  const handleToggleSwitch = async (value: boolean) => {
+    if (value) {
+      await scheduleDailyNotification(notificationTime);
+    } else {
+      await cancelNotification();
+    }
+  };
+
+  const handleTimeChange = async (event: any, selectedDate?: Date) => {
+    if (Platform.OS === "android") setShowTimePickerAndroid(false);
+    if (selectedDate) {
+      // 通知がONの時だけ、時間変更と同時に通知を再セットする
+      if (isNotificationEnabled) {
+        await scheduleDailyNotification(selectedDate);
+      }
+    }
+  };
+
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>設定</Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-            <Ionicons name="close-circle" size={28} color="#8E8E93" />
-          </TouchableOpacity>
-        </View>
+    <Modal visible={visible} transparent={true} animationType="fade">
+      <TouchableOpacity
+        style={styles.overlay}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <TouchableWithoutFeedback>
+          <View style={styles.content}>
+            <View style={styles.header}>
+              <View>
+                <Text style={styles.title}>CONFIG</Text>
+                <Text style={styles.subTitle}>設定とバックアップ</Text>
+              </View>
+              <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+                <Ionicons name="close" size={24} color="#1C1C1E" />
+              </TouchableOpacity>
+            </View>
 
-        <ScrollView style={styles.scroll}>
-          {/* データ管理セクション */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>データ管理</Text>
+            {/* 🌟 通知設定セクション */}
+            <Text style={styles.sectionLabel}>NOTIFICATIONS</Text>
             <View style={styles.card}>
               <View style={styles.row}>
-                <View>
-                  <Text style={styles.rowTitle}>クラウド同期状態</Text>
-                  <Text style={styles.rowSub}>最終同期: {lastSyncedAt || "未同期"}</Text>
+                <View style={styles.rowLeft}>
+                  <Ionicons
+                    name="notifications-outline"
+                    size={20}
+                    color="#1C1C1E"
+                  />
+                  <Text style={styles.rowText}>毎日のリマインダー</Text>
                 </View>
-                <Ionicons name="cloud-done-outline" size={20} color="#34C759" />
+                <Switch
+                  value={isNotificationEnabled}
+                  onValueChange={handleToggleSwitch}
+                  trackColor={{ false: "#E5E5EA", true: "#34C759" }}
+                />
               </View>
-              
-              <View style={styles.divider} />
 
-              <TouchableOpacity 
-                style={styles.row} 
-                onPress={() => {
-                  Alert.alert(
-                    "データの復元",
-                    "クラウドから最新データを読み込みます。現在の端末にある未保存のデータは上書きされますがよろしいですか？",
-                    [
-                      { text: "キャンセル", style: "cancel" },
-                      { text: "復元する", style: "destructive", onPress: onRestore }
-                    ]
-                  );
-                }}
-              >
-                <Text style={[styles.rowTitle, { color: "#007AFF" }]}>クラウドからデータを復元</Text>
-                <Ionicons name="download-outline" size={20} color="#007AFF" />
-              </TouchableOpacity>
+              {/* 通知がONの時だけ時間を表示 */}
+              {isNotificationEnabled && (
+                <View style={[styles.row, styles.borderTop]}>
+                  <View style={styles.rowLeft}>
+                    <Ionicons name="time-outline" size={20} color="#8E8E93" />
+                    <Text style={[styles.rowText, { color: "#8E8E93" }]}>
+                      通知時間
+                    </Text>
+                  </View>
+
+                  {Platform.OS === "ios" ? (
+                    <DateTimePicker
+                      value={notificationTime}
+                      mode="time"
+                      display="default"
+                      onChange={handleTimeChange}
+                      style={{ width: 90 }}
+                    />
+                  ) : (
+                    <>
+                      <TouchableOpacity
+                        style={styles.timeBtnAndroid}
+                        onPress={() => setShowTimePickerAndroid(true)}
+                      >
+                        <Text style={styles.timeBtnTextAndroid}>
+                          {("0" + notificationTime.getHours()).slice(-2)}:
+                          {("0" + notificationTime.getMinutes()).slice(-2)}
+                        </Text>
+                      </TouchableOpacity>
+                      {showTimePickerAndroid && (
+                        <DateTimePicker
+                          value={notificationTime}
+                          mode="time"
+                          display="default"
+                          onChange={handleTimeChange}
+                        />
+                      )}
+                    </>
+                  )}
+                </View>
+              )}
             </View>
-          </View>
 
-          {/* 情報セクション */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>アプリ情報</Text>
+            {/* 既存のバックアップセクション */}
+            <Text style={[styles.sectionLabel, { marginTop: 20 }]}>
+              DATA SYNC
+            </Text>
             <View style={styles.card}>
               <View style={styles.row}>
-                <Text style={styles.rowTitle}>バージョン</Text>
-                <Text style={styles.rowValue}>1.0.0</Text>
+                <View style={styles.rowLeft}>
+                  <Ionicons
+                    name="cloud-done-outline"
+                    size={20}
+                    color="#1C1C1E"
+                  />
+                  <Text style={styles.rowText}>最終同期</Text>
+                </View>
+                <Text style={styles.timeText}>
+                  {lastSyncedAt ? lastSyncedAt : "未同期"}
+                </Text>
               </View>
-              <View style={styles.divider} />
-              <TouchableOpacity style={styles.row}>
-                <Text style={styles.rowTitle}>利用規約（準備中）</Text>
-                <Ionicons name="chevron-forward" size={16} color="#C7C7CC" />
-              </TouchableOpacity>
-              <View style={styles.divider} />
-              <TouchableOpacity style={styles.row}>
-                <Text style={styles.rowTitle}>プライバシーポリシー（準備中）</Text>
-                <Ionicons name="chevron-forward" size={16} color="#C7C7CC" />
+              <TouchableOpacity
+                style={[styles.row, styles.borderTop]}
+                onPress={onRestore}
+              >
+                <View style={styles.rowLeft}>
+                  <Ionicons
+                    name="cloud-download-outline"
+                    size={20}
+                    color="#007AFF"
+                  />
+                  <Text
+                    style={[
+                      styles.rowText,
+                      { color: "#007AFF", fontWeight: "bold" },
+                    ]}
+                  >
+                    クラウドからデータを復元
+                  </Text>
+                </View>
               </TouchableOpacity>
             </View>
-          </View>
 
-          <Text style={styles.footerText}>Developed by Kanta Hirano</Text>
-        </ScrollView>
-      </SafeAreaView>
+            <Text style={styles.copyright}>Developed by Kanta Hirano</Text>
+          </View>
+        </TouchableWithoutFeedback>
+      </TouchableOpacity>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F2F2F7" },
-  header: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    paddingHorizontal: 20, 
-    paddingVertical: 15,
-    backgroundColor: '#FFF',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#C6C6C8'
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "flex-end",
   },
-  title: { fontSize: 17, fontWeight: '600' },
-  closeBtn: { padding: 4 },
-  scroll: { flex: 1 },
-  section: { marginTop: 25 },
-  sectionLabel: { marginHorizontal: 20, marginBottom: 8, fontSize: 13, color: "#6E6E73", textTransform: 'uppercase' },
-  card: { backgroundColor: "#FFF", borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: "#C6C6C8" },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 20, minHeight: 44 },
-  rowTitle: { fontSize: 16 },
-  rowSub: { fontSize: 12, color: "#8E8E93", marginTop: 2 },
-  rowValue: { fontSize: 16, color: "#8E8E93" },
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: "#C6C6C8", marginLeft: 20 },
-  footerText: { textAlign: 'center', marginTop: 40, marginBottom: 20, color: "#8E8E93", fontSize: 12 }
+  content: {
+    backgroundColor: "#F2F2F7",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    minHeight: "50%",
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 24,
+  },
+  title: { fontSize: 22, fontWeight: "800", color: "#1C1C1E" },
+  subTitle: { fontSize: 12, color: "#8E8E93", fontWeight: "600", marginTop: 2 },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    backgroundColor: "#E5E5EA",
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#8E8E93",
+    letterSpacing: 1,
+    marginBottom: 8,
+    marginLeft: 8,
+  },
+  card: {
+    backgroundColor: "#FFF",
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+  },
+  borderTop: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#E5E5EA",
+  },
+  rowLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  rowText: { fontSize: 16, fontWeight: "500", color: "#1C1C1E" },
+  timeText: { fontSize: 14, color: "#8E8E93", fontWeight: "500" },
+  timeBtnAndroid: {
+    backgroundColor: "#F2F2F7",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  timeBtnTextAndroid: { fontSize: 16, fontWeight: "600", color: "#1C1C1E" },
+  copyright: {
+    textAlign: "center",
+    fontSize: 12,
+    color: "#C7C7CC",
+    marginTop: 32,
+    fontWeight: "600",
+  },
 });
