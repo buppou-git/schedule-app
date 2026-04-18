@@ -8,6 +8,8 @@ import {
   useScheduleManager,
 } from "../../hooks/useScheduleManager";
 
+import { useNotificationManager } from "../../hooks/useNotificationManager";
+
 //データベース関係
 import { signInAnonymously } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
@@ -40,6 +42,7 @@ import ConfigModal from "./components/ConfigModal";
 import LayerManagementModal from "./components/LayerManagementModal";
 import MoneyDashboard from "./components/MoneyDashboard";
 import ScheduleModal from "./components/ScheduleModal";
+import SubTaskEditModal from "./components/SubTaskEditModal";
 import TabBar from "./components/TabBar";
 
 const getTodayString = () => {
@@ -60,6 +63,13 @@ export default function Index() {
   const [selectedDate, setSelectedDate] = useState(getTodayString());
 
   const { scheduleData, setScheduleData, lastSyncedAt } = useScheduleManager();
+
+  // 🌟 修正：scheduleItemNotification を追加！
+  const { cancelItemNotification, scheduleItemNotification } = useNotificationManager();
+
+  // 🌟 追加：サブタスク編集モーダル用のState
+  const [subTaskModalVisible, setSubTaskModalVisible] = useState(false);
+  const [editingSubTaskInfo, setEditingSubTaskInfo] = useState<any>(null);
 
   const [layerMaster, setLayerMaster] = useState<{ [key: string]: string }>({});
   const [tagMaster, setTagMaster] = useState<{
@@ -219,14 +229,59 @@ export default function Index() {
     // 🌟 ポイント：依存配列から scheduleData を外してスッキリさせています
   }, [layerMaster, tagMaster, presets, activeTags]);
 
+  const expandedScheduleData = useMemo(() => {
+    const expanded: { [key: string]: ScheduleItem[] } = {};
+
+    Object.keys(scheduleData).forEach((dateStr) => {
+      if (!expanded[dateStr]) expanded[dateStr] = [];
+      // 普通の予定を展開
+      expanded[dateStr].push(...scheduleData[dateStr]);
+
+      // 繰り返しの予定を処理
+      scheduleData[dateStr].forEach((item) => {
+        if (item.repeatType ) {
+          let currentDate = new Date(dateStr);
+          const endDate = new Date(dateStr);
+          endDate.setFullYear(endDate.getFullYear() + 1); // 🌟 1年先まで自動生成
+
+          while (true) {
+            if (item.repeatType === "daily") {
+              currentDate.setDate(currentDate.getDate() + 1);
+            } else if (item.repeatType === "weekly") {
+              currentDate.setDate(currentDate.getDate() + 7);
+            } else if (item.repeatType === "monthly") {
+              currentDate.setMonth(currentDate.getMonth() + 1);
+            }
+
+            if (currentDate > endDate) break;
+
+            const nextDateStr = currentDate.toISOString().split("T")[0];
+         
+            if (item.exceptionDates?.includes(nextDateStr)) continue;
+
+            if (!expanded[nextDateStr]) expanded[nextDateStr] = [];
+            const exists = expanded[nextDateStr].some((i) => i.id === item.id);
+            
+            if (!exists) {
+              // 🌟 修正：投影されたコピーの isDone は、その日が完了リストにあるかで決める
+              const isSpecificDone = item.completedDates?.includes(nextDateStr) || false;
+              expanded[nextDateStr].push({ ...item, isDone: isSpecificDone });
+            }
+          }
+        }
+      });
+    });
+    return expanded;
+  }, [scheduleData]);
+
   const markedDatesBase = useMemo(() => {
     const marked: any = {};
     const activeTagsSet = new Set(activeTags);
     const isAllLayers = activeTags.length === 0;
 
-    Object.keys(scheduleData).forEach((date) => {
+    Object.keys(expandedScheduleData).forEach((date) => {
       const dayDots = new Set<string>();
-      scheduleData[date].forEach((item) => {
+      expandedScheduleData[date].forEach((item) => {
         const matchesMode =
           (activeMode === "calendar" && item.isEvent) ||
           (activeMode === "todo" && item.isTodo) ||
@@ -308,22 +363,156 @@ export default function Index() {
 
   const toggleTodo = (date: string, id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    // 🌟 prevではなく、直接現在の scheduleData をコピーして使う
     const newData = { ...scheduleData };
-    const currentStatus = newData[date]?.find((i) => i.id === id)?.isDone;
-    const nextStatus = !currentStatus;
 
-    Object.keys(newData).forEach((d) => {
-      newData[d] = newData[d].map((i) =>
-        i.id === id ? { ...i, isDone: nextStatus } : i,
-      );
-    });
+    // 対象のアイテム（元データ）を全探索
+    let targetItem: ScheduleItem | null = null;
+    let originalDate = "";
 
-    // 新しいデータをセット
+    for (const d of Object.keys(newData)) {
+      const found = newData[d].find(i => i.id === id);
+      if (found) {
+        targetItem = found;
+        originalDate = d;
+        break;
+      }
+    }
+
+    if (!targetItem) return;
+
+    if (targetItem.repeatType) {
+      // 🌟 繰り返し予定の場合：配列を更新
+      const completedDates = targetItem.completedDates || [];
+      if (completedDates.includes(date)) {
+        targetItem.completedDates = completedDates.filter(d => d !== date);
+      } else {
+        targetItem.completedDates = [...completedDates, date];
+      }
+    } else {
+      // 通常の予定：単一のフラグを更新
+      targetItem.isDone = !targetItem.isDone;
+    }
+
     setScheduleData(newData);
     setHasUnsavedChanges(true);
   };
+
+
+  const toggleSubTodo = async (date: string, parentId: string, subTaskId: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const newData = { ...scheduleData };
+
+    let targetDate = date;
+    let found = false;
+
+    // 仮想データも考慮して実体を探す
+    if (newData[targetDate] && newData[targetDate].some(i => i.id === parentId)) {
+      found = true;
+    } else {
+      for (const d of Object.keys(newData)) {
+        if (newData[d].some(i => i.id === parentId)) {
+          targetDate = d;
+          found = true;
+          break;
+        }
+      }
+    }
+    if (!found) return;
+
+    // 対象の親タスクとそのサブタスクを見つけて更新
+    newData[targetDate] = newData[targetDate].map(item => {
+      if (item.id === parentId && item.subTasks) {
+        const updatedSubTasks = item.subTasks.map(sub => {
+          if (sub.id === subTaskId) {
+            const nextStatus = !sub.isDone;
+            // 💡 おもてなし：完了にした時、もし通知が予約されていたら自動キャンセル
+            if (nextStatus && sub.notificationId) {
+              cancelItemNotification(sub.notificationId);
+            }
+            return { 
+              ...sub, 
+              isDone: nextStatus,
+              notificationId: nextStatus ? undefined : sub.notificationId,
+              reminderOption: nextStatus ? "none" : sub.reminderOption
+            };
+          }
+          return sub;
+        });
+       // 🌟 追加：サブタスクが1つ以上あり、かつ「すべて完了」しているか判定
+       const isAllSubTasksDone =
+       updatedSubTasks.length > 0 &&
+       updatedSubTasks.every((sub: any) => sub.isDone);
+
+     // 🌟 修正：親タスクの isDone も連動して上書きする
+     return {
+       ...item,
+       subTasks: updatedSubTasks,
+       isDone: isAllSubTasksDone,
+     };
+   }
+   return item;
+ });
+
+ setScheduleData(newData);
+
+    setScheduleData(newData);
+    setHasUnsavedChanges(true);
+  };
+
+  const handleSubTaskSave = async (updatedSub: any) => {
+    if (!editingSubTaskInfo) return;
+    const { parentId, parentTitle, date } = editingSubTaskInfo;
+    const newData = { ...scheduleData };
+
+    let targetDate = date;
+    let found = false;
+    if (newData[targetDate] && newData[targetDate].some(i => i.id === parentId)) {
+      found = true;
+    } else {
+      for (const d of Object.keys(newData)) {
+        if (newData[d].some(i => i.id === parentId)) {
+          targetDate = d;
+          found = true;
+          break;
+        }
+      }
+    }
+    if (!found) return;
+
+    // 💡 通知の再予約（古いものを消して、新しい時間でセット）
+    if (updatedSub.notificationId) {
+      await cancelItemNotification(updatedSub.notificationId);
+      updatedSub.notificationId = undefined;
+    }
+    if (updatedSub.hasDateTime && updatedSub.endTime && updatedSub.reminderOption !== "none" && !updatedSub.isDone) {
+      let triggerDate = new Date(updatedSub.endTime);
+      if (updatedSub.reminderOption === "1hour") triggerDate.setHours(triggerDate.getHours() - 1);
+      else if (updatedSub.reminderOption === "1day") triggerDate.setDate(triggerDate.getDate() - 1);
+
+      if (triggerDate > new Date()) {
+        const id = await scheduleItemNotification(`🔔【${parentTitle}】${updatedSub.title}`, triggerDate);
+        if (id) updatedSub.notificationId = id;
+      }
+    }
+
+    newData[targetDate] = newData[targetDate].map(item => {
+      if (item.id === parentId && item.subTasks) {
+        return {
+          ...item,
+          subTasks: item.subTasks.map(sub => sub.id === updatedSub.id ? updatedSub : sub)
+        };
+      }
+      return item;
+    });
+
+    setScheduleData(newData);
+    setHasUnsavedChanges(true);
+    setSubTaskModalVisible(false);
+  };
+
+
+
+
 
   const handleRestore = async () => {
     const user = auth.currentUser;
@@ -415,7 +604,7 @@ export default function Index() {
   };
 
   const { dayTasks, upcomingTasks, dayEvents } = useMemo(() => {
-    const items = scheduleData[selectedDate] || [];
+    const items = expandedScheduleData[selectedDate] || [];
     const isAllLayers = activeTags.length === 0;
     const activeTagsSet = new Set(activeTags);
 
@@ -446,7 +635,7 @@ export default function Index() {
     const addedUpcomingIds = new Set<string>();
 
     if (activeMode === "todo") {
-      const sortedDates = Object.keys(scheduleData).sort();
+      const sortedDates = Object.keys(expandedScheduleData).sort();
       sortedDates.forEach((date) => {
         if (date > selectedDate) {
           scheduleData[date].forEach((task) => {
@@ -507,98 +696,100 @@ export default function Index() {
     }
 
     return (
-      <TouchableOpacity
-        key={item.id}
-        style={[styles.todoCard, item.isDone && styles.todoCardDone]}
-        onPress={() => openEditModal(item)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.stripeContainer}>
-          {uniqueColors.map((color: any, idx: number) => (
-            <View
-              key={idx}
-              style={[styles.todoAccent, { backgroundColor: color }]}
-            />
-          ))}
-        </View>
-        <View style={styles.todoContent}>
-          <View style={styles.todoMainRow}>
-            <Text
-              style={[styles.todoTitle, item.isDone && styles.todoTitleDone]}
-              numberOfLines={1}
-            >
-              {item.title}
-            </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 4 }}
-            >
-              {itemTags.map((tag: string, idx: number) => (
-                <View
-                  key={idx}
-                  style={[
-                    styles.miniTagBadge,
-                    {
-                      backgroundColor: displayColors[idx] + "15",
-                      borderColor: displayColors[idx],
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[styles.miniTagText, { color: displayColors[idx] }]}
-                  >
-                    {tag}
-                  </Text>
-                </View>
-              ))}
-            </ScrollView>
+      <View key={item.id} style={{ marginBottom: 12 }}>
+        {/* --- 👑 親タスクのカード --- */}
+        <TouchableOpacity
+          style={[styles.todoCard, item.isDone && styles.todoCardDone, { marginBottom: 0 }]}
+          onPress={() => openEditModal(item)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.stripeContainer}>
+            {uniqueColors.map((color: any, idx: number) => (
+              <View key={idx} style={[styles.todoAccent, { backgroundColor: color }]} />
+            ))}
           </View>
-
-          <View style={styles.todoSubRow}>
-            {isFinalDay && !item.isDone ? (
-              <View style={styles.deadlineBadgeUrgent}>
-                <Ionicons
-                  name="flame"
-                  size={10}
-                  color="#FFF"
-                  style={{ marginRight: 2 }}
-                />
-                <Text style={styles.deadlineBadgeTextUrgent}>
-                  TODAY: 最終日!
-                </Text>
+          <View style={styles.todoContent}>
+            <View style={styles.todoMainRow}>
+              <Text style={[styles.todoTitle, item.isDone && styles.todoTitleDone]} numberOfLines={1}>
+                {item.title}
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 4 }}>
+                {itemTags.map((tag: string, idx: number) => (
+                  <View key={idx} style={[styles.miniTagBadge, { backgroundColor: displayColors[idx] + "15", borderColor: displayColors[idx] }]}>
+                    <Text style={[styles.miniTagText, { color: displayColors[idx] }]}>{tag}</Text>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+            <View style={styles.todoSubRow}>
+              {isFinalDay && !item.isDone ? (
+                <View style={styles.deadlineBadgeUrgent}>
+                  <Ionicons name="flame" size={10} color="#FFF" style={{ marginRight: 2 }} />
+                  <Text style={styles.deadlineBadgeTextUrgent}>TODAY: 最終日!</Text>
+                </View>
+              ) : daysLeft !== null && daysLeft > 0 && !item.isDone ? (
+                <View style={styles.deadlineBadgeSafe}>
+                  <Ionicons name="leaf-outline" size={10} color="#34C759" style={{ marginRight: 2 }} />
+                  <Text style={styles.deadlineBadgeTextSafe}>残り {daysLeft} 日</Text>
+                </View>
+              ) : null}
+              <View style={styles.todoTimeRow}>
+                <Ionicons name="time-outline" size={10} color="#8E8E93" />
+                <Text style={styles.todoTimeText}>{formatEventTime(item)}</Text>
               </View>
-            ) : daysLeft !== null && daysLeft > 0 && !item.isDone ? (
-              <View style={styles.deadlineBadgeSafe}>
-                <Ionicons
-                  name="leaf-outline"
-                  size={10}
-                  color="#34C759"
-                  style={{ marginRight: 2 }}
-                />
-                <Text style={styles.deadlineBadgeTextSafe}>
-                  残り {daysLeft} 日
-                </Text>
-              </View>
-            ) : null}
-
-            <View style={styles.todoTimeRow}>
-              <Ionicons name="time-outline" size={10} color="#8E8E93" />
-              <Text style={styles.todoTimeText}>{formatEventTime(item)}</Text>
             </View>
           </View>
-        </View>
-        <TouchableOpacity
-          style={styles.checkButton}
-          onPress={() => toggleTodo(itemDate, item.id)}
-        >
-          <Ionicons
-            name={item.isDone ? "checkmark-circle" : "ellipse-outline"}
-            size={24}
-            color={item.isDone ? "#34C759" : "#C7C7CC"}
-          />
+          <TouchableOpacity style={styles.checkButton} onPress={() => toggleTodo(itemDate, item.id)}>
+            <Ionicons name={item.isDone ? "checkmark-circle" : "ellipse-outline"} size={24} color={item.isDone ? "#34C759" : "#C7C7CC"} />
+          </TouchableOpacity>
         </TouchableOpacity>
-      </TouchableOpacity>
+
+        {/* --- 👶 サブタスクの入れ子UI --- */}
+        {item.subTasks && item.subTasks.length > 0 && (
+          <View style={styles.subTaskListContainer}>
+            {item.subTasks.map((sub: any) => (
+             <TouchableOpacity
+             key={sub.id}
+             style={[styles.subTaskMiniCard, sub.isDone && { opacity: 0.5 }]}
+             onPress={() => {
+               // 🌟 修正：親の情報と一緒に専用モーダルを開く！
+               setEditingSubTaskInfo({
+                 parentId: item.id,
+                 parentTitle: item.title,
+                 date: itemDate,
+                 subTask: sub,
+               });
+               setSubTaskModalVisible(true);
+             }}
+             activeOpacity={0.6}
+           >
+                <TouchableOpacity
+                  style={{ padding: 4, marginRight: 6 }}
+                  onPress={() => toggleSubTodo(itemDate, item.id, sub.id)}
+                >
+                  <Ionicons
+                    name={sub.isDone ? "checkmark-circle" : "ellipse-outline"}
+                    size={20}
+                    color={sub.isDone ? "#34C759" : "#AEAEB2"}
+                  />
+                </TouchableOpacity>
+                <Text style={[styles.subTaskMiniTitle, sub.isDone && styles.todoTitleDone]}>
+                  {sub.title}
+                </Text>
+                
+                {sub.hasDateTime && sub.endTime && (
+                  <View style={{ flexDirection: "row", alignItems: "center", marginLeft: "auto" }}>
+                    <Ionicons name="time-outline" size={12} color="#8E8E93" style={{ marginRight: 4 }} />
+                    <Text style={{ fontSize: 10, color: "#8E8E93" }}>
+                      {new Date(sub.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </View>
     );
   };
 
@@ -1184,6 +1375,15 @@ export default function Index() {
         lastSyncedAt={lastSyncedAt}
         onRestore={handleRestore}
       />
+      <SubTaskEditModal
+        visible={subTaskModalVisible}
+        onClose={() => setSubTaskModalVisible(false)}
+        subTask={editingSubTaskInfo?.subTask || null}
+        onSave={handleSubTaskSave}
+        themeColor={currentSolidColor}
+      />
+
+
     </SafeAreaView>
   );
 }
@@ -1560,4 +1760,26 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   namingConfirmText: { fontSize: 12, fontWeight: "700", color: "#FFF" },
+  subTaskListContainer: {
+    marginLeft: 20, // ここでインデント（字下げ）を作ります！
+    paddingLeft: 12,
+    borderLeftWidth: 2,
+    borderLeftColor: "#E5E5EA", // 枝分かれの線
+    marginTop: 6,
+    gap: 6,
+  },
+  subTaskMiniCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8F8FA",
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+  },
+  subTaskMiniTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#333",
+    flex: 1,
+  },
 });

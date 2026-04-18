@@ -25,6 +25,10 @@ export interface ScheduleItem {
   startTime?: string;
   endTime?: string;
   notificationId?: string;
+  completedDates?: string[]; // 完了した日付のリスト（例: ["2026-04-18", "2026-04-19"]）
+  exceptionDates?: string[]; // 繰り返しから除外する日付（「今回のみ変更」した時に元の予定を隠す用）
+  linkedMasterId?: string;   // 「今回のみ変更」で作られた予定が、どの元予定から派生したか
+  subTasks?: any[];
 }
 
 export const useScheduleManager = () => {
@@ -66,10 +70,13 @@ export const useScheduleManager = () => {
         const userRef = doc(db, "users", auth.currentUser.uid);
         const now = new Date().toISOString();
 
+        // 🌟 追加：Firebaseに送る前に、JSONの変換を通して「undefined」を完全に消去（サニタイズ）する！
+        const sanitizedData = JSON.parse(JSON.stringify(newData));
+
         // merge: true をつけることで、他のデータ（タグ設定など）を消さずに上書きできます
         await setDoc(
           userRef,
-          { scheduleData: newData, lastSyncedAt: now },
+          { scheduleData: sanitizedData, lastSyncedAt: now }, // 🌟 newData を sanitizedData に変更
           { merge: true },
         );
 

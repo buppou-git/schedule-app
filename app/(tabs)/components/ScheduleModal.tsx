@@ -32,6 +32,7 @@ interface SubTask {
   endTime?: Date;
   reminderOption?: string;
   notificationId?: string;
+  isDone?: boolean;
 }
 
 interface ScheduleItem {
@@ -56,6 +57,11 @@ interface ScheduleItem {
   notificationIds?: string[];
   reminderOptions?: string[];
   customReminderTimes?: string[];
+  completedDates?: string[]; // 完了した日付のリスト（例: ["2026-04-18", "2026-04-19"]）
+  exceptionDates?: string[]; // 繰り返しから除外する日付（「今回のみ変更」した時に元の予定を隠す用）
+  linkedMasterId?: string;   // 「今回のみ変更」で作られた予定が、どの元予定から派生したか
+  subTasks?: SubTask[];
+
 }
 
 interface ScheduleModalProps {
@@ -306,6 +312,7 @@ export default function ScheduleModal({
         } else {
           setCustomReminderTimes([]);
         }
+        setRepeatType(selectedItem.repeatType || "none");
       } else {
         setInputText("");
         setTagInput("");
@@ -324,8 +331,8 @@ export default function ScheduleModal({
         setEndTime(new Date(now.getTime() + 60 * 60 * 1000));
         setSelectedReminders([]);
         setCustomReminderTimes([]);
+        setRepeatType("none");
       }
-      setRepeatType("none");
       setSubTasks([]);
       setIsCreatingNewTag(false);
       setShowSubTasks(false);
@@ -373,9 +380,28 @@ export default function ScheduleModal({
     [selectedLayer, quickMainTags],
   );
 
-  const executeSave = async (updateFuture: boolean) => {
+  const handleSavePress = () => {
     if (!inputText) return Alert.alert("エラー", "タイトルを入力してください");
 
+    if (selectedItem && selectedItem.repeatType) {
+      Alert.alert(
+        "繰り返しの編集",
+        "この予定の変更をどのように適用しますか？",
+        [
+          { text: "今回のみ", onPress: () => executeSave("single") },
+          { text: "今後すべて", onPress: () => executeSave("all") },
+          { text: "キャンセル", style: "cancel" }
+        ]
+      );
+    } else {
+      executeSave("normal");
+    }
+  };
+
+
+
+  const executeSave = async (mode: "normal" | "all" | "single") => {
+    if (!inputText) return Alert.alert("エラー", "タイトルを入力してください");
     const r = {
       ...readingMaster,
       [inputText.trim()]: toHiragana(inputText.trim()),
@@ -517,12 +543,42 @@ export default function ScheduleModal({
     };
 
     if (selectedItem) {
-      Object.keys(newData).forEach((d) => {
-        newData[d] = newData[d].filter((i: any) => i.id !== selectedItem.id);
-      });
-      if (!newData[sStr]) newData[sStr] = [];
-      newData[sStr].push({ ...selectedItem, ...itemData });
+      // 🌟 分岐：「今回のみ」を選んだ場合
+      if (mode === "single") {
+        // 1. 元の予定の除外リスト（exceptionDates）に今回の日付を追加して、元の予定を見えなくする
+        Object.keys(newData).forEach((d) => {
+          newData[d] = newData[d].map((i: any) => {
+            if (i.id === selectedItem.id) {
+              return {
+                ...i,
+                exceptionDates: [...(i.exceptionDates || []), selectedDate],
+              };
+            }
+            return i;
+          });
+        });
+
+        // 2. 今回だけの独立した新しい予定を生成する
+        const newItem = {
+          ...selectedItem,
+          ...itemData,
+          id: Date.now().toString(), // 新しいIDを付与
+          repeatType: undefined,     // 繰り返し属性を剥奪
+          linkedMasterId: selectedItem.id, // 念のため元の親IDを記録
+        };
+        if (!newData[sStr]) newData[sStr] = [];
+        newData[sStr].push(newItem);
+
+      } else {
+        // 🌟 分岐：「今後すべて」または「通常」の編集
+        Object.keys(newData).forEach((d) => {
+          newData[d] = newData[d].filter((i: any) => i.id !== selectedItem.id);
+        });
+        if (!newData[sStr]) newData[sStr] = [];
+        newData[sStr].push({ ...selectedItem, ...itemData });
+      }
     } else {
+      // 新規作成
       if (!newData[sStr]) newData[sStr] = [];
       newData[sStr].push({
         id: Date.now().toString(),
@@ -538,17 +594,70 @@ export default function ScheduleModal({
     }, 300);
   };
 
-  const executeDelete = () => {
-    const newData = { ...scheduleData };
+// 🌟 追加：削除ボタンを押した時の分岐ロジック
+const handleDeletePress = () => {
+  if (selectedItem && selectedItem.repeatType) {
+    Alert.alert(
+      "繰り返しの削除",
+      "この予定をどのように削除しますか？",
+      [
+        { text: "今回のみ", onPress: () => executeDelete("single") },
+        { text: "今後すべて", onPress: () => executeDelete("all") },
+        { text: "キャンセル", style: "cancel" }
+      ]
+    );
+  } else {
+    executeDelete("normal");
+  }
+};
+
+// 🌟 変更：削除の実行部分（async をつけて通知キャンセルを待てるようにします）
+const executeDelete = async (mode: "normal" | "all" | "single") => {
+  if (!selectedItem) return;
+  const newData = { ...scheduleData };
+
+  if (mode === "single") {
+    // 🌟 「今回のみ」削除：元の予定の例外リスト（exceptionDates）に今日を追加して隠す
     Object.keys(newData).forEach((d) => {
-      newData[d] = newData[d].filter((i: any) => i.id !== selectedItem!.id);
+      newData[d] = newData[d].map((i: any) => {
+        if (i.id === selectedItem.id) {
+          return {
+            ...i,
+            exceptionDates: [...(i.exceptionDates || []), selectedDate],
+          };
+        }
+        return i;
+      });
     });
-    onClose();
-    setTimeout(() => {
-      setScheduleData(newData);
-      setHasUnsavedChanges(true);
-    }, 300);
-  };
+  } else {
+    // 🌟 「今後すべて」または「通常の予定」の削除
+    // 🚨 ゴースト通知対策：メインの通知をOSからキャンセル
+    if (selectedItem.notificationIds) {
+      for (const id of selectedItem.notificationIds) {
+        await cancelItemNotification(id);
+      }
+    }
+    // 🚨 ゴースト通知対策：サブタスクの通知をOSからキャンセル
+    if (selectedItem.subTasks) {
+      for (const task of selectedItem.subTasks) {
+        if (task.notificationId) {
+          await cancelItemNotification(task.notificationId);
+        }
+      }
+    }
+
+    // データから完全に削除
+    Object.keys(newData).forEach((d) => {
+      newData[d] = newData[d].filter((i: any) => i.id !== selectedItem.id);
+    });
+  }
+
+  onClose();
+  setTimeout(() => {
+    setScheduleData(newData);
+    setHasUnsavedChanges(true);
+  }, 300);
+};
 
   const timeAndTagSection = useMemo(() => {
     if (!isReady) return <View style={{ minHeight: 200 }} />;
@@ -616,6 +725,34 @@ export default function ScheduleModal({
               </View>
             </View>
           </View>
+        </View>
+
+        <Text style={styles.label}>繰り返し</Text>
+        <View style={styles.layerContainer}>
+          {[
+            { label: "なし", value: "none" },
+            { label: "毎日", value: "daily" },
+            { label: "毎週", value: "weekly" },
+            { label: "毎月", value: "monthly" },
+          ].map((opt) => (
+            <TouchableOpacity
+              key={opt.value}
+              style={[
+                styles.layerChip,
+                repeatType === opt.value && { backgroundColor: uiThemeColor },
+              ]}
+              onPress={() => setRepeatType(opt.value as any)}
+            >
+              <Text
+                style={[
+                  styles.layerChipText,
+                  repeatType === opt.value && { color: "#fff" },
+                ]}
+              >
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
         <Text style={styles.label}>カレンダーの種類</Text>
@@ -695,6 +832,7 @@ export default function ScheduleModal({
     tagMaster,
     tagInput,
     isCreatingNewTag,
+    repeatType,
   ]);
 
   const subTaskSection = useMemo(() => {
@@ -732,17 +870,48 @@ export default function ScheduleModal({
                     alignItems: "center",
                   }}
                 >
-                  <TextInput
-                    style={styles.subTaskInput}
-                    placeholder="やる事..."
-                    placeholderTextColor="#BBB"
-                    value={task.title}
-                    onChangeText={(t) => {
-                      const n = [...subTasks];
-                      n[idx].title = t;
-                      setSubTasks(n);
-                    }}
-                  />
+                  <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
+                    {/* 🌟 チェックボックス（完了切り替え） */}
+                    <TouchableOpacity
+                      onPress={async () => {
+                        const n = [...subTasks];
+                        n[idx].isDone = !n[idx].isDone;
+                        
+                        // 💡 おもてなし：完了にした時、もし通知が予約されていたら自動でキャンセルする
+                        if (n[idx].isDone && n[idx].notificationId) {
+                          await cancelItemNotification(n[idx].notificationId);
+                          n[idx].notificationId = undefined;
+                          n[idx].reminderOption = "none";
+                        }
+                        
+                        setSubTasks(n);
+                      }}
+                      style={{ marginRight: 8 }}
+                    >
+                      <Ionicons
+                        name={task.isDone ? "checkmark-circle" : "ellipse-outline"}
+                        size={22}
+                        color={task.isDone ? "#34C759" : "#C7C7CC"}
+                      />
+                    </TouchableOpacity>
+
+                    <TextInput
+                      style={[
+                        styles.subTaskInput,
+                        // 🌟 完了時は文字をグレーにして打ち消し線を引く
+                        task.isDone && { textDecorationLine: "line-through", color: "#8E8E93" }
+                      ]}
+                      placeholder="やる事..."
+                      placeholderTextColor="#BBB"
+                      value={task.title}
+                      editable={!task.isDone} // 🌟 完了済みは編集不可にする（お好みで）
+                      onChangeText={(t) => {
+                        const n = [...subTasks];
+                        n[idx].title = t;
+                        setSubTasks(n);
+                      }}
+                    />
+                  </View>
                   <TouchableOpacity
                     onPress={() =>
                       setSubTasks(subTasks.filter((t) => t.id !== task.id))
@@ -969,9 +1138,12 @@ export default function ScheduleModal({
               </View>
             ))}
 
-            <TouchableOpacity
+<TouchableOpacity
               style={styles.addSubTaskBtn}
               onPress={() => {
+                // 🌟 追加：子タスクを作るということは「ToDo」なので、自動でスイッチON！
+                setIsTodo(true);
+
                 setSubTasks([
                   ...subTasks,
                   {
@@ -981,6 +1153,7 @@ export default function ScheduleModal({
                     hasDateTime: false,
                     amount: 0,
                     isExpense: false,
+                    isDone: false,
                     category: selectedCategory,
                   },
                 ]);
@@ -1413,7 +1586,7 @@ export default function ScheduleModal({
                     <Text style={{ color: "#999" }}>キャンセル</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    onPress={() => executeSave(false)}
+                    onPress={handleSavePress}
                     style={[styles.saveBtn, { backgroundColor: uiThemeColor }]}
                   >
                     <Text style={styles.saveBtnText}>保存して閉じる</Text>
@@ -1422,7 +1595,7 @@ export default function ScheduleModal({
 
                 {selectedItem && (
                   <TouchableOpacity
-                    onPress={executeDelete}
+                  onPress={handleDeletePress}
                     style={styles.deleteBtn}
                   >
                     <Ionicons name="trash-outline" size={18} color="#FF3B30" />
