@@ -48,7 +48,6 @@ interface ScheduleItem {
   isExpense: boolean;
   category?: string;
   recurringGroupId?: string;
-  repeatType?: "daily" | "weekly" | "monthly";
   isAllDay?: boolean;
   startDate?: string;
   endDate?: string;
@@ -61,6 +60,9 @@ interface ScheduleItem {
   exceptionDates?: string[]; // 繰り返しから除外する日付（「今回のみ変更」した時に元の予定を隠す用）
   linkedMasterId?: string;   // 「今回のみ変更」で作られた予定が、どの元予定から派生したか
   subTasks?: SubTask[];
+  repeatType?: "daily" | "weekly" | "monthly" | "custom"; // 🌟 custom を追加
+  repeatDays?: number[];     // 🌟 [1, 2, 3, 4, 5] (月〜金) のような配列
+  repeatInterval?: number;   // 🌟 1 (毎週), 2 (隔週) などの数値
 
 }
 
@@ -103,6 +105,8 @@ const ModernDatePicker = ({
     mode === "date"
       ? `${value.getFullYear()}/${("0" + (value.getMonth() + 1)).slice(-2)}/${("0" + value.getDate()).slice(-2)}`
       : `${("0" + value.getHours()).slice(-2)}:${("0" + value.getMinutes()).slice(-2)}`;
+
+
 
   return (
     <>
@@ -218,9 +222,14 @@ export default function ScheduleModal({
   const [tagInput, setTagInput] = useState("");
   const [tagColor, setTagColor] = useState("#007AFF");
   const [selectedCategory, setSelectedCategory] = useState("食費");
+  
+  // 🌟 修正："custom" を追加し、迷子だった変数をここにお引越し！
   const [repeatType, setRepeatType] = useState<
-    "none" | "daily" | "weekly" | "monthly"
+    "none" | "daily" | "weekly" | "monthly" | "custom"
   >("none");
+  const [repeatDays, setRepeatDays] = useState<number[]>([]);
+  const [repeatInterval, setRepeatInterval] = useState(1);
+
   const [isAllDay, setIsAllDay] = useState(true);
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
@@ -313,6 +322,8 @@ export default function ScheduleModal({
           setCustomReminderTimes([]);
         }
         setRepeatType(selectedItem.repeatType || "none");
+        setRepeatDays(selectedItem.repeatDays || []); 
+        setRepeatInterval(selectedItem.repeatInterval || 1); 
       } else {
         setInputText("");
         setTagInput("");
@@ -531,6 +542,8 @@ export default function ScheduleModal({
       color: finalColor,
       category: isExpense ? selectedCategory : undefined,
       repeatType: repeatType !== "none" ? repeatType : undefined,
+      repeatDays: repeatType === "custom" ? repeatDays : undefined,
+      repeatInterval: repeatType === "custom" ? repeatInterval : undefined,
       isAllDay,
       startDate: sStr,
       endDate: endDate.toISOString().split("T")[0],
@@ -594,70 +607,70 @@ export default function ScheduleModal({
     }, 300);
   };
 
-// 🌟 追加：削除ボタンを押した時の分岐ロジック
-const handleDeletePress = () => {
-  if (selectedItem && selectedItem.repeatType) {
-    Alert.alert(
-      "繰り返しの削除",
-      "この予定をどのように削除しますか？",
-      [
-        { text: "今回のみ", onPress: () => executeDelete("single") },
-        { text: "今後すべて", onPress: () => executeDelete("all") },
-        { text: "キャンセル", style: "cancel" }
-      ]
-    );
-  } else {
-    executeDelete("normal");
-  }
-};
+  // 🌟 追加：削除ボタンを押した時の分岐ロジック
+  const handleDeletePress = () => {
+    if (selectedItem && selectedItem.repeatType) {
+      Alert.alert(
+        "繰り返しの削除",
+        "この予定をどのように削除しますか？",
+        [
+          { text: "今回のみ", onPress: () => executeDelete("single") },
+          { text: "今後すべて", onPress: () => executeDelete("all") },
+          { text: "キャンセル", style: "cancel" }
+        ]
+      );
+    } else {
+      executeDelete("normal");
+    }
+  };
 
-// 🌟 変更：削除の実行部分（async をつけて通知キャンセルを待てるようにします）
-const executeDelete = async (mode: "normal" | "all" | "single") => {
-  if (!selectedItem) return;
-  const newData = { ...scheduleData };
+  // 🌟 変更：削除の実行部分（async をつけて通知キャンセルを待てるようにします）
+  const executeDelete = async (mode: "normal" | "all" | "single") => {
+    if (!selectedItem) return;
+    const newData = { ...scheduleData };
 
-  if (mode === "single") {
-    // 🌟 「今回のみ」削除：元の予定の例外リスト（exceptionDates）に今日を追加して隠す
-    Object.keys(newData).forEach((d) => {
-      newData[d] = newData[d].map((i: any) => {
-        if (i.id === selectedItem.id) {
-          return {
-            ...i,
-            exceptionDates: [...(i.exceptionDates || []), selectedDate],
-          };
-        }
-        return i;
+    if (mode === "single") {
+      // 🌟 「今回のみ」削除：元の予定の例外リスト（exceptionDates）に今日を追加して隠す
+      Object.keys(newData).forEach((d) => {
+        newData[d] = newData[d].map((i: any) => {
+          if (i.id === selectedItem.id) {
+            return {
+              ...i,
+              exceptionDates: [...(i.exceptionDates || []), selectedDate],
+            };
+          }
+          return i;
+        });
       });
-    });
-  } else {
-    // 🌟 「今後すべて」または「通常の予定」の削除
-    // 🚨 ゴースト通知対策：メインの通知をOSからキャンセル
-    if (selectedItem.notificationIds) {
-      for (const id of selectedItem.notificationIds) {
-        await cancelItemNotification(id);
-      }
-    }
-    // 🚨 ゴースト通知対策：サブタスクの通知をOSからキャンセル
-    if (selectedItem.subTasks) {
-      for (const task of selectedItem.subTasks) {
-        if (task.notificationId) {
-          await cancelItemNotification(task.notificationId);
+    } else {
+      // 🌟 「今後すべて」または「通常の予定」の削除
+      // 🚨 ゴースト通知対策：メインの通知をOSからキャンセル
+      if (selectedItem.notificationIds) {
+        for (const id of selectedItem.notificationIds) {
+          await cancelItemNotification(id);
         }
       }
+      // 🚨 ゴースト通知対策：サブタスクの通知をOSからキャンセル
+      if (selectedItem.subTasks) {
+        for (const task of selectedItem.subTasks) {
+          if (task.notificationId) {
+            await cancelItemNotification(task.notificationId);
+          }
+        }
+      }
+
+      // データから完全に削除
+      Object.keys(newData).forEach((d) => {
+        newData[d] = newData[d].filter((i: any) => i.id !== selectedItem.id);
+      });
     }
 
-    // データから完全に削除
-    Object.keys(newData).forEach((d) => {
-      newData[d] = newData[d].filter((i: any) => i.id !== selectedItem.id);
-    });
-  }
-
-  onClose();
-  setTimeout(() => {
-    setScheduleData(newData);
-    setHasUnsavedChanges(true);
-  }, 300);
-};
+    onClose();
+    setTimeout(() => {
+      setScheduleData(newData);
+      setHasUnsavedChanges(true);
+    }, 300);
+  };
 
   const timeAndTagSection = useMemo(() => {
     if (!isReady) return <View style={{ minHeight: 200 }} />;
@@ -734,6 +747,7 @@ const executeDelete = async (mode: "normal" | "all" | "single") => {
             { label: "毎日", value: "daily" },
             { label: "毎週", value: "weekly" },
             { label: "毎月", value: "monthly" },
+            { label: "カスタム", value: "custom" },
           ].map((opt) => (
             <TouchableOpacity
               key={opt.value}
@@ -754,6 +768,46 @@ const executeDelete = async (mode: "normal" | "all" | "single") => {
             </TouchableOpacity>
           ))}
         </View>
+        {repeatType === "custom" && (
+          <View style={styles.customRepeatArea}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 12 }}>
+              <Text style={styles.miniLabel}>曜日の選択</Text>
+              <TouchableOpacity onPress={() => setRepeatDays([1, 2, 3, 4, 5])}>
+                <Text style={{ fontSize: 11, color: uiThemeColor, fontWeight: "bold" }}>平日のみ選択</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.daySelectorRow}>
+              {["日", "月", "火", "水", "木", "金", "土"].map((day, idx) => {
+                const isSelected = repeatDays.includes(idx);
+                return (
+                  <TouchableOpacity
+                    key={idx}
+                    style={[styles.dayCircle, isSelected && { backgroundColor: uiThemeColor, borderColor: uiThemeColor }]}
+                    onPress={() => {
+                      setRepeatDays(prev => prev.includes(idx) ? prev.filter(d => d !== idx) : [...prev, idx]);
+                    }}
+                  >
+                    <Text style={[styles.dayText, isSelected && { color: "#FFF" }]}>{day}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <View style={styles.intervalRow}>
+              <Text style={styles.miniLabel}>繰り返しの間隔:</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <TextInput
+                  style={styles.intervalInput}
+                  keyboardType="numeric"
+                  value={repeatInterval.toString()}
+                  onChangeText={(t) => setRepeatInterval(parseInt(t) || 1)}
+                />
+                <Text style={{ fontSize: 14, fontWeight: "bold", color: "#1C1C1E" }}>週間ごと</Text>
+              </View>
+            </View>
+          </View>
+        )}
 
         <Text style={styles.label}>カレンダーの種類</Text>
         <View style={styles.layerContainer}>
@@ -833,6 +887,8 @@ const executeDelete = async (mode: "normal" | "all" | "single") => {
     tagInput,
     isCreatingNewTag,
     repeatType,
+    repeatDays,  
+    repeatInterval,
   ]);
 
   const subTaskSection = useMemo(() => {
@@ -871,30 +927,6 @@ const executeDelete = async (mode: "normal" | "all" | "single") => {
                   }}
                 >
                   <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-                    {/* 🌟 チェックボックス（完了切り替え） */}
-                    <TouchableOpacity
-                      onPress={async () => {
-                        const n = [...subTasks];
-                        n[idx].isDone = !n[idx].isDone;
-                        
-                        // 💡 おもてなし：完了にした時、もし通知が予約されていたら自動でキャンセルする
-                        if (n[idx].isDone && n[idx].notificationId) {
-                          await cancelItemNotification(n[idx].notificationId);
-                          n[idx].notificationId = undefined;
-                          n[idx].reminderOption = "none";
-                        }
-                        
-                        setSubTasks(n);
-                      }}
-                      style={{ marginRight: 8 }}
-                    >
-                      <Ionicons
-                        name={task.isDone ? "checkmark-circle" : "ellipse-outline"}
-                        size={22}
-                        color={task.isDone ? "#34C759" : "#C7C7CC"}
-                      />
-                    </TouchableOpacity>
-
                     <TextInput
                       style={[
                         styles.subTaskInput,
@@ -1138,7 +1170,7 @@ const executeDelete = async (mode: "normal" | "all" | "single") => {
               </View>
             ))}
 
-<TouchableOpacity
+            <TouchableOpacity
               style={styles.addSubTaskBtn}
               onPress={() => {
                 // 🌟 追加：子タスクを作るということは「ToDo」なので、自動でスイッチON！
@@ -1325,19 +1357,19 @@ const executeDelete = async (mode: "normal" | "all" | "single") => {
 
                       {(isAllDay
                         ? [
-                            { label: "当日の朝", value: "morning" },
-                            { label: "前日", value: "dayBefore" },
-                            { label: "2日前", value: "2daysBefore" },
-                            { label: "カスタム", value: "custom" },
-                          ]
+                          { label: "当日の朝", value: "morning" },
+                          { label: "前日", value: "dayBefore" },
+                          { label: "2日前", value: "2daysBefore" },
+                          { label: "カスタム", value: "custom" },
+                        ]
                         : [
-                            { label: "ちょうど", value: "exact" },
-                            { label: "10分前", value: "10min" },
-                            { label: "30分前", value: "30min" },
-                            { label: "1時間前", value: "1hour" },
-                            { label: "当日の朝", value: "morning" },
-                            { label: "カスタム", value: "custom" },
-                          ]
+                          { label: "ちょうど", value: "exact" },
+                          { label: "10分前", value: "10min" },
+                          { label: "30分前", value: "30min" },
+                          { label: "1時間前", value: "1hour" },
+                          { label: "当日の朝", value: "morning" },
+                          { label: "カスタム", value: "custom" },
+                        ]
                       ).map((opt) => {
                         const isSelected = selectedReminders.includes(
                           opt.value,
@@ -1595,7 +1627,7 @@ const executeDelete = async (mode: "normal" | "all" | "single") => {
 
                 {selectedItem && (
                   <TouchableOpacity
-                  onPress={handleDeletePress}
+                    onPress={handleDeletePress}
                     style={styles.deleteBtn}
                   >
                     <Ionicons name="trash-outline" size={18} color="#FF3B30" />
@@ -1843,5 +1875,39 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF",
     borderWidth: 1,
     borderColor: "#E5E5EA",
+  },
+  customRepeatArea: {
+    backgroundColor: "#F8F8FA",
+    padding: 16,
+    borderRadius: 15,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: "#EEE",
+  },
+  miniLabel: { fontSize: 11, fontWeight: "800", color: "#AEAEB2", textTransform: "uppercase" },
+  daySelectorRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 10, marginBottom: 20 },
+  dayCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: "#E5E5EA",
+    backgroundColor: "#FFF",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  dayText: { fontSize: 12, fontWeight: "bold", color: "#8E8E93" },
+  intervalRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderTopWidth: 1, borderTopColor: "#EEE", paddingTop: 15 },
+  intervalInput: {
+    backgroundColor: "#FFF",
+    borderWidth: 1,
+    borderColor: "#E5E5EA",
+    borderRadius: 8,
+    width: 50,
+    textAlign: "center",
+    paddingVertical: 4,
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#1C1C1E",
   },
 });

@@ -18,7 +18,9 @@ export interface ScheduleItem {
   isExpense: boolean;
   category?: string;
   recurringGroupId?: string;
-  repeatType?: "daily" | "weekly" | "monthly";
+  repeatType?: "daily" | "weekly" | "monthly" | "custom";
+  repeatDays?: number[];     
+  repeatInterval?: number;
   isAllDay?: boolean;
   startDate?: string;
   endDate?: string;

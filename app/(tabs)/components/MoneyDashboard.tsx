@@ -31,7 +31,7 @@ interface ScheduleItem {
   isExpense: boolean;
   category?: string;
   recurringGroupId?: string;
-  repeatType?: "daily" | "weekly" | "monthly";
+  repeatType?: "daily" | "weekly" | "monthly"| "custom";
   isAllDay?: boolean;
   startTime?: string;
   endTime?: string;
@@ -46,7 +46,7 @@ interface Props {
   layerMaster: { [key: string]: string };
   activeTags: string[];
   setHasUnsavedChanges: (val: boolean) => void;
-  isSummaryMode: boolean;
+  isSummaryMode?: boolean;
 }
 
 export default function MoneyDashboard({
@@ -119,6 +119,21 @@ export default function MoneyDashboard({
   const isSingleFilter = activeTags.length === 1;
   const currentActiveLayer = isSingleFilter ? activeTags[0] : null;
 
+  const getItemTotalExpense = (item: any) => {
+    // 親タスクの金額（ここは予定としてそのまま足す）
+    let total = item.isExpense ? (item.amount || 0) : 0;
+    
+    if (item.subTasks && item.subTasks.length > 0) {
+      item.subTasks.forEach((sub: any) => {
+        // 🌟 修正：支出設定がON、かつ「完了済み (isDone)」の時だけ足し算する！
+        if (sub.isExpense && sub.isDone) {
+          total += (sub.amount || 0);
+        }
+      });
+    }
+    return total;
+  };
+
   const toggleManualMode = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (!isManualInput && selectedSubTag) {
@@ -140,11 +155,13 @@ export default function MoneyDashboard({
     Object.keys(scheduleData).forEach((date) => {
       if (date.startsWith(monthStr)) {
         scheduleData[date].forEach((item) => {
-          if (item.isExpense) {
+          // 🌟 修正：サブタスクの金額も含めて1円でもあれば計上する
+          const itemTotal = getItemTotalExpense(item);
+          if (itemTotal > 0) {
             const itemTag = item.tags?.[0] || item.tag || "未分類";
             const itemLayer = tagMaster[itemTag]?.layer || itemTag;
-            lActuals[itemLayer] = (lActuals[itemLayer] || 0) + item.amount;
-            sActuals[itemTag] = (sActuals[itemTag] || 0) + item.amount;
+            lActuals[itemLayer] = (lActuals[itemLayer] || 0) + itemTotal;
+            sActuals[itemTag] = (sActuals[itemTag] || 0) + itemTotal;
           }
         });
       }
@@ -323,7 +340,10 @@ export default function MoneyDashboard({
     Object.keys(scheduleData).forEach((date) => {
       if (date.startsWith(monthStr)) {
         scheduleData[date].forEach((item) => {
-          if (!item.isExpense) return;
+          // 🌟 修正：合算金額が0ならスキップ
+          const itemTotal = getItemTotalExpense(item);
+          if (itemTotal === 0) return;
+          
           const itemTag =
             item.tags && item.tags.length > 0 ? item.tags[0] : item.tag || "";
           const itemLayer = tagMaster[itemTag]?.layer || "共通";
@@ -331,14 +351,14 @@ export default function MoneyDashboard({
           if (activeTags.length > 0 && !activeTags.includes(itemLayer)) return;
           if (selectedFilterTag && itemTag !== selectedFilterTag) return;
 
-          total += item.amount;
+          total += itemTotal; // 🌟 合算した金額を足す
           let groupKey = itemTag;
           if (chartGroupBy === "layer") groupKey = itemLayer;
           else if (chartGroupBy === "category")
             groupKey = item.category || itemTag;
           if (!groupKey) groupKey = item.category || "未分類";
 
-          totals[groupKey] = (totals[groupKey] || 0) + item.amount;
+          totals[groupKey] = (totals[groupKey] || 0) + itemTotal; // 🌟 合算した金額を足す
         });
       }
     });
@@ -362,12 +382,15 @@ export default function MoneyDashboard({
   const mainStats = useMemo(() => {
     let dTotal = 0;
     (scheduleData[selectedDate] || []).forEach((item) => {
-      if (!item.isExpense) return;
+      const itemTotal = getItemTotalExpense(item);
+      if (itemTotal === 0) return; // 🌟 変更
+      
       const itemTag =
         item.tags && item.tags.length > 0 ? item.tags[0] : item.tag || "";
       const itemLayer = tagMaster[itemTag]?.layer || "共通";
       if (activeTags.length > 0 && !activeTags.includes(itemLayer)) return;
-      dTotal += item.amount;
+      
+      dTotal += itemTotal; // 🌟 変更
     });
     return { dailyTotal: dTotal };
   }, [selectedDate, scheduleData, activeTags, tagMaster]);
@@ -392,7 +415,7 @@ export default function MoneyDashboard({
       .sort((a, b) => b.localeCompare(a))
       .forEach((date) => {
         const items = scheduleData[date].filter((item) => {
-          if (!item.isExpense) return false;
+          if (getItemTotalExpense(item) === 0) return false; // 🌟 合算額が0なら表示しない
           const itemTag =
             item.tags && item.tags.length > 0 ? item.tags[0] : item.tag || "";
           const itemLayer = tagMaster[itemTag]?.layer || "共通";
@@ -416,7 +439,7 @@ export default function MoneyDashboard({
 
   // はみ出し修正：正確なコンテナ幅の計算
   const containerWidth = screenWidth - 30; // paddingHorizontal: 15 * 2
-  const exactCardWidth = containerWidth * 0.58;
+  const exactCardWidth = containerWidth * 0.55;
 
   const themeColor = currentActiveLayer
     ? layerMaster[currentActiveLayer]
@@ -1266,7 +1289,7 @@ export default function MoneyDashboard({
         /* --- 日別詳細モード --- */
         <View style={styles.dailyContainer}>
           {/* 🌟 修正：左半分のコンテナに width を明示 */}
-          <View style={[styles.dailyLeft, { width: "40%" }]}>
+          <View style={[styles.dailyLeft, { width: "35%" }]}>
             <View style={styles.iconTextRowSmall}>
               <Ionicons name="receipt-outline" size={12} color={themeColor} />
               <Text style={[styles.dailyLabel, { color: themeColor }]}>
@@ -1281,7 +1304,7 @@ export default function MoneyDashboard({
               keyboardShouldPersistTaps="handled"
             >
               {(scheduleData[selectedDate] || [])
-                .filter((i) => i.isExpense)
+                .filter((i) => getItemTotalExpense(i) > 0)
                 .map((i) => {
                   const itemTag =
                     i.tags && i.tags.length > 0 ? i.tags[0] : i.tag || "";
@@ -1329,10 +1352,9 @@ export default function MoneyDashboard({
             </ScrollView>
           </View>
 
-          <View style={{ width: "4%" }} />
+          <View style={{ width: "3%" }} />
 
-          {/* 🌟 修正：右半分のコンテナに flex: 1 を指定し、画面外へのはみ出しを防ぐ */}
-          <View style={[styles.dailyRight, { width: "65%" }]}>
+          <View style={[styles.dailyRight, {flex: 1 }]}>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -1381,16 +1403,17 @@ export default function MoneyDashboard({
                         </TouchableOpacity>
                       )}
                     </View>
-                    <TextInput
-                      style={[
-                        styles.quickInput,
-                        { color: c, borderColor: c + "40", borderWidth: 1 },
-                      ]}
-                      placeholder="¥ 0"
-                      keyboardType="numeric"
-                      value={inputAmount}
-                      onChangeText={setInputAmount}
-                    />
+                    <View style={[styles.modernInputWrapper, { borderColor: c + "30", backgroundColor: "#FFF" }]}>
+                      <Text style={[styles.modernCurrency, { color: c }]}>¥</Text>
+                      <TextInput
+                        style={[styles.modernQuickInput, { color: c }]}
+                        placeholder="0"
+                        placeholderTextColor={c + "40"}
+                        keyboardType="numeric"
+                        value={inputAmount}
+                        onChangeText={setInputAmount}
+                      />
+                    </View>
                     <View style={{ flex: 1, justifyContent: "space-between" }}>
                       <View>
                         {isAll || isManualInput ? (
@@ -1623,7 +1646,7 @@ export default function MoneyDashboard({
                         </View>
                       </View>
                       <Text style={styles.historyAmount}>
-                        ¥{item.amount.toLocaleString()}
+                        ¥{getItemTotalExpense(item).toLocaleString()} {/* 🌟 変更 */}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -1954,16 +1977,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   inputCardTitle: { fontSize: 13, fontWeight: "900", letterSpacing: 0.5 },
-  addExecuteBtn: {
-    marginTop: 5,
-    paddingVertical: 10,
-    borderRadius: 12,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-  },
+
 
   historyModalContainer: {
     flex: 1,
@@ -2115,14 +2129,7 @@ const styles = StyleSheet.create({
     gap: 4,
     marginBottom: 6,
   },
-  layerQuickChip3Col: {
-    width: "31.5%",
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+
   layerQuickChipText: { fontSize: 10, fontWeight: "bold" },
   subTagSection: { borderTopWidth: 1, paddingTop: 8, marginTop: 4 },
   subTagScroll: { flexDirection: "row", height: 35 },
@@ -2163,5 +2170,49 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "bold",
     marginLeft: 8,
+  },
+  modernInputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 12,
+    borderWidth: 1.5,
+    paddingHorizontal: 12,
+    marginVertical: 10,
+    height: 48,
+  },
+  modernCurrency: {
+    fontSize: 18,
+    fontWeight: "900",
+    marginRight: 4,
+  },
+  modernQuickInput: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+  
+  // 🌟 実行ボタンをおしゃれに（少し浮かせる）
+  addExecuteBtn: {
+    marginTop: 8,
+    height: 44,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+
+  // 🌟 クイックチップのデザイン微調整
+  layerQuickChip3Col: {
+    width: "31.5%",
+    height: 36, // 高さを揃える
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

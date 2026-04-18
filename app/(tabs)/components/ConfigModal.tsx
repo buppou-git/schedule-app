@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import React, { useState } from "react";
 import {
+  Linking,
   Modal,
   Platform,
   StyleSheet,
@@ -9,7 +10,7 @@ import {
   Text,
   TouchableOpacity,
   TouchableWithoutFeedback,
-  View,
+  View
 } from "react-native";
 import { useNotificationManager } from "../../../hooks/useNotificationManager";
 
@@ -174,6 +175,34 @@ export default function ConfigModal({
                   </Text>
                 </View>
               </TouchableOpacity>
+            </View>
+            <Text style={[styles.sectionLabel, { marginTop: 20 }]}>
+              LEGAL
+            </Text>
+            <View style={styles.card}>
+             {/* 🌟 利用規約ボタン */}
+            <TouchableOpacity
+              style={styles.row}
+              onPress={() => Linking.openURL('https://www.notion.so/3466f7789c6e806f8880ed9241a38b99?source=copy_link')}
+            >
+              <View style={styles.rowLeft}>
+                <Ionicons name="document-text-outline" size={20} color="#1C1C1E" />
+                <Text style={styles.rowText}>利用規約</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+            </TouchableOpacity>
+            
+            {/* 🌟 プライバシーポリシーボタン */}
+            <TouchableOpacity
+              style={[styles.row, styles.borderTop]}
+              onPress={() => Linking.openURL('https://www.notion.so/3466f7789c6e80958ff2e31ae7f89e16?source=copy_link')}
+            >
+              <View style={styles.rowLeft}>
+                <Ionicons name="shield-checkmark-outline" size={20} color="#1C1C1E" />
+                <Text style={styles.rowText}>プライバシーポリシー</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+            </TouchableOpacity>
             </View>
 
             <Text style={styles.copyright}>Developed by Kanta Hirano</Text>

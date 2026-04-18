@@ -231,19 +231,33 @@ export default function Index() {
 
   const expandedScheduleData = useMemo(() => {
     const expanded: { [key: string]: ScheduleItem[] } = {};
+    
+    // 🌟 最適化：計算の「終着点」を、作成日ではなく「現在から1年後」に設定
+    // これにより、放置していても常に1年先まで自動延長され続けます
+    const horizonDate = new Date();
+    horizonDate.setFullYear(horizonDate.getFullYear() + 1);
 
     Object.keys(scheduleData).forEach((dateStr) => {
       if (!expanded[dateStr]) expanded[dateStr] = [];
-      // 普通の予定を展開
-      expanded[dateStr].push(...scheduleData[dateStr]);
+      
+      const processedBaseItems = scheduleData[dateStr]
+        .filter(item => !item.exceptionDates?.includes(dateStr))
+        .map(item => {
+          if (item.repeatType) {
+            const isSpecificDone = item.completedDates?.includes(dateStr) || false;
+            return { ...item, isDone: isSpecificDone };
+          }
+          return item;
+        });
+      expanded[dateStr].push(...processedBaseItems);
 
-      // 繰り返しの予定を処理
       scheduleData[dateStr].forEach((item) => {
-        if (item.repeatType ) {
+        if (item.repeatType) {
           let currentDate = new Date(dateStr);
-          const endDate = new Date(dateStr);
-          endDate.setFullYear(endDate.getFullYear() + 1); // 🌟 1年先まで自動生成
-
+          
+          // 🌟 高速化：表示範囲外の過去すぎるデータは計算をスキップ
+          // カレンダーの過去表示分（6ヶ月前）より前なら、そこまで一気にジャンプするロジックを入れるとさらに高速です
+          
           while (true) {
             if (item.repeatType === "daily") {
               currentDate.setDate(currentDate.getDate() + 1);
@@ -251,19 +265,25 @@ export default function Index() {
               currentDate.setDate(currentDate.getDate() + 7);
             } else if (item.repeatType === "monthly") {
               currentDate.setMonth(currentDate.getMonth() + 1);
+            } else if (item.repeatType === "custom") {
+              currentDate.setDate(currentDate.getDate() + 1);
+              const dayOfWeek = currentDate.getDay();
+              const startDateTime = new Date(dateStr).getTime();
+              const currentDateTime = currentDate.getTime();
+              const diffWeeks = Math.floor((currentDateTime - startDateTime) / (7 * 24 * 60 * 60 * 1000));
+              const isMatchDay = item.repeatDays?.includes(dayOfWeek);
+              const isMatchInterval = diffWeeks % (item.repeatInterval || 1) === 0;
+              if (!(isMatchDay && isMatchInterval)) continue;
             }
 
-            if (currentDate > endDate) break;
+            // 🌟 自動延長：horizonDate（今日から1年後）までループを回す
+            if (currentDate > horizonDate) break;
 
             const nextDateStr = currentDate.toISOString().split("T")[0];
-         
             if (item.exceptionDates?.includes(nextDateStr)) continue;
-
             if (!expanded[nextDateStr]) expanded[nextDateStr] = [];
-            const exists = expanded[nextDateStr].some((i) => i.id === item.id);
-            
+            const exists = expanded[nextDateStr].some((i) => i.id === item.id || i.linkedMasterId === item.id);
             if (!exists) {
-              // 🌟 修正：投影されたコピーの isDone は、その日が完了リストにあるかで決める
               const isSpecificDone = item.completedDates?.includes(nextDateStr) || false;
               expanded[nextDateStr].push({ ...item, isDone: isSpecificDone });
             }
@@ -454,8 +474,6 @@ export default function Index() {
  });
 
  setScheduleData(newData);
-
-    setScheduleData(newData);
     setHasUnsavedChanges(true);
   };
 
@@ -500,6 +518,41 @@ export default function Index() {
         return {
           ...item,
           subTasks: item.subTasks.map(sub => sub.id === updatedSub.id ? updatedSub : sub)
+        };
+      }
+      return item;
+    });
+
+    setScheduleData(newData);
+    setHasUnsavedChanges(true);
+    setSubTaskModalVisible(false);
+  };
+
+
+  const handleSubTaskDelete = async (subTaskId: number) => {
+    if (!editingSubTaskInfo) return;
+    const { parentId, date } = editingSubTaskInfo;
+    const newData = { ...scheduleData };
+
+    // 対象の日付を探す
+    let targetDate = date;
+    if (!(newData[targetDate] && newData[targetDate].some(i => i.id === parentId))) {
+      for (const d of Object.keys(newData)) {
+        if (newData[d].some(i => i.id === parentId)) {
+          targetDate = d; break;
+        }
+      }
+    }
+
+    newData[targetDate] = newData[targetDate].map(item => {
+      if (item.id === parentId && item.subTasks) {
+        // 🚨 削除するサブタスクの通知もキャンセル
+        const targetSub = item.subTasks.find(s => s.id === subTaskId);
+        if (targetSub?.notificationId) cancelItemNotification(targetSub.notificationId);
+
+        return {
+          ...item,
+          subTasks: item.subTasks.filter(sub => sub.id !== subTaskId)
         };
       }
       return item;
@@ -739,9 +792,25 @@ export default function Index() {
               </View>
             </View>
           </View>
-          <TouchableOpacity style={styles.checkButton} onPress={() => toggleTodo(itemDate, item.id)}>
-            <Ionicons name={item.isDone ? "checkmark-circle" : "ellipse-outline"} size={24} color={item.isDone ? "#34C759" : "#C7C7CC"} />
-          </TouchableOpacity>
+          {/* 🌟 修正：サブタスクがない場合のみ、手動チェックボタンを表示する */}
+          {(!item.subTasks || item.subTasks.length === 0) ? (
+            <TouchableOpacity style={styles.checkButton} onPress={() => toggleTodo(itemDate, item.id)}>
+              <Ionicons
+                name={item.isDone ? "checkmark-circle" : "ellipse-outline"}
+                size={24}
+                color={item.isDone ? "#34C759" : "#C7C7CC"}
+              />
+            </TouchableOpacity>
+          ) : (
+            <View style={[styles.checkButton, { opacity: 0.5 }]}>
+              {/* 🌟 サブタスクがある親は、進捗を示す別のアイコン（リスト等）にする */}
+              <Ionicons
+                name={item.isDone ? "checkmark-done-circle" : "list-circle-outline"}
+                size={24}
+                color={item.isDone ? "#34C759" : "#AEAEB2"}
+              />
+            </View>
+          )}
         </TouchableOpacity>
 
         {/* --- 👶 サブタスクの入れ子UI --- */}
@@ -845,121 +914,22 @@ export default function Index() {
       />
 
       <View style={styles.mainContent}>
-        <View style={styles.calendarArea}>
-          {activeMode === "money" ? (
-            <>
-              {/* 🌟 1. カレンダーの上にタブを配置！ */}
-              <View
-                style={[
-                  styles.toggleContainer,
-                  { marginHorizontal: 15, marginTop: 10 },
-                ]}
-              >
-                <TouchableOpacity
-                  style={[
-                    styles.toggleBtn,
-                    !isMoneySummaryMode && styles.toggleActive,
-                  ]}
-                  onPress={() => setIsMoneySummaryMode(false)}
-                >
-                  <View style={styles.toggleItem}>
-                    <Ionicons
-                      name="list"
-                      size={16}
-                      color={!isMoneySummaryMode ? "#1C1C1E" : "#8E8E93"}
-                    />
-                    <Text style={styles.toggleText}>日別詳細</Text>
-                  </View>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.toggleBtn,
-                    isMoneySummaryMode && styles.toggleActive,
-                  ]}
-                  onPress={() => setIsMoneySummaryMode(true)}
-                >
-                  <View style={styles.toggleItem}>
-                    <Ionicons
-                      name="pie-chart"
-                      size={15}
-                      color={isMoneySummaryMode ? "#1C1C1E" : "#8E8E93"}
-                    />
-                    <Text style={styles.toggleText}>予算管理</Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
-
-              {/* 🌟 2. 日別詳細の時（!isMoneySummaryMode）だけカレンダーを表示 */}
-              {!isMoneySummaryMode && (
-                <View style={styles.weekCalendarWrapper}>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      paddingRight: 20,
-                    }}
-                  >
-                    <Text style={styles.monthLabel}>
-                      {parseInt(selectedDate.split("-")[1])}月
-                    </Text>
-                    <TouchableOpacity onPress={handleOpenNewModal}>
-                      <Ionicons
-                        name="add-circle"
-                        size={30}
-                        color={currentSolidColor}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                  <CalendarProvider
-                    date={selectedDate}
-                    onDateChanged={setSelectedDate}
-                  >
-                    <WeekCalendar
-                      firstDay={1}
-                      markedDates={currentMarkedDates}
-                      theme={{
-                        calendarBackground: "transparent",
-                        todayTextColor: currentSolidColor,
-                        selectedDayBackgroundColor: currentSolidColor,
-                      }}
-                    />
-                  </CalendarProvider>
-                </View>
-              )}
-            </>
-          ) : (
+      <View style={styles.calendarArea}>
+          {/* 🌟 修正版：カレンダーモードは月表示、それ以外は週表示 */}
+          {activeMode === "calendar" ? (
             <CalendarList
               current={selectedDate}
               key={calendarKey}
               markingType={"multi-dot"}
-              pastScrollRange={6} // 過去6ヶ月分だけ裏で準備する（デフォルトは50）
-              futureScrollRange={6} // 未来6ヶ月分だけ裏で準備する（デフォルトは50）
-              initialNumToRender={1} // 起動時はまず「今月」の1ヶ月分だけを最優先で描画する
-              windowSize={3} // メモリに保持する見えない画面の数を減らす
+              pastScrollRange={6}
+              futureScrollRange={6}
+              initialNumToRender={1}
+              windowSize={3}
               renderHeader={(date) => (
-                <View
-                  style={[
-                    styles.monthHeaderContainer,
-                    {
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      paddingRight: 15,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[styles.monthformat, { color: currentSolidColor }]}
-                  >
-                    {date.getMonth() + 1}月
-                  </Text>
+                <View style={[styles.monthHeaderContainer, { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingRight: 15 }]}>
+                  <Text style={[styles.monthformat, { color: currentSolidColor }]}>{date.getMonth() + 1}月</Text>
                   <TouchableOpacity onPress={handleOpenNewModal}>
-                    <Ionicons
-                      name="add-circle"
-                      size={30}
-                      color={currentSolidColor}
-                    />
+                    <Ionicons name="add-circle" size={30} color={currentSolidColor} />
                   </TouchableOpacity>
                 </View>
               )}
@@ -973,7 +943,47 @@ export default function Index() {
                 selectedDayBackgroundColor: currentSolidColor,
               }}
             />
+          ) : (
+            <>
+              {/* 家計簿モードの時だけタブを表示 */}
+              {activeMode === "money" && (
+                <View style={[styles.toggleContainer, { marginHorizontal: 15, marginTop: 10 }]}>
+                  <TouchableOpacity style={[styles.toggleBtn, !isMoneySummaryMode && styles.toggleActive]} onPress={() => setIsMoneySummaryMode(false)}>
+                    <View style={styles.toggleItem}>
+                      <Ionicons name="list" size={16} color={!isMoneySummaryMode ? "#1C1C1E" : "#8E8E93"} />
+                      <Text style={styles.toggleText}>日別詳細</Text>
+                    </View>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.toggleBtn, isMoneySummaryMode && styles.toggleActive]} onPress={() => setIsMoneySummaryMode(true)}>
+                    <View style={styles.toggleItem}>
+                      <Ionicons name="pie-chart" size={15} color={isMoneySummaryMode ? "#1C1C1E" : "#8E8E93"} />
+                      <Text style={styles.toggleText}>予算管理</Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* ToDoまたは家計簿詳細の時に「週カレンダー」を表示 */}
+              {(activeMode === "todo" || (activeMode === "money" && !isMoneySummaryMode)) && (
+                <View style={styles.weekCalendarWrapper}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingRight: 20 }}>
+                    <Text style={styles.monthLabel}>{parseInt(selectedDate.split("-")[1])}月</Text>
+                    <TouchableOpacity onPress={handleOpenNewModal}>
+                      <Ionicons name="add-circle" size={30} color={currentSolidColor} />
+                    </TouchableOpacity>
+                  </View>
+                  <CalendarProvider date={selectedDate} onDateChanged={setSelectedDate}>
+                    <WeekCalendar
+                      firstDay={1}
+                      markedDates={currentMarkedDates}
+                      theme={{ calendarBackground: "transparent", todayTextColor: currentSolidColor, selectedDayBackgroundColor: currentSolidColor }}
+                    />
+                  </CalendarProvider>
+                </View>
+              )}
+            </>
           )}
+          {/* ここまでを差し替え。直後に <ScrollView style={styles.scheduleList} が続くようにします */}
 
           <ScrollView
             style={styles.scheduleList}
@@ -1380,6 +1390,7 @@ export default function Index() {
         onClose={() => setSubTaskModalVisible(false)}
         subTask={editingSubTaskInfo?.subTask || null}
         onSave={handleSubTaskSave}
+        onDelete={handleSubTaskDelete}
         themeColor={currentSolidColor}
       />
 
