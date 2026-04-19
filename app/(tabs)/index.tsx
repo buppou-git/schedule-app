@@ -16,6 +16,10 @@ import { doc, setDoc } from "firebase/firestore";
 import { AppState } from "react-native";
 import { auth, db } from "./firebaseConfig";
 
+//Todo
+import EventItem from "./components/EventItem";
+import TodoItem from "./components/TodoItem";
+
 import {
   Alert,
   Keyboard,
@@ -231,7 +235,7 @@ export default function Index() {
 
   const expandedScheduleData = useMemo(() => {
     const expanded: { [key: string]: ScheduleItem[] } = {};
-    
+
     // 🌟 最適化：計算の「終着点」を、作成日ではなく「現在から1年後」に設定
     // これにより、放置していても常に1年先まで自動延長され続けます
     const horizonDate = new Date();
@@ -239,7 +243,7 @@ export default function Index() {
 
     Object.keys(scheduleData).forEach((dateStr) => {
       if (!expanded[dateStr]) expanded[dateStr] = [];
-      
+
       const processedBaseItems = scheduleData[dateStr]
         .filter(item => !item.exceptionDates?.includes(dateStr))
         .map(item => {
@@ -254,10 +258,10 @@ export default function Index() {
       scheduleData[dateStr].forEach((item) => {
         if (item.repeatType) {
           let currentDate = new Date(dateStr);
-          
+
           // 🌟 高速化：表示範囲外の過去すぎるデータは計算をスキップ
           // カレンダーの過去表示分（6ヶ月前）より前なら、そこまで一気にジャンプするロジックを入れるとさらに高速です
-          
+
           while (true) {
             if (item.repeatType === "daily") {
               currentDate.setDate(currentDate.getDate() + 1);
@@ -449,8 +453,8 @@ export default function Index() {
             if (nextStatus && sub.notificationId) {
               cancelItemNotification(sub.notificationId);
             }
-            return { 
-              ...sub, 
+            return {
+              ...sub,
               isDone: nextStatus,
               notificationId: nextStatus ? undefined : sub.notificationId,
               reminderOption: nextStatus ? "none" : sub.reminderOption
@@ -458,22 +462,22 @@ export default function Index() {
           }
           return sub;
         });
-       // 🌟 追加：サブタスクが1つ以上あり、かつ「すべて完了」しているか判定
-       const isAllSubTasksDone =
-       updatedSubTasks.length > 0 &&
-       updatedSubTasks.every((sub: any) => sub.isDone);
+        // 🌟 追加：サブタスクが1つ以上あり、かつ「すべて完了」しているか判定
+        const isAllSubTasksDone =
+          updatedSubTasks.length > 0 &&
+          updatedSubTasks.every((sub: any) => sub.isDone);
 
-     // 🌟 修正：親タスクの isDone も連動して上書きする
-     return {
-       ...item,
-       subTasks: updatedSubTasks,
-       isDone: isAllSubTasksDone,
-     };
-   }
-   return item;
- });
+        // 🌟 修正：親タスクの isDone も連動して上書きする
+        return {
+          ...item,
+          subTasks: updatedSubTasks,
+          isDone: isAllSubTasksDone,
+        };
+      }
+      return item;
+    });
 
- setScheduleData(newData);
+    setScheduleData(newData);
     setHasUnsavedChanges(true);
   };
 
@@ -723,144 +727,7 @@ export default function Index() {
     return { dayTasks: dTasks, upcomingTasks: uTasks, dayEvents: dEvents };
   }, [scheduleData, selectedDate, activeTags, activeMode, tagMaster]);
 
-  const renderTodoItem = (item: any, itemDate: string) => {
-    const itemTags =
-      item.tags && item.tags.length > 0
-        ? item.tags
-        : item.tag
-          ? [item.tag]
-          : [];
-    const displayColors = itemTags.map((tag: string) => {
-      const color = tagMaster[tag]?.color || layerMaster[tag] || "#999";
-      return color;
-    });
-    const uniqueColors = Array.from(new Set(displayColors));
 
-    const isPeriodTask = item.endDate && item.startDate !== item.endDate;
-    let daysLeft = null;
-    let isFinalDay = false;
-
-    if (isPeriodTask && item.endDate) {
-      const targetD = new Date(selectedDate);
-      const endD = new Date(item.endDate);
-      const diffTime = endD.getTime() - targetD.getTime();
-      daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      isFinalDay = daysLeft === 0;
-    }
-
-    return (
-      <View key={item.id} style={{ marginBottom: 12 }}>
-        {/* --- 👑 親タスクのカード --- */}
-        <TouchableOpacity
-          style={[styles.todoCard, item.isDone && styles.todoCardDone, { marginBottom: 0 }]}
-          onPress={() => openEditModal(item)}
-          activeOpacity={0.7}
-        >
-          <View style={styles.stripeContainer}>
-            {uniqueColors.map((color: any, idx: number) => (
-              <View key={idx} style={[styles.todoAccent, { backgroundColor: color }]} />
-            ))}
-          </View>
-          <View style={styles.todoContent}>
-            <View style={styles.todoMainRow}>
-              <Text style={[styles.todoTitle, item.isDone && styles.todoTitleDone]} numberOfLines={1}>
-                {item.title}
-              </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 4 }}>
-                {itemTags.map((tag: string, idx: number) => (
-                  <View key={idx} style={[styles.miniTagBadge, { backgroundColor: displayColors[idx] + "15", borderColor: displayColors[idx] }]}>
-                    <Text style={[styles.miniTagText, { color: displayColors[idx] }]}>{tag}</Text>
-                  </View>
-                ))}
-              </ScrollView>
-            </View>
-            <View style={styles.todoSubRow}>
-              {isFinalDay && !item.isDone ? (
-                <View style={styles.deadlineBadgeUrgent}>
-                  <Ionicons name="flame" size={10} color="#FFF" style={{ marginRight: 2 }} />
-                  <Text style={styles.deadlineBadgeTextUrgent}>TODAY: 最終日!</Text>
-                </View>
-              ) : daysLeft !== null && daysLeft > 0 && !item.isDone ? (
-                <View style={styles.deadlineBadgeSafe}>
-                  <Ionicons name="leaf-outline" size={10} color="#34C759" style={{ marginRight: 2 }} />
-                  <Text style={styles.deadlineBadgeTextSafe}>残り {daysLeft} 日</Text>
-                </View>
-              ) : null}
-              <View style={styles.todoTimeRow}>
-                <Ionicons name="time-outline" size={10} color="#8E8E93" />
-                <Text style={styles.todoTimeText}>{formatEventTime(item)}</Text>
-              </View>
-            </View>
-          </View>
-          {/* 🌟 修正：サブタスクがない場合のみ、手動チェックボタンを表示する */}
-          {(!item.subTasks || item.subTasks.length === 0) ? (
-            <TouchableOpacity style={styles.checkButton} onPress={() => toggleTodo(itemDate, item.id)}>
-              <Ionicons
-                name={item.isDone ? "checkmark-circle" : "ellipse-outline"}
-                size={24}
-                color={item.isDone ? "#34C759" : "#C7C7CC"}
-              />
-            </TouchableOpacity>
-          ) : (
-            <View style={[styles.checkButton, { opacity: 0.5 }]}>
-              {/* 🌟 サブタスクがある親は、進捗を示す別のアイコン（リスト等）にする */}
-              <Ionicons
-                name={item.isDone ? "checkmark-done-circle" : "list-circle-outline"}
-                size={24}
-                color={item.isDone ? "#34C759" : "#AEAEB2"}
-              />
-            </View>
-          )}
-        </TouchableOpacity>
-
-        {/* --- 👶 サブタスクの入れ子UI --- */}
-        {item.subTasks && item.subTasks.length > 0 && (
-          <View style={styles.subTaskListContainer}>
-            {item.subTasks.map((sub: any) => (
-             <TouchableOpacity
-             key={sub.id}
-             style={[styles.subTaskMiniCard, sub.isDone && { opacity: 0.5 }]}
-             onPress={() => {
-               // 🌟 修正：親の情報と一緒に専用モーダルを開く！
-               setEditingSubTaskInfo({
-                 parentId: item.id,
-                 parentTitle: item.title,
-                 date: itemDate,
-                 subTask: sub,
-               });
-               setSubTaskModalVisible(true);
-             }}
-             activeOpacity={0.6}
-           >
-                <TouchableOpacity
-                  style={{ padding: 4, marginRight: 6 }}
-                  onPress={() => toggleSubTodo(itemDate, item.id, sub.id)}
-                >
-                  <Ionicons
-                    name={sub.isDone ? "checkmark-circle" : "ellipse-outline"}
-                    size={20}
-                    color={sub.isDone ? "#34C759" : "#AEAEB2"}
-                  />
-                </TouchableOpacity>
-                <Text style={[styles.subTaskMiniTitle, sub.isDone && styles.todoTitleDone]}>
-                  {sub.title}
-                </Text>
-                
-                {sub.hasDateTime && sub.endTime && (
-                  <View style={{ flexDirection: "row", alignItems: "center", marginLeft: "auto" }}>
-                    <Ionicons name="time-outline" size={12} color="#8E8E93" style={{ marginRight: 4 }} />
-                    <Text style={{ fontSize: 10, color: "#8E8E93" }}>
-                      {new Date(sub.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-      </View>
-    );
-  };
 
   return (
     <SafeAreaView
@@ -914,7 +781,7 @@ export default function Index() {
       />
 
       <View style={styles.mainContent}>
-      <View style={styles.calendarArea}>
+        <View style={styles.calendarArea}>
           {/* 🌟 修正版：カレンダーモードは月表示、それ以外は週表示 */}
           {activeMode === "calendar" ? (
             <CalendarList
@@ -1049,14 +916,42 @@ export default function Index() {
                       )}
                     </View>
 
-                    {dayTasks.map((t) => renderTodoItem(t, selectedDate))}
+                    {dayTasks.map((t) => (
+                      <TodoItem
+                        key={t.id}
+                        item={t}
+                        itemDate={selectedDate}
+                        selectedDate={selectedDate}
+                        tagMaster={tagMaster}
+                        layerMaster={layerMaster}
+                        formatEventTime={formatEventTime}
+                        openEditModal={openEditModal}
+                        toggleTodo={toggleTodo}
+                        toggleSubTodo={toggleSubTodo}
+                        setEditingSubTaskInfo={setEditingSubTaskInfo}
+                        setSubTaskModalVisible={setSubTaskModalVisible}
+                      />
+                    ))}
 
                     {upcomingTasks.length > 0 && (
                       <View style={styles.upcomingSection}>
-                        <Text style={styles.upcomingMiniTitle}>
-                          今後の予定（未完了）
-                        </Text>
-                        {upcomingTasks.map((t) => renderTodoItem(t, t.date))}
+                        <Text style={styles.upcomingMiniTitle}>今後の予定（未完了）</Text>
+                        {upcomingTasks.map((t) => (
+                          <TodoItem
+                            key={t.id}
+                            item={t}
+                            itemDate={t.date}
+                            selectedDate={selectedDate}
+                            tagMaster={tagMaster}
+                            layerMaster={layerMaster}
+                            formatEventTime={formatEventTime}
+                            openEditModal={openEditModal}
+                            toggleTodo={toggleTodo}
+                            toggleSubTodo={toggleSubTodo}
+                            setEditingSubTaskInfo={setEditingSubTaskInfo}
+                            setSubTaskModalVisible={setSubTaskModalVisible}
+                          />
+                        ))}
                       </View>
                     )}
                   </View>
@@ -1066,59 +961,17 @@ export default function Index() {
               return (
                 <View style={styles.listPadding}>
                   <Text style={styles.dateTitle}>{selectedDate} の予定</Text>
-                  {dayEvents.map((item) => {
-                    const itemTags =
-                      item.tags && item.tags.length > 0
-                        ? item.tags
-                        : item.tag
-                          ? [item.tag]
-                          : [];
-                    const displayColors = itemTags.map((tag: any) => {
-                      const info = tagMaster[tag] || {
-                        layer: tag,
-                        color: layerMaster[tag] || "#999",
-                      };
-
-                      return activeTags.length === 0
-                        ? layerMaster[info.layer] || "#999"
-                        : info.color;
-                    });
-                    return (
-                      <TouchableOpacity
-                        key={item.id}
-                        style={styles.listItem}
-                        onPress={() => openEditModal(item)}
-                      >
-                        <View
-                          style={{
-                            flexDirection: "row",
-                            gap: 4,
-                            marginRight: 8,
-                            flexWrap: "wrap",
-                            width: "25%",
-                          }}
-                        >
-                          {itemTags.map((tag: any, idx: any) => (
-                            <View
-                              key={idx}
-                              style={[
-                                styles.tagBadge,
-                                { backgroundColor: displayColors[idx] },
-                              ]}
-                            >
-                              <Text style={styles.tagText}>{tag}</Text>
-                            </View>
-                          ))}
-                        </View>
-                        <View style={styles.itemMain}>
-                          <Text style={styles.itemTitle}>{item.title}</Text>
-                          <Text style={styles.timeTextSmall}>
-                            {formatEventTime(item)}
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
+                  {dayEvents.map((item) => (
+                    <EventItem
+                      key={item.id}
+                      item={item}
+                      activeTags={activeTags}
+                      tagMaster={tagMaster}
+                      layerMaster={layerMaster}
+                      formatEventTime={formatEventTime}
+                      openEditModal={openEditModal}
+                    />
+                  ))}
                 </View>
               );
             })()}
@@ -1258,13 +1111,13 @@ export default function Index() {
                           styles.gridCard,
                           isSelected
                             ? {
-                                backgroundColor: layerMaster[layer],
-                                borderColor: layerMaster[layer],
-                              }
+                              backgroundColor: layerMaster[layer],
+                              borderColor: layerMaster[layer],
+                            }
                             : [
-                                styles.gridCardGhost,
-                                { borderColor: layerMaster[layer] + "40" },
-                              ],
+                              styles.gridCardGhost,
+                              { borderColor: layerMaster[layer] + "40" },
+                            ],
                         ]}
                         onPress={() => toggleTempTag(layer)}
                       >
