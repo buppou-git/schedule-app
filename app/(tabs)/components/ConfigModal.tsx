@@ -1,10 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import React, { useState } from "react";
+import { GoogleSignin } from "@react-native-google-signin/google-signin";
+import { GoogleAuthProvider, linkWithCredential } from "firebase/auth";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Linking,
   Modal,
   Platform,
+  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -13,6 +18,7 @@ import {
   View
 } from "react-native";
 import { useNotificationManager } from "../../../hooks/useNotificationManager";
+import { auth } from "../firebaseConfig"; // 🌟 Firebaseの読み込みを追加（パスは環境に合わせてください）
 
 interface ConfigModalProps {
   visible: boolean;
@@ -21,13 +27,21 @@ interface ConfigModalProps {
   onRestore: () => void;
 }
 
+// 🌟 ここにコピーした「Web クライアント ID」をペースト！
+const WEB_CLIENT_ID = "633661996714-j5cb16hjn156oeqf51pi384e0hh7b158.apps.googleusercontent.com";
+
+//const ANDROID_CLIENT_ID ="633661996714-44384q8406fa1odgaakqpbqo6cjgiant.apps.googleusercontent.com";
+
+GoogleSignin.configure({
+  webClientId: WEB_CLIENT_ID,
+});
+
 export default function ConfigModal({
   visible,
   onClose,
   lastSyncedAt,
   onRestore,
 }: ConfigModalProps) {
-  // 🌟 さっき作った「通知の脳みそ」を呼び出す！
   const {
     isNotificationEnabled,
     notificationTime,
@@ -35,8 +49,51 @@ export default function ConfigModal({
     cancelNotification,
   } = useNotificationManager();
 
-  // Android用の時計モーダル表示フラグ
   const [showTimePickerAndroid, setShowTimePickerAndroid] = useState(false);
+
+  // 🌟 アカウント状態の管理
+  const [isLinking, setIsLinking] = useState(false);
+  const [isAnonymous, setIsAnonymous] = useState(auth.currentUser?.isAnonymous ?? true);
+
+
+
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setIsAnonymous(user?.isAnonymous ?? true);
+    });
+    return unsubscribe;
+  }, []);
+
+  const handleGoogleSignIn = async () => {
+    setIsLinking(true);
+    try {
+      await GoogleSignin.hasPlayServices();
+      const response = await GoogleSignin.signIn();
+
+      // 🌟 ここを変更！
+      // TypeScriptの厳しい型チェックを「as any」で一旦黙らせて、データを取り出します
+      const anyResponse = response as any;
+      const id_token = anyResponse.data?.idToken || anyResponse.idToken;
+
+      if (id_token) {
+        const credential = GoogleAuthProvider.credential(id_token);
+        if (auth.currentUser) {
+          await linkWithCredential(auth.currentUser, credential);
+          setIsAnonymous(false);
+          Alert.alert("連携完了", "アカウントと紐付けられ、データが保護されました。");
+        }
+      }
+    } catch (error: any) {
+      console.error("Google Sign-In Error:", error);
+      if (error.code === "auth/credential-already-in-use") {
+        Alert.alert("エラー", "このアカウントは既に別のデータと紐付いています。");
+      } else {
+        Alert.alert("エラー", "アカウント連携をキャンセル、または失敗しました。");
+      }
+    } finally {
+      setIsLinking(false);
+    }
+  };
 
   const handleToggleSwitch = async (value: boolean) => {
     if (value) {
@@ -49,7 +106,6 @@ export default function ConfigModal({
   const handleTimeChange = async (event: any, selectedDate?: Date) => {
     if (Platform.OS === "android") setShowTimePickerAndroid(false);
     if (selectedDate) {
-      // 通知がONの時だけ、時間変更と同時に通知を再セットする
       if (isNotificationEnabled) {
         await scheduleDailyNotification(selectedDate);
       }
@@ -75,137 +131,152 @@ export default function ConfigModal({
               </TouchableOpacity>
             </View>
 
-            {/* 🌟 通知設定セクション */}
-            <Text style={styles.sectionLabel}>NOTIFICATIONS</Text>
-            <View style={styles.card}>
-              <View style={styles.row}>
-                <View style={styles.rowLeft}>
-                  <Ionicons
-                    name="notifications-outline"
-                    size={20}
-                    color="#1C1C1E"
-                  />
-                  <Text style={styles.rowText}>毎日のリマインダー</Text>
-                </View>
-                <Switch
-                  value={isNotificationEnabled}
-                  onValueChange={handleToggleSwitch}
-                  trackColor={{ false: "#E5E5EA", true: "#34C759" }}
-                />
-              </View>
+            {/* 要素が増えたのでスクロールできるようにラップ */}
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
 
-              {/* 通知がONの時だけ時間を表示 */}
-              {isNotificationEnabled && (
-                <View style={[styles.row, styles.borderTop]}>
+              {/* 🌟 アカウント設定（スタイリッシュ版） */}
+              <Text style={styles.sectionLabel}>ACCOUNT</Text>
+              <View style={styles.card}>
+                <View style={styles.row}>
                   <View style={styles.rowLeft}>
-                    <Ionicons name="time-outline" size={20} color="#8E8E93" />
-                    <Text style={[styles.rowText, { color: "#8E8E93" }]}>
-                      通知時間
-                    </Text>
+                    <Ionicons name="person-circle-outline" size={20} color="#1C1C1E" />
+                    <Text style={styles.rowText}>ステータス</Text>
                   </View>
-
-                  {Platform.OS === "ios" ? (
-                    <DateTimePicker
-                      value={notificationTime}
-                      mode="time"
-                      display="default"
-                      onChange={handleTimeChange}
-                      style={{ width: 90 }}
-                    />
-                  ) : (
-                    <>
-                      <TouchableOpacity
-                        style={styles.timeBtnAndroid}
-                        onPress={() => setShowTimePickerAndroid(true)}
-                      >
-                        <Text style={styles.timeBtnTextAndroid}>
-                          {("0" + notificationTime.getHours()).slice(-2)}:
-                          {("0" + notificationTime.getMinutes()).slice(-2)}
-                        </Text>
-                      </TouchableOpacity>
-                      {showTimePickerAndroid && (
-                        <DateTimePicker
-                          value={notificationTime}
-                          mode="time"
-                          display="default"
-                          onChange={handleTimeChange}
-                        />
-                      )}
-                    </>
-                  )}
-                </View>
-              )}
-            </View>
-
-            {/* 既存のバックアップセクション */}
-            <Text style={[styles.sectionLabel, { marginTop: 20 }]}>
-              DATA SYNC
-            </Text>
-            <View style={styles.card}>
-              <View style={styles.row}>
-                <View style={styles.rowLeft}>
-                  <Ionicons
-                    name="cloud-done-outline"
-                    size={20}
-                    color="#1C1C1E"
-                  />
-                  <Text style={styles.rowText}>最終同期</Text>
-                </View>
-                <Text style={styles.timeText}>
-                  {lastSyncedAt ? lastSyncedAt : "未同期"}
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={[styles.row, styles.borderTop]}
-                onPress={onRestore}
-              >
-                <View style={styles.rowLeft}>
-                  <Ionicons
-                    name="cloud-download-outline"
-                    size={20}
-                    color="#007AFF"
-                  />
-                  <Text
-                    style={[
-                      styles.rowText,
-                      { color: "#007AFF", fontWeight: "bold" },
-                    ]}
-                  >
-                    クラウドからデータを復元
+                  <Text style={[styles.timeText, { color: isAnonymous ? "#8E8E93" : "#34C759", fontWeight: "bold" }]}>
+                    {isAnonymous ? "ゲスト (未連携)" : "Google 連携済"}
                   </Text>
                 </View>
-              </TouchableOpacity>
-            </View>
-            <Text style={[styles.sectionLabel, { marginTop: 20 }]}>
-              LEGAL
-            </Text>
-            <View style={styles.card}>
-             {/* 🌟 利用規約ボタン */}
-            <TouchableOpacity
-              style={styles.row}
-              onPress={() => Linking.openURL('https://www.notion.so/3466f7789c6e806f8880ed9241a38b99?source=copy_link')}
-            >
-              <View style={styles.rowLeft}>
-                <Ionicons name="document-text-outline" size={20} color="#1C1C1E" />
-                <Text style={styles.rowText}>利用規約</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
-            </TouchableOpacity>
-            
-            {/* 🌟 プライバシーポリシーボタン */}
-            <TouchableOpacity
-              style={[styles.row, styles.borderTop]}
-              onPress={() => Linking.openURL('https://www.notion.so/3466f7789c6e80958ff2e31ae7f89e16?source=copy_link')}
-            >
-              <View style={styles.rowLeft}>
-                <Ionicons name="shield-checkmark-outline" size={20} color="#1C1C1E" />
-                <Text style={styles.rowText}>プライバシーポリシー</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
-            </TouchableOpacity>
-            </View>
 
-            <Text style={styles.copyright}>Developed by Kanta Hirano</Text>
+                {/* 🌟 6. ボタンの onPress を新しい関数に差し替える */}
+                {isAnonymous && (
+                  <TouchableOpacity
+                    style={[styles.row, styles.borderTop]}
+                    disabled={isLinking}
+                    onPress={handleGoogleSignIn}
+                  >
+                    <View style={styles.rowLeft}>
+                      {/* ロゴもモノトーンにして浮かないようにする */}
+                      <Ionicons name="logo-google" size={20} color="#1C1C1E" />
+                      <Text style={styles.rowText}>Googleでデータを保護</Text>
+                    </View>
+                    {isLinking ? (
+                      <ActivityIndicator size="small" color="#1C1C1E" />
+                    ) : (
+                      <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* 既存の通知設定セクション */}
+              <Text style={[styles.sectionLabel, { marginTop: 20 }]}>NOTIFICATIONS</Text>
+              <View style={styles.card}>
+                <View style={styles.row}>
+                  <View style={styles.rowLeft}>
+                    <Ionicons name="notifications-outline" size={20} color="#1C1C1E" />
+                    <Text style={styles.rowText}>毎日のリマインダー</Text>
+                  </View>
+                  <Switch
+                    value={isNotificationEnabled}
+                    onValueChange={handleToggleSwitch}
+                    trackColor={{ false: "#E5E5EA", true: "#34C759" }}
+                  />
+                </View>
+
+                {isNotificationEnabled && (
+                  <View style={[styles.row, styles.borderTop]}>
+                    <View style={styles.rowLeft}>
+                      <Ionicons name="time-outline" size={20} color="#8E8E93" />
+                      <Text style={[styles.rowText, { color: "#8E8E93" }]}>
+                        通知時間
+                      </Text>
+                    </View>
+
+                    {Platform.OS === "ios" ? (
+                      <DateTimePicker
+                        value={notificationTime}
+                        mode="time"
+                        display="default"
+                        onChange={handleTimeChange}
+                        style={{ width: 90 }}
+                      />
+                    ) : (
+                      <>
+                        <TouchableOpacity
+                          style={styles.timeBtnAndroid}
+                          onPress={() => setShowTimePickerAndroid(true)}
+                        >
+                          <Text style={styles.timeBtnTextAndroid}>
+                            {("0" + notificationTime.getHours()).slice(-2)}:
+                            {("0" + notificationTime.getMinutes()).slice(-2)}
+                          </Text>
+                        </TouchableOpacity>
+                        {showTimePickerAndroid && (
+                          <DateTimePicker
+                            value={notificationTime}
+                            mode="time"
+                            display="default"
+                            onChange={handleTimeChange}
+                          />
+                        )}
+                      </>
+                    )}
+                  </View>
+                )}
+              </View>
+
+              {/* 既存のバックアップセクション */}
+              <Text style={[styles.sectionLabel, { marginTop: 20 }]}>DATA SYNC</Text>
+              <View style={styles.card}>
+                <View style={styles.row}>
+                  <View style={styles.rowLeft}>
+                    <Ionicons name="cloud-done-outline" size={20} color="#1C1C1E" />
+                    <Text style={styles.rowText}>最終同期</Text>
+                  </View>
+                  <Text style={styles.timeText}>
+                    {lastSyncedAt ? lastSyncedAt : "未同期"}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.row, styles.borderTop]}
+                  onPress={onRestore}
+                >
+                  <View style={styles.rowLeft}>
+                    <Ionicons name="cloud-download-outline" size={20} color="#007AFF" />
+                    <Text style={[styles.rowText, { color: "#007AFF", fontWeight: "bold" }]}>
+                      クラウドからデータを復元
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+
+              {/* 既存の法務セクション */}
+              <Text style={[styles.sectionLabel, { marginTop: 20 }]}>LEGAL</Text>
+              <View style={styles.card}>
+                <TouchableOpacity
+                  style={styles.row}
+                  onPress={() => Linking.openURL('https://www.notion.so/3466f7789c6e806f8880ed9241a38b99?source=copy_link')}
+                >
+                  <View style={styles.rowLeft}>
+                    <Ionicons name="document-text-outline" size={20} color="#1C1C1E" />
+                    <Text style={styles.rowText}>利用規約</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.row, styles.borderTop]}
+                  onPress={() => Linking.openURL('https://www.notion.so/3466f7789c6e80958ff2e31ae7f89e16?source=copy_link')}
+                >
+                  <View style={styles.rowLeft}>
+                    <Ionicons name="shield-checkmark-outline" size={20} color="#1C1C1E" />
+                    <Text style={styles.rowText}>プライバシーポリシー</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.copyright}>Developed by Kanta Hirano</Text>
+            </ScrollView>
           </View>
         </TouchableWithoutFeedback>
       </TouchableOpacity>
@@ -223,14 +294,15 @@ const styles = StyleSheet.create({
     backgroundColor: "#F2F2F7",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    padding: 24,
-    minHeight: "50%",
+    paddingTop: 24,
+    paddingHorizontal: 24,
+    maxHeight: "90%", // 要素が増えたので画面をはみ出さないように制御
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 24,
+    marginBottom: 20,
   },
   title: { fontSize: 22, fontWeight: "800", color: "#1C1C1E" },
   subTitle: { fontSize: 12, color: "#8E8E93", fontWeight: "600", marginTop: 2 },

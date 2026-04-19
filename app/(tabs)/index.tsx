@@ -8,6 +8,7 @@ import {
   useScheduleManager,
 } from "../../hooks/useScheduleManager";
 
+import { useCalendarData } from "../../hooks/useCalendarData";
 import { useNotificationManager } from "../../hooks/useNotificationManager";
 
 //データベース関係
@@ -233,124 +234,15 @@ export default function Index() {
     // 🌟 ポイント：依存配列から scheduleData を外してスッキリさせています
   }, [layerMaster, tagMaster, presets, activeTags]);
 
-  const expandedScheduleData = useMemo(() => {
-    const expanded: { [key: string]: ScheduleItem[] } = {};
-
-    // 🌟 最適化：計算の「終着点」を、作成日ではなく「現在から1年後」に設定
-    // これにより、放置していても常に1年先まで自動延長され続けます
-    const horizonDate = new Date();
-    horizonDate.setFullYear(horizonDate.getFullYear() + 1);
-
-    Object.keys(scheduleData).forEach((dateStr) => {
-      if (!expanded[dateStr]) expanded[dateStr] = [];
-
-      const processedBaseItems = scheduleData[dateStr]
-        .filter(item => !item.exceptionDates?.includes(dateStr))
-        .map(item => {
-          if (item.repeatType) {
-            const isSpecificDone = item.completedDates?.includes(dateStr) || false;
-            return { ...item, isDone: isSpecificDone };
-          }
-          return item;
-        });
-      expanded[dateStr].push(...processedBaseItems);
-
-      scheduleData[dateStr].forEach((item) => {
-        if (item.repeatType) {
-          let currentDate = new Date(dateStr);
-
-          // 🌟 高速化：表示範囲外の過去すぎるデータは計算をスキップ
-          // カレンダーの過去表示分（6ヶ月前）より前なら、そこまで一気にジャンプするロジックを入れるとさらに高速です
-
-          while (true) {
-            if (item.repeatType === "daily") {
-              currentDate.setDate(currentDate.getDate() + 1);
-            } else if (item.repeatType === "weekly") {
-              currentDate.setDate(currentDate.getDate() + 7);
-            } else if (item.repeatType === "monthly") {
-              currentDate.setMonth(currentDate.getMonth() + 1);
-            } else if (item.repeatType === "custom") {
-              currentDate.setDate(currentDate.getDate() + 1);
-              const dayOfWeek = currentDate.getDay();
-              const startDateTime = new Date(dateStr).getTime();
-              const currentDateTime = currentDate.getTime();
-              const diffWeeks = Math.floor((currentDateTime - startDateTime) / (7 * 24 * 60 * 60 * 1000));
-              const isMatchDay = item.repeatDays?.includes(dayOfWeek);
-              const isMatchInterval = diffWeeks % (item.repeatInterval || 1) === 0;
-              if (!(isMatchDay && isMatchInterval)) continue;
-            }
-
-            // 🌟 自動延長：horizonDate（今日から1年後）までループを回す
-            if (currentDate > horizonDate) break;
-
-            const nextDateStr = currentDate.toISOString().split("T")[0];
-            if (item.exceptionDates?.includes(nextDateStr)) continue;
-            if (!expanded[nextDateStr]) expanded[nextDateStr] = [];
-            const exists = expanded[nextDateStr].some((i) => i.id === item.id || i.linkedMasterId === item.id);
-            if (!exists) {
-              const isSpecificDone = item.completedDates?.includes(nextDateStr) || false;
-              expanded[nextDateStr].push({ ...item, isDone: isSpecificDone });
-            }
-          }
-        }
-      });
-    });
-    return expanded;
-  }, [scheduleData]);
-
-  const markedDatesBase = useMemo(() => {
-    const marked: any = {};
-    const activeTagsSet = new Set(activeTags);
-    const isAllLayers = activeTags.length === 0;
-
-    Object.keys(expandedScheduleData).forEach((date) => {
-      const dayDots = new Set<string>();
-      expandedScheduleData[date].forEach((item) => {
-        const matchesMode =
-          (activeMode === "calendar" && item.isEvent) ||
-          (activeMode === "todo" && item.isTodo) ||
-          (activeMode === "money" && item.isExpense);
-        if (!matchesMode) return;
-        const itemTags =
-          item.tags && item.tags.length > 0
-            ? item.tags
-            : item.tag
-              ? [item.tag]
-              : [];
-        itemTags.forEach((tag) => {
-          const info = tagMaster[tag] || {
-            layer: tag,
-            color: layerMaster[tag] || "#999",
-          };
-          const isAllLayers = activeTags.length === 0;
-          if (!isAllLayers && !activeTagsSet.has(info.layer)) return;
-
-          dayDots.add(info.color);
-        });
-      });
-      if (dayDots.size > 0)
-        marked[date] = {
-          dots: Array.from(dayDots).map((color) => ({ color })),
-        };
-    });
-    return marked;
-  }, [scheduleData, activeTags, activeMode, layerMaster, tagMaster]);
-
-  const currentMarkedDates = useMemo(
-    () => ({
-      ...markedDatesBase,
-      [selectedDate]: {
-        ...markedDatesBase[selectedDate],
-        selected: true,
-        selectedColor:
-          activeTags.length === 1
-            ? layerMaster[activeTags[0]] || "#1C1C1E"
-            : "#1C1C1E",
-      },
-    }),
-    [markedDatesBase, selectedDate, activeTags, layerMaster],
+  const { expandedScheduleData, currentMarkedDates } = useCalendarData(
+    scheduleData,
+    activeMode,
+    activeTags,
+    layerMaster,
+    tagMaster,
+    selectedDate
   );
-
+  
   const currentSolidColor = useMemo(
     () => (activeTags.length === 1 ? layerMaster[activeTags[0]] : "#1C1C1E"),
     [activeTags, layerMaster],
