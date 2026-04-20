@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "multi-calendar",
+    "name": "UniCal",
     "slug": "multi-calendar",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -13,9 +13,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/icon.png", // 🌟 ここを icon.png に変更
-        "backgroundColor": "#FFFFFF" // 🌟 背景色をアイコンに合わせて変更（白なら #FFFFFF）
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#FFFFFF"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
