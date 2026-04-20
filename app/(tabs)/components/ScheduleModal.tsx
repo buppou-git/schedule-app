@@ -58,12 +58,11 @@ interface ScheduleItem {
   customReminderTimes?: string[];
   completedDates?: string[]; // 完了した日付のリスト（例: ["2026-04-18", "2026-04-19"]）
   exceptionDates?: string[]; // 繰り返しから除外する日付（「今回のみ変更」した時に元の予定を隠す用）
-  linkedMasterId?: string;   // 「今回のみ変更」で作られた予定が、どの元予定から派生したか
+  linkedMasterId?: string; // 「今回のみ変更」で作られた予定が、どの元予定から派生したか
   subTasks?: SubTask[];
   repeatType?: "daily" | "weekly" | "monthly" | "custom"; // 🌟 custom を追加
-  repeatDays?: number[];     // 🌟 [1, 2, 3, 4, 5] (月〜金) のような配列
-  repeatInterval?: number;   // 🌟 1 (毎週), 2 (隔週) などの数値
-
+  repeatDays?: number[]; // 🌟 [1, 2, 3, 4, 5] (月〜金) のような配列
+  repeatInterval?: number; // 🌟 1 (毎週), 2 (隔週) などの数値
 }
 
 interface ScheduleModalProps {
@@ -105,8 +104,6 @@ const ModernDatePicker = ({
     mode === "date"
       ? `${value.getFullYear()}/${("0" + (value.getMonth() + 1)).slice(-2)}/${("0" + value.getDate()).slice(-2)}`
       : `${("0" + value.getHours()).slice(-2)}:${("0" + value.getMinutes()).slice(-2)}`;
-
-
 
   return (
     <>
@@ -222,7 +219,9 @@ export default function ScheduleModal({
   const [tagInput, setTagInput] = useState("");
   const [tagColor, setTagColor] = useState("#007AFF");
   const [selectedCategory, setSelectedCategory] = useState("食費");
-  
+
+  const [initialSnapshot, setInitialSnapshot] = useState<string>("");
+
   // 🌟 修正："custom" を追加し、迷子だった変数をここにお引越し！
   const [repeatType, setRepeatType] = useState<
     "none" | "daily" | "weekly" | "monthly" | "custom"
@@ -322,8 +321,35 @@ export default function ScheduleModal({
           setCustomReminderTimes([]);
         }
         setRepeatType(selectedItem.repeatType || "none");
-        setRepeatDays(selectedItem.repeatDays || []); 
-        setRepeatInterval(selectedItem.repeatInterval || 1); 
+        setRepeatDays(selectedItem.repeatDays || []);
+        setRepeatInterval(selectedItem.repeatInterval || 1);
+
+        const snapshot = JSON.stringify({
+          title: selectedItem.title || "",
+          amount: selectedItem.amount || 0,
+          isEvent: selectedItem.isEvent ?? true,
+          isTodo: selectedItem.isTodo ?? false,
+          isExpense: selectedItem.isExpense ?? false,
+          tag: selectedItem.tag || "",
+          category: selectedItem.category || "食費",
+          isAllDay: selectedItem.isAllDay ?? true,
+          startDate: selectedItem.startDate || selectedDate,
+          endDate: selectedItem.endDate || selectedDate,
+          startTime: selectedItem.startTime || "",
+          endTime: selectedItem.endTime || "",
+          repeatType: selectedItem.repeatType || "none",
+          repeatDays: selectedItem.repeatDays || [],
+          repeatInterval: selectedItem.repeatInterval || 1,
+          reminderOptions:
+            selectedItem.reminderOptions ||
+            (hasOldNotification ? ["exact"] : []),
+          // 子タスクの「タイトル」と「完了状態」も結合して監視する
+          subTasksData:
+            selectedItem.subTasks
+              ?.map((t: any) => `${t.title}_${t.isDone}`)
+              .join(",") || "",
+        });
+        setInitialSnapshot(snapshot);
       } else {
         setInputText("");
         setTagInput("");
@@ -394,6 +420,35 @@ export default function ScheduleModal({
   const handleSavePress = () => {
     if (!inputText) return Alert.alert("エラー", "タイトルを入力してください");
 
+    if (selectedItem) {
+      const currentSnapshot = JSON.stringify({
+        title: inputText,
+        amount: parseInt(inputAmount) || 0,
+        isEvent: isEvent,
+        isTodo: isTodo,
+        isExpense: isExpense,
+        tag: tagInput.trim(),
+        category: selectedCategory,
+        isAllDay: isAllDay,
+        startDate: startDate.toISOString().split("T")[0],
+        endDate: endDate.toISOString().split("T")[0],
+        startTime: isAllDay ? "" : formatTime(startTime),
+        endTime: isAllDay ? "" : formatTime(endTime),
+        repeatType: repeatType,
+        repeatDays: repeatDays,
+        repeatInterval: repeatInterval,
+        reminderOptions: selectedReminders,
+        subTasksData: subTasks.map((t) => `${t.title}_${t.isDone}`).join(","),
+      });
+
+      // 完全に一致（変更なし）の場合は、通信を回避して画面だけを閉じる
+      if (initialSnapshot === currentSnapshot) {
+        console.log("変更がないため、無駄な保存・通信処理をスキップしました！");
+        onClose();
+        return; // ここで処理を強制終了
+      }
+    }
+
     if (selectedItem && selectedItem.repeatType) {
       Alert.alert(
         "繰り返しの編集",
@@ -401,15 +456,13 @@ export default function ScheduleModal({
         [
           { text: "今回のみ", onPress: () => executeSave("single") },
           { text: "今後すべて", onPress: () => executeSave("all") },
-          { text: "キャンセル", style: "cancel" }
-        ]
+          { text: "キャンセル", style: "cancel" },
+        ],
       );
     } else {
       executeSave("normal");
     }
   };
-
-
 
   const executeSave = async (mode: "normal" | "all" | "single") => {
     if (!inputText) return Alert.alert("エラー", "タイトルを入力してください");
@@ -576,12 +629,11 @@ export default function ScheduleModal({
           ...selectedItem,
           ...itemData,
           id: Date.now().toString(), // 新しいIDを付与
-          repeatType: undefined,     // 繰り返し属性を剥奪
+          repeatType: undefined, // 繰り返し属性を剥奪
           linkedMasterId: selectedItem.id, // 念のため元の親IDを記録
         };
         if (!newData[sStr]) newData[sStr] = [];
         newData[sStr].push(newItem);
-
       } else {
         // 🌟 分岐：「今後すべて」または「通常」の編集
         Object.keys(newData).forEach((d) => {
@@ -610,15 +662,11 @@ export default function ScheduleModal({
   // 🌟 追加：削除ボタンを押した時の分岐ロジック
   const handleDeletePress = () => {
     if (selectedItem && selectedItem.repeatType) {
-      Alert.alert(
-        "繰り返しの削除",
-        "この予定をどのように削除しますか？",
-        [
-          { text: "今回のみ", onPress: () => executeDelete("single") },
-          { text: "今後すべて", onPress: () => executeDelete("all") },
-          { text: "キャンセル", style: "cancel" }
-        ]
-      );
+      Alert.alert("繰り返しの削除", "この予定をどのように削除しますか？", [
+        { text: "今回のみ", onPress: () => executeDelete("single") },
+        { text: "今後すべて", onPress: () => executeDelete("all") },
+        { text: "キャンセル", style: "cancel" },
+      ]);
     } else {
       executeDelete("normal");
     }
@@ -770,25 +818,53 @@ export default function ScheduleModal({
         </View>
         {repeatType === "custom" && (
           <View style={styles.customRepeatArea}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 12 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                marginBottom: 12,
+              }}
+            >
               <Text style={styles.miniLabel}>曜日の選択</Text>
               <TouchableOpacity onPress={() => setRepeatDays([1, 2, 3, 4, 5])}>
-                <Text style={{ fontSize: 11, color: uiThemeColor, fontWeight: "bold" }}>平日のみ選択</Text>
+                <Text
+                  style={{
+                    fontSize: 11,
+                    color: uiThemeColor,
+                    fontWeight: "bold",
+                  }}
+                >
+                  平日のみ選択
+                </Text>
               </TouchableOpacity>
             </View>
-            
+
             <View style={styles.daySelectorRow}>
               {["日", "月", "火", "水", "木", "金", "土"].map((day, idx) => {
                 const isSelected = repeatDays.includes(idx);
                 return (
                   <TouchableOpacity
                     key={idx}
-                    style={[styles.dayCircle, isSelected && { backgroundColor: uiThemeColor, borderColor: uiThemeColor }]}
+                    style={[
+                      styles.dayCircle,
+                      isSelected && {
+                        backgroundColor: uiThemeColor,
+                        borderColor: uiThemeColor,
+                      },
+                    ]}
                     onPress={() => {
-                      setRepeatDays(prev => prev.includes(idx) ? prev.filter(d => d !== idx) : [...prev, idx]);
+                      setRepeatDays((prev) =>
+                        prev.includes(idx)
+                          ? prev.filter((d) => d !== idx)
+                          : [...prev, idx],
+                      );
                     }}
                   >
-                    <Text style={[styles.dayText, isSelected && { color: "#FFF" }]}>{day}</Text>
+                    <Text
+                      style={[styles.dayText, isSelected && { color: "#FFF" }]}
+                    >
+                      {day}
+                    </Text>
                   </TouchableOpacity>
                 );
               })}
@@ -796,14 +872,20 @@ export default function ScheduleModal({
 
             <View style={styles.intervalRow}>
               <Text style={styles.miniLabel}>繰り返しの間隔:</Text>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+              >
                 <TextInput
                   style={styles.intervalInput}
                   keyboardType="numeric"
                   value={repeatInterval.toString()}
                   onChangeText={(t) => setRepeatInterval(parseInt(t) || 1)}
                 />
-                <Text style={{ fontSize: 14, fontWeight: "bold", color: "#1C1C1E" }}>週間ごと</Text>
+                <Text
+                  style={{ fontSize: 14, fontWeight: "bold", color: "#1C1C1E" }}
+                >
+                  週間ごと
+                </Text>
               </View>
             </View>
           </View>
@@ -887,7 +969,7 @@ export default function ScheduleModal({
     tagInput,
     isCreatingNewTag,
     repeatType,
-    repeatDays,  
+    repeatDays,
     repeatInterval,
   ]);
 
@@ -926,12 +1008,21 @@ export default function ScheduleModal({
                     alignItems: "center",
                   }}
                 >
-                  <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      flex: 1,
+                    }}
+                  >
                     <TextInput
                       style={[
                         styles.subTaskInput,
                         // 🌟 完了時は文字をグレーにして打ち消し線を引く
-                        task.isDone && { textDecorationLine: "line-through", color: "#8E8E93" }
+                        task.isDone && {
+                          textDecorationLine: "line-through",
+                          color: "#8E8E93",
+                        },
                       ]}
                       placeholder="やる事..."
                       placeholderTextColor="#BBB"
@@ -1357,19 +1448,19 @@ export default function ScheduleModal({
 
                       {(isAllDay
                         ? [
-                          { label: "当日の朝", value: "morning" },
-                          { label: "前日", value: "dayBefore" },
-                          { label: "2日前", value: "2daysBefore" },
-                          { label: "カスタム", value: "custom" },
-                        ]
+                            { label: "当日の朝", value: "morning" },
+                            { label: "前日", value: "dayBefore" },
+                            { label: "2日前", value: "2daysBefore" },
+                            { label: "カスタム", value: "custom" },
+                          ]
                         : [
-                          { label: "ちょうど", value: "exact" },
-                          { label: "10分前", value: "10min" },
-                          { label: "30分前", value: "30min" },
-                          { label: "1時間前", value: "1hour" },
-                          { label: "当日の朝", value: "morning" },
-                          { label: "カスタム", value: "custom" },
-                        ]
+                            { label: "ちょうど", value: "exact" },
+                            { label: "10分前", value: "10min" },
+                            { label: "30分前", value: "30min" },
+                            { label: "1時間前", value: "1hour" },
+                            { label: "当日の朝", value: "morning" },
+                            { label: "カスタム", value: "custom" },
+                          ]
                       ).map((opt) => {
                         const isSelected = selectedReminders.includes(
                           opt.value,
@@ -1884,8 +1975,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#EEE",
   },
-  miniLabel: { fontSize: 11, fontWeight: "800", color: "#AEAEB2", textTransform: "uppercase" },
-  daySelectorRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 10, marginBottom: 20 },
+  miniLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#AEAEB2",
+    textTransform: "uppercase",
+  },
+  daySelectorRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 10,
+    marginBottom: 20,
+  },
   dayCircle: {
     width: 34,
     height: 34,
@@ -1897,7 +1998,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   dayText: { fontSize: 12, fontWeight: "bold", color: "#8E8E93" },
-  intervalRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderTopWidth: 1, borderTopColor: "#EEE", paddingTop: 15 },
+  intervalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderTopWidth: 1,
+    borderTopColor: "#EEE",
+    paddingTop: 15,
+  },
   intervalInput: {
     backgroundColor: "#FFF",
     borderWidth: 1,
