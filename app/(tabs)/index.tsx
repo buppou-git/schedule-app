@@ -46,6 +46,7 @@ import {
 import ConfigModal from "./components/ConfigModal";
 import LayerManagementModal from "./components/LayerManagementModal";
 import MoneyDashboard from "./components/MoneyDashboard";
+import QuickActionModal from "./components/QuickActionModal";
 import ScheduleModal from "./components/ScheduleModal";
 import SubTaskEditModal from "./components/SubTaskEditModal";
 import TabBar from "./components/TabBar";
@@ -75,6 +76,8 @@ export default function Index() {
   // 🌟 追加：サブタスク編集モーダル用のState
   const [subTaskModalVisible, setSubTaskModalVisible] = useState(false);
   const [editingSubTaskInfo, setEditingSubTaskInfo] = useState<any>(null);
+  const [quickActionVisible, setQuickActionVisible] = useState(false);
+  const [quickActionItem, setQuickActionItem] = useState<any>(null);
 
   const [layerMaster, setLayerMaster] = useState<{ [key: string]: string }>({});
   const [tagMaster, setTagMaster] = useState<{
@@ -242,7 +245,7 @@ export default function Index() {
     tagMaster,
     selectedDate
   );
-  
+
   const currentSolidColor = useMemo(
     () => (activeTags.length === 1 ? layerMaster[activeTags[0]] : "#1C1C1E"),
     [activeTags, layerMaster],
@@ -459,6 +462,42 @@ export default function Index() {
     setSubTaskModalVisible(false);
   };
 
+  const handleQuickSave = (item: any, newTitle: string) => {
+    if (!newTitle.trim()) return;
+    const newData = { ...scheduleData };
+    for (const d of Object.keys(newData)) {
+      newData[d] = newData[d].map((i: any) => i.id === item.id ? { ...i, title: newTitle } : i);
+    }
+    setScheduleData(newData);
+    setHasUnsavedChanges(true);
+  };
+
+  // 🌟 追加：サクッと削除
+  const handleQuickDelete = (item: any) => {
+    Alert.alert("削除の確認", `「${item.title}」を削除しますか？`, [
+      { text: "キャンセル", style: "cancel" },
+      {
+        text: "削除",
+        style: "destructive",
+        onPress: async () => {
+          // 通知がセットされていればキャンセル
+          if (item.notificationIds) {
+            for (const id of item.notificationIds) {
+              await cancelItemNotification(id);
+            }
+          }
+          // データから削除
+          const newData = { ...scheduleData };
+          for (const d of Object.keys(newData)) {
+            newData[d] = newData[d].filter((i: any) => i.id !== item.id);
+          }
+          setScheduleData(newData);
+          setHasUnsavedChanges(true);
+        }
+      }
+    ]);
+  };
+
 
 
 
@@ -560,7 +599,7 @@ export default function Index() {
     const dTasks: any[] = [];
     const dEvents: any[] = [];
 
-    items.forEach((item) => {
+    items.forEach((item: any) => {
       const itemTags =
         item.tags && item.tags.length > 0
           ? item.tags
@@ -569,7 +608,7 @@ export default function Index() {
             : [];
       const matchLayer =
         isAllLayers ||
-        itemTags.some((tag) => {
+        itemTags.some((tag: any) => {
           const parentLayer = tagMaster[tag]?.layer || tag;
           return activeTagsSet.has(parentLayer);
         });
@@ -822,6 +861,11 @@ export default function Index() {
                         toggleSubTodo={toggleSubTodo}
                         setEditingSubTaskInfo={setEditingSubTaskInfo}
                         setSubTaskModalVisible={setSubTaskModalVisible}
+                        onLongPress={(item) => {
+                          setQuickActionItem(item);
+                          setQuickActionVisible(true);
+
+                        }}
                       />
                     ))}
 
@@ -832,7 +876,7 @@ export default function Index() {
                           <TodoItem
                             key={t.id}
                             item={t}
-                            itemDate={t.date}
+                            itemDate={selectedDate}
                             selectedDate={selectedDate}
                             tagMaster={tagMaster}
                             layerMaster={layerMaster}
@@ -842,6 +886,11 @@ export default function Index() {
                             toggleSubTodo={toggleSubTodo}
                             setEditingSubTaskInfo={setEditingSubTaskInfo}
                             setSubTaskModalVisible={setSubTaskModalVisible}
+                            onLongPress={(item) => {
+                              setQuickActionItem(item);
+                              setQuickActionVisible(true);
+
+                            }}
                           />
                         ))}
                       </View>
@@ -862,6 +911,11 @@ export default function Index() {
                       layerMaster={layerMaster}
                       formatEventTime={formatEventTime}
                       openEditModal={openEditModal}
+                      // 👇 🌟 ここに追加！
+                      onLongPress={(item) => {
+                        setQuickActionItem(item);
+                        setQuickActionVisible(true);
+                      }}
                     />
                   ))}
                 </View>
@@ -1137,6 +1191,20 @@ export default function Index() {
         onSave={handleSubTaskSave}
         onDelete={handleSubTaskDelete}
         themeColor={currentSolidColor}
+      />
+
+      <QuickActionModal
+        visible={quickActionVisible}
+        onClose={() => setQuickActionVisible(false)}
+        item={quickActionItem}
+        themeColor={currentSolidColor}
+        onDelete={handleQuickDelete}
+        onEditDetail={(item) => {
+          // 詳細モーダルを開く処理
+          setSelectedItem(item);
+          setModalVisible(true);
+        }}
+        onQuickSave={handleQuickSave}
       />
 
 

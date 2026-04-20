@@ -14,6 +14,7 @@ interface TodoItemProps {
   toggleSubTodo: (date: string, parentId: string, subTaskId: number) => void;
   setEditingSubTaskInfo: (info: any) => void;
   setSubTaskModalVisible: (visible: boolean) => void;
+  onLongPress: (item: any) => void;
 }
 
 export default function TodoItem({
@@ -28,6 +29,7 @@ export default function TodoItem({
   toggleSubTodo,
   setEditingSubTaskInfo,
   setSubTaskModalVisible,
+  onLongPress,
 }: TodoItemProps) {
   const itemTags = item.tags && item.tags.length > 0 ? item.tags : item.tag ? [item.tag] : [];
   
@@ -56,6 +58,8 @@ export default function TodoItem({
         style={[styles.todoCard, item.isDone && styles.todoCardDone]}
         onPress={() => openEditModal(item)}
         activeOpacity={0.7}
+        onLongPress={() => onLongPress(item)}
+        delayLongPress={300} // 0.3秒で発火
       >
         <View style={styles.stripeContainer}>
           {uniqueColors.map((color: any, idx: number) => (
