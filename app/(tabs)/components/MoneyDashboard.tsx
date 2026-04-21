@@ -127,7 +127,7 @@ export default function MoneyDashboard({
   }, []);
 
   const isSingleFilter = activeTags.length === 1;
-  const currentActiveLayer = isSingleFilter ? activeTags[0] : null;
+  const currentActiveLayer = (isSingleFilter && !showOtherInCharts) ? activeTags[0] : null;
 
   const getItemTotalExpense = (item: any) => {
     // 親タスクの金額（ここは予定としてそのまま足す）
@@ -181,13 +181,22 @@ export default function MoneyDashboard({
 
   const globalBudgetCalc = useMemo(() => {
     const totalAllocated = Object.keys(layerMaster).reduce(
-      (sum, l) =>
-        layerBudgetEnabled[l] !== false ? sum + (layerBudgets[l] || 0) : sum,
+      (sum, l) => {
+        if (layerBudgetEnabled[l] === false) return sum;
+        // 🌟 追加：フィルターが効いていて、かつ「その他を表示」がOFFなら計算から除外
+        if (activeTags.length > 0 && !activeTags.includes(l) && !showOtherInCharts) return sum;
+        return sum + (layerBudgets[l] || 0);
+      },
       0,
     );
 
-    const commonActual =
-      layerBudgetEnabled["共通"] !== false ? layerActuals["共通"] || 0 : 0;
+    let commonActual = 0;
+    const isCommonActive = activeTags.length === 0 || activeTags.includes("共通");
+    // 🌟 変更：共通出費もスイッチと連動させる
+    if (layerBudgetEnabled["共通"] !== false && (isCommonActive || showOtherInCharts)) {
+      commonActual = layerActuals["共通"] || 0;
+    }
+
     const unallocatedBuffer = monthlyBudget - totalAllocated - commonActual;
 
     return {
@@ -196,13 +205,7 @@ export default function MoneyDashboard({
       unallocatedBuffer,
       isOverflow: unallocatedBuffer < 0,
     };
-  }, [
-    monthlyBudget,
-    layerBudgets,
-    layerMaster,
-    layerBudgetEnabled,
-    layerActuals,
-  ]);
+  }, [monthlyBudget, layerBudgets, layerMaster, layerBudgetEnabled, layerActuals, activeTags, showOtherInCharts]);
 
   const singleLayerBudgetCalc = useMemo(() => {
     if (!currentActiveLayer) return { totalAllocated: 0, unallocatedBuffer: 0 };
@@ -771,9 +774,9 @@ export default function MoneyDashboard({
                                 ? key === "共通"
                                   ? "#8E8E93"
                                   : layerMaster[key] ||
-                                    palette[index % palette.length]
+                                  palette[index % palette.length]
                                 : tagMaster[key]?.color ||
-                                  palette[index % palette.length],
+                                palette[index % palette.length],
                           legendFontColor: "#666",
                           legendFontSize: 11,
                         }))}
@@ -896,6 +899,7 @@ export default function MoneyDashboard({
 
                       {Object.keys(layerMaster).map((l) => {
                         if (layerBudgetEnabled[l] === false) return null;
+                        if (activeTags.length > 0 && !activeTags.includes(l)) return null;
                         const b = layerBudgets[l] || 0;
                         const a = layerActuals[l] || 0;
                         const color = layerMaster[l];
@@ -1091,43 +1095,65 @@ export default function MoneyDashboard({
                         );
                       })}
 
-                      {/* 🌟 共通出費枠（薄いガイド線なし ＋ スライダーあり） */}
-                      {layerBudgetEnabled["共通"] !== false &&
+                      {/* 🌟 2. 共通出費枠（フィルターに「共通」が含まれている、またはフィルターなしの時だけ個別表示） */}
+                      {layerBudgetEnabled["共通"] !== false && (activeTags.length === 0 || activeTags.includes("共通")) && (
                         (() => {
                           const a = layerActuals["共通"] || 0;
-                          const b = layerBudgets["共通"] || 0; // 🌟 共通の予算
                           const validMaster = monthlyBudget || 1;
 
                           return (
                             <View style={styles.sliderCard}>
                               <View style={styles.sliderHeader}>
-                                <Text
-                                  style={{
-                                    fontWeight: "bold",
-                                    color: "#8E8E93",
-                                    fontSize: 16,
-                                  }}
-                                >
-                                  共通出費 (未分類)
-                                </Text>
-                                <Text style={styles.sliderSubText}>
-                                  実績 ¥{a.toLocaleString()}
-                                </Text>
+                                <Text style={{ fontWeight: "bold", color: "#8E8E93", fontSize: 16 }}>共通出費 (未分類)</Text>
+                                <Text style={styles.sliderSubText}>実績 ¥{a.toLocaleString()}</Text>
                               </View>
                               <View style={styles.absoluteScaleBar}>
-                                {/* 🌟 実績バーのみ表示（薄いガイド線はなし） */}
-                                <View
-                                  style={{
-                                    position: "absolute",
-                                    width: `${Math.min(a / validMaster, 1) * 100}%`,
-                                    height: "100%",
-                                    backgroundColor: "#8E8E93",
-                                  }}
-                                />
+                                <View style={{ position: "absolute", width: `${Math.min(a / validMaster, 1) * 100}%`, height: "100%", backgroundColor: "#8E8E93" }} />
                               </View>
                             </View>
                           );
-                        })()}
+                        })()
+                      )}
+
+                      {/* 🌟 3. 「その他」スライダー（スイッチON ＆ フィルター適用中のみ表示） */}
+                      {showOtherInCharts && activeTags.length > 0 && (
+                        (() => {
+                          let otherBudget = 0;
+                          let otherActual = 0;
+
+                          // フィルターに含まれていないレイヤー（と共通出費）をすべて合算してぶち込む！
+                          [...Object.keys(layerMaster), "共通"].forEach(l => {
+                            if (!activeTags.includes(l) && layerBudgetEnabled[l] !== false) {
+                              otherBudget += (l === "共通" ? 0 : layerBudgets[l] || 0);
+                              otherActual += layerActuals[l] || 0;
+                            }
+                          });
+
+                         
+
+                          const isOver = otherActual > otherBudget && otherBudget > 0;
+                          const validMaster = monthlyBudget || 1;
+
+                          return (
+                            <View style={styles.sliderCard}>
+                              <View style={styles.sliderHeader}>
+                                <Text style={{ fontWeight: "bold", color: "#8E8E93", fontSize: 16 }}>その他</Text>
+                                <Text style={styles.sliderSubText}>
+                                  実績 ¥{otherActual.toLocaleString()} / 予算 ¥{otherBudget.toLocaleString()}
+                                </Text>
+                              </View>
+                              <View style={styles.absoluteScaleBar}>
+                                <View style={{
+                                  position: "absolute",
+                                  width: `${Math.min(otherActual / validMaster, 1) * 100}%`,
+                                  height: "100%",
+                                  backgroundColor: isOver ? "#FF3B30" : "#C7C7CC",
+                                }} />
+                              </View>
+                            </View>
+                          );
+                        })()
+                      )}
                     </>
                   ) : (
                     /* --- シングルレイヤーモード --- */
@@ -1440,11 +1466,11 @@ export default function MoneyDashboard({
                   quickMainTags[l] || quickMainTags["ALL_LAYERS"] || [];
                 const sTags = isAll
                   ? Object.keys(tagMaster).filter(
-                      (t) => tagMaster[t].layer === "共通",
-                    )
+                    (t) => tagMaster[t].layer === "共通",
+                  )
                   : Object.keys(tagMaster).filter(
-                      (t) => tagMaster[t].layer === l,
-                    );
+                    (t) => tagMaster[t].layer === l,
+                  );
 
                 return (
                   <View
