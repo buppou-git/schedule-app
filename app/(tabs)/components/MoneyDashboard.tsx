@@ -31,7 +31,7 @@ interface ScheduleItem {
   isExpense: boolean;
   category?: string;
   recurringGroupId?: string;
-  repeatType?: "daily" | "weekly" | "monthly"| "custom";
+  repeatType?: "daily" | "weekly" | "monthly" | "custom";
   isAllDay?: boolean;
   startTime?: string;
   endTime?: string;
@@ -122,7 +122,7 @@ export default function MoneyDashboard({
   const getItemTotalExpense = (item: any) => {
     // 親タスクの金額（ここは予定としてそのまま足す）
     let total = item.isExpense ? (item.amount || 0) : 0;
-    
+
     if (item.subTasks && item.subTasks.length > 0) {
       item.subTasks.forEach((sub: any) => {
         // 🌟 修正：支出設定がON、かつ「完了済み (isDone)」の時だけ足し算する！
@@ -269,7 +269,10 @@ export default function MoneyDashboard({
 
     const isAll = target === "ALL_LAYERS";
     let fTag = isManualInput ? manualTag.trim() : selectedSubTag;
-    if (!fTag) fTag = isAll ? selectedMainTag : target;
+
+    // 🌟 修正：属性が空なら、カテゴリ名ではなく「共通」タグを付与する
+    if (!fTag) fTag = isAll ? "共通出費" : target;
+
 
     if (fTag && !tagMaster[fTag]) {
       const assignLayer = isAll ? "共通" : target;
@@ -334,31 +337,53 @@ export default function MoneyDashboard({
     }, 100);
   };
 
+  const [showOtherInCharts, setShowOtherInCharts] = useState(true);
+
+  // 永続化（保存）する場合
+  useEffect(() => {
+    const load = async () => {
+      const val = await AsyncStorage.getItem("showOtherInCharts");
+      if (val !== null) setShowOtherInCharts(JSON.parse(val));
+      // ... 他のロード処理
+    };
+    load();
+  }, []);
+
   const getStatsForMonth = (monthStr: string) => {
     let total = 0;
     const totals: { [key: string]: number } = {};
+
     Object.keys(scheduleData).forEach((date) => {
       if (date.startsWith(monthStr)) {
         scheduleData[date].forEach((item) => {
-          // 🌟 修正：合算金額が0ならスキップ
           const itemTotal = getItemTotalExpense(item);
           if (itemTotal === 0) return;
-          
-          const itemTag =
-            item.tags && item.tags.length > 0 ? item.tags[0] : item.tag || "";
+
+          const itemTag = item.tags && item.tags.length > 0 ? item.tags[0] : item.tag || "";
           const itemLayer = tagMaster[itemTag]?.layer || "共通";
 
-          if (activeTags.length > 0 && !activeTags.includes(itemLayer)) return;
-          if (selectedFilterTag && itemTag !== selectedFilterTag) return;
+          // 🌟 変更：スキップではなく「その他」判定を行う
+          let isOther = false;
+          if (activeTags.length > 0 && !activeTags.includes(itemLayer)) {
+            isOther = true;
+          }
+          if (selectedFilterTag && itemTag !== selectedFilterTag) {
+            isOther = true;
+          }
 
-          total += itemTotal; // 🌟 合算した金額を足す
+          total += itemTotal;
+
           let groupKey = itemTag;
-          if (chartGroupBy === "layer") groupKey = itemLayer;
-          else if (chartGroupBy === "category")
-            groupKey = item.category || itemTag;
-          if (!groupKey) groupKey = item.category || "未分類";
+          // 🌟 変更：対象外なら強制的に「その他」グループへ
+          if (isOther) {
+            groupKey = "その他";
+          } else {
+            if (chartGroupBy === "layer") groupKey = itemLayer;
+            else if (chartGroupBy === "category") groupKey = item.category || itemTag;
+            if (!groupKey) groupKey = item.category || "未分類";
+          }
 
-          totals[groupKey] = (totals[groupKey] || 0) + itemTotal; // 🌟 合算した金額を足す
+          totals[groupKey] = (totals[groupKey] || 0) + itemTotal;
         });
       }
     });
@@ -384,12 +409,12 @@ export default function MoneyDashboard({
     (scheduleData[selectedDate] || []).forEach((item) => {
       const itemTotal = getItemTotalExpense(item);
       if (itemTotal === 0) return; // 🌟 変更
-      
+
       const itemTag =
         item.tags && item.tags.length > 0 ? item.tags[0] : item.tag || "";
       const itemLayer = tagMaster[itemTag]?.layer || "共通";
       if (activeTags.length > 0 && !activeTags.includes(itemLayer)) return;
-      
+
       dTotal += itemTotal; // 🌟 変更
     });
     return { dailyTotal: dTotal };
@@ -508,6 +533,25 @@ export default function MoneyDashboard({
                   AsyncStorage.setItem("myPayday", t);
                 }}
               />
+              <View style={styles.settingSwitchRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.settingSwitchLabel}>フィルター外を「その他」で表示</Text>
+                  <Text style={{ fontSize: 10, color: "#8E8E93" }}>
+                    オフにするとフィルター中の支出のみが集計されます
+                  </Text>
+                </View>
+                <Switch
+                  value={showOtherInCharts}
+                  onValueChange={(v) => {
+                    setShowOtherInCharts(v);
+                    AsyncStorage.setItem("showOtherInCharts", JSON.stringify(v));
+                    // Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); // ←必要ならHapticsも
+                  }}
+                  trackColor={{ false: "#E5E5EA", true: themeColor }}
+                />
+              </View>
+
+
               <View style={styles.divider} />
               <Text style={[styles.settingLabel, { marginTop: 10 }]}>
                 予算スライダーの表示切替
@@ -1354,7 +1398,7 @@ export default function MoneyDashboard({
 
           <View style={{ width: "3%" }} />
 
-          <View style={[styles.dailyRight, {flex: 1 }]}>
+          <View style={[styles.dailyRight, { flex: 1 }]}>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -2191,7 +2235,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     textAlign: "right",
   },
-  
+
   // 🌟 実行ボタンをおしゃれに（少し浮かせる）
   addExecuteBtn: {
     marginTop: 8,

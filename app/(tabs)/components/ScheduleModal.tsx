@@ -344,10 +344,7 @@ export default function ScheduleModal({
             selectedItem.reminderOptions ||
             (hasOldNotification ? ["exact"] : []),
           // 子タスクの「タイトル」と「完了状態」も結合して監視する
-          subTasksData:
-            selectedItem.subTasks
-              ?.map((t: any) => `${t.title}_${t.isDone}`)
-              .join(",") || "",
+          subTasksData: selectedItem.subTasks?.map((t: any) => `${t.title}_${t.isDone}_${t.amount}_${t.isExpense}`).join(",") || "",
         });
         setInitialSnapshot(snapshot);
       } else {
