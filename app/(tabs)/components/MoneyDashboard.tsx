@@ -116,18 +116,28 @@ export default function MoneyDashboard({
   const [editAmount, setEditAmount] = useState("");
   const [editTitle, setEditTitle] = useState("");
 
+  const [showOtherInCharts, setShowOtherInCharts] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      const val = await AsyncStorage.getItem("showOtherInCharts");
+      if (val !== null) setShowOtherInCharts(JSON.parse(val));
+    };
+    load();
+  }, []);
+
   const isSingleFilter = activeTags.length === 1;
   const currentActiveLayer = isSingleFilter ? activeTags[0] : null;
 
   const getItemTotalExpense = (item: any) => {
     // 親タスクの金額（ここは予定としてそのまま足す）
-    let total = item.isExpense ? (item.amount || 0) : 0;
+    let total = item.isExpense ? item.amount || 0 : 0;
 
     if (item.subTasks && item.subTasks.length > 0) {
       item.subTasks.forEach((sub: any) => {
         // 🌟 修正：支出設定がON、かつ「完了済み (isDone)」の時だけ足し算する！
         if (sub.isExpense && sub.isDone) {
-          total += (sub.amount || 0);
+          total += sub.amount || 0;
         }
       });
     }
@@ -208,6 +218,50 @@ export default function MoneyDashboard({
     };
   }, [currentActiveLayer, layerBudgets, subTagBudgets, tagMaster]);
 
+  // 🌟 追加：分析バー（積み上げグラフ）用のセグメント計算
+  const barSegments = useMemo(() => {
+    const segments: { color: string; actual: number; budget: number }[] = [];
+    let otherActual = 0;
+    let otherBudget = 0;
+
+    const layers = [...Object.keys(layerMaster), "共通"];
+    layers.forEach((l) => {
+      if (layerBudgetEnabled[l] === false) return;
+
+      const actual = layerActuals[l] || 0;
+      const budget = l === "共通" ? 0 : layerBudgets[l] || 0;
+      const isMatched = activeTags.length === 0 || activeTags.includes(l);
+
+      if (isMatched) {
+        segments.push({
+          color: l === "共通" ? "#8E8E93" : layerMaster[l],
+          actual,
+          budget,
+        });
+      } else if (showOtherInCharts) {
+        otherActual += actual;
+        otherBudget += budget;
+      }
+    });
+
+    if (showOtherInCharts && (otherActual > 0 || otherBudget > 0)) {
+      segments.push({
+        color: "#C7C7CC",
+        actual: otherActual,
+        budget: otherBudget,
+      });
+    }
+
+    return segments;
+  }, [
+    layerMaster,
+    layerActuals,
+    layerBudgets,
+    activeTags,
+    layerBudgetEnabled,
+    showOtherInCharts,
+  ]);
+
   useEffect(() => {
     const load = async () => {
       const [b, p, lb, sb, le, q] = await Promise.all([
@@ -273,7 +327,6 @@ export default function MoneyDashboard({
     // 🌟 修正：属性が空なら、カテゴリ名ではなく「共通」タグを付与する
     if (!fTag) fTag = isAll ? "共通出費" : target;
 
-
     if (fTag && !tagMaster[fTag]) {
       const assignLayer = isAll ? "共通" : target;
       const newTagMaster = {
@@ -337,18 +390,6 @@ export default function MoneyDashboard({
     }, 100);
   };
 
-  const [showOtherInCharts, setShowOtherInCharts] = useState(true);
-
-  // 永続化（保存）する場合
-  useEffect(() => {
-    const load = async () => {
-      const val = await AsyncStorage.getItem("showOtherInCharts");
-      if (val !== null) setShowOtherInCharts(JSON.parse(val));
-      // ... 他のロード処理
-    };
-    load();
-  }, []);
-
   const getStatsForMonth = (monthStr: string) => {
     let total = 0;
     const totals: { [key: string]: number } = {};
@@ -359,29 +400,32 @@ export default function MoneyDashboard({
           const itemTotal = getItemTotalExpense(item);
           if (itemTotal === 0) return;
 
-          const itemTag = item.tags && item.tags.length > 0 ? item.tags[0] : item.tag || "";
+          const itemTag =
+            item.tags && item.tags.length > 0 ? item.tags[0] : item.tag || "";
           const itemLayer = tagMaster[itemTag]?.layer || "共通";
 
-          // 🌟 変更：スキップではなく「その他」判定を行う
-          let isOther = false;
-          if (activeTags.length > 0 && !activeTags.includes(itemLayer)) {
-            isOther = true;
-          }
-          if (selectedFilterTag && itemTag !== selectedFilterTag) {
-            isOther = true;
+          // 🌟 修正版：「その他」の表示/非表示をスイッチと連動させる
+          const isMatch =
+            (activeTags.length === 0 || activeTags.includes(itemLayer)) &&
+            (!selectedFilterTag || itemTag === selectedFilterTag);
+
+          if (!isMatch) {
+            // フィルター対象外の場合、スイッチがONなら「その他」として加算
+            if (showOtherInCharts) {
+              const groupKey = "その他";
+              total += itemTotal;
+              totals[groupKey] = (totals[groupKey] || 0) + itemTotal;
+            }
+            return; // スイッチがOFFなら何もしない（ここでこの予定の処理を終わる）
           }
 
+          // フィルター対象（一致する）場合の通常の集計
           total += itemTotal;
-
           let groupKey = itemTag;
-          // 🌟 変更：対象外なら強制的に「その他」グループへ
-          if (isOther) {
-            groupKey = "その他";
-          } else {
-            if (chartGroupBy === "layer") groupKey = itemLayer;
-            else if (chartGroupBy === "category") groupKey = item.category || itemTag;
-            if (!groupKey) groupKey = item.category || "未分類";
-          }
+          if (chartGroupBy === "layer") groupKey = itemLayer;
+          else if (chartGroupBy === "category")
+            groupKey = item.category || itemTag;
+          if (!groupKey) groupKey = item.category || "未分類";
 
           totals[groupKey] = (totals[groupKey] || 0) + itemTotal;
         });
@@ -535,7 +579,9 @@ export default function MoneyDashboard({
               />
               <View style={styles.settingSwitchRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.settingSwitchLabel}>フィルター外を「その他」で表示</Text>
+                  <Text style={styles.settingSwitchLabel}>
+                    フィルター外を「その他」で表示
+                  </Text>
                   <Text style={{ fontSize: 10, color: "#8E8E93" }}>
                     オフにするとフィルター中の支出のみが集計されます
                   </Text>
@@ -544,13 +590,15 @@ export default function MoneyDashboard({
                   value={showOtherInCharts}
                   onValueChange={(v) => {
                     setShowOtherInCharts(v);
-                    AsyncStorage.setItem("showOtherInCharts", JSON.stringify(v));
+                    AsyncStorage.setItem(
+                      "showOtherInCharts",
+                      JSON.stringify(v),
+                    );
                     // Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); // ←必要ならHapticsも
                   }}
                   trackColor={{ false: "#E5E5EA", true: themeColor }}
                 />
               </View>
-
 
               <View style={styles.divider} />
               <Text style={[styles.settingLabel, { marginTop: 10 }]}>
@@ -628,7 +676,9 @@ export default function MoneyDashboard({
                       <Text style={styles.progressLabel}>
                         {selectedFilterTag
                           ? `${selectedFilterTag} の総額`
-                          : currentActiveLayer || "今月の総支出"}
+                          : activeTags.length > 0
+                            ? "選択中の進捗（その他を含む）"
+                            : "今月の総支出"}
                       </Text>
                       <Text
                         style={[styles.progressPercent, { color: statusColor }]}
@@ -715,13 +765,15 @@ export default function MoneyDashboard({
                           name: key,
                           population: stats.totals[key],
                           color:
-                            chartGroupBy === "layer"
-                              ? key === "共通"
-                                ? "#8E8E93"
-                                : layerMaster[key] ||
-                                palette[index % palette.length]
-                              : tagMaster[key]?.color ||
-                              palette[index % palette.length],
+                            key === "その他"
+                              ? "#C7C7CC" // 🌟 追加：「その他」はグレーで固定
+                              : chartGroupBy === "layer"
+                                ? key === "共通"
+                                  ? "#8E8E93"
+                                  : layerMaster[key] ||
+                                    palette[index % palette.length]
+                                : tagMaster[key]?.color ||
+                                  palette[index % palette.length],
                           legendFontColor: "#666",
                           legendFontSize: 11,
                         }))}
@@ -743,12 +795,12 @@ export default function MoneyDashboard({
                     onPress={() => setIsHistoryModalVisible(true)}
                   >
                     <Ionicons name="analytics" size={18} color={themeColor} />
-                    <Text style={[styles.historyOpenBtnText, { color: themeColor }]}>
+                    <Text
+                      style={[styles.historyOpenBtnText, { color: themeColor }]}
+                    >
                       支出推移と履歴レポートを見る
                     </Text>
                   </TouchableOpacity>
-
-
                 </ScrollView>
               ) : (
                 <ScrollView
@@ -780,59 +832,32 @@ export default function MoneyDashboard({
                         <View
                           style={[styles.masterStackLayer, { opacity: 0.2 }]}
                         >
-                          {Object.keys(layerMaster).map(
-                            (l) =>
-                              layerBudgetEnabled[l] !== false && (
-                                <View
-                                  key={`bg-${l}`}
-                                  style={{
-                                    width: `${((layerBudgets[l] || 0) / monthlyBudget) * 100}%`,
-                                    height: "100%",
-                                    backgroundColor: layerMaster[l],
-                                  }}
-                                />
-                              ),
-                          )}
-                          {layerBudgetEnabled["共通"] !== false && (
+                          {barSegments.map((seg, idx) => (
                             <View
+                              key={`bg-${idx}`}
                               style={{
-                                width: `${((layerActuals["共通"] || 0) / monthlyBudget) * 100}%`,
+                                width: `${(seg.budget / (monthlyBudget || 1)) * 100}%`,
                                 height: "100%",
-                                backgroundColor: "#8E8E93",
+                                backgroundColor: seg.color,
                               }}
                             />
-                          )}
+                          ))}
                         </View>
                         <View style={styles.masterStackLayer}>
-                          {Object.keys(layerMaster).map(
-                            (l) =>
-                              layerBudgetEnabled[l] !== false && (
-                                <View
-                                  key={`fg-${l}`}
-                                  style={{
-                                    width: `${((layerActuals[l] || 0) / monthlyBudget) * 100}%`,
-                                    height: "100%",
-                                    backgroundColor: layerMaster[l],
-                                    borderRightWidth: 1,
-                                    borderColor: "#FFF",
-                                  }}
-                                />
-                              ),
-                          )}
-                          {layerBudgetEnabled["共通"] !== false && (
+                          {barSegments.map((seg, idx) => (
                             <View
+                              key={`fg-${idx}`}
                               style={{
-                                width: `${((layerActuals["共通"] || 0) / monthlyBudget) * 100}%`,
+                                width: `${(seg.actual / (monthlyBudget || 1)) * 100}%`,
                                 height: "100%",
-                                backgroundColor: "#8E8E93",
+                                backgroundColor: seg.color,
                                 borderRightWidth: 1,
                                 borderColor: "#FFF",
                               }}
                             />
-                          )}
+                          ))}
                         </View>
                       </View>
-
                       <View style={styles.masterProgressLabelRow}>
                         <Text style={{ fontSize: 11, color: "#666" }}>
                           割当: ¥
@@ -1415,11 +1440,11 @@ export default function MoneyDashboard({
                   quickMainTags[l] || quickMainTags["ALL_LAYERS"] || [];
                 const sTags = isAll
                   ? Object.keys(tagMaster).filter(
-                    (t) => tagMaster[t].layer === "共通",
-                  )
+                      (t) => tagMaster[t].layer === "共通",
+                    )
                   : Object.keys(tagMaster).filter(
-                    (t) => tagMaster[t].layer === l,
-                  );
+                      (t) => tagMaster[t].layer === l,
+                    );
 
                 return (
                   <View
@@ -1447,8 +1472,15 @@ export default function MoneyDashboard({
                         </TouchableOpacity>
                       )}
                     </View>
-                    <View style={[styles.modernInputWrapper, { borderColor: c + "30", backgroundColor: "#FFF" }]}>
-                      <Text style={[styles.modernCurrency, { color: c }]}>¥</Text>
+                    <View
+                      style={[
+                        styles.modernInputWrapper,
+                        { borderColor: c + "30", backgroundColor: "#FFF" },
+                      ]}
+                    >
+                      <Text style={[styles.modernCurrency, { color: c }]}>
+                        ¥
+                      </Text>
                       <TextInput
                         style={[styles.modernQuickInput, { color: c }]}
                         placeholder="0"
@@ -1637,7 +1669,11 @@ export default function MoneyDashboard({
                     decimalPlaces: 0,
                     color: () => themeColor,
                     labelColor: () => `#333`,
-                    propsForDots: { r: "5", strokeWidth: "2", stroke: themeColor }
+                    propsForDots: {
+                      r: "5",
+                      strokeWidth: "2",
+                      stroke: themeColor,
+                    },
                   }}
                   bezier
                   style={styles.lineChartStyle}
@@ -1690,7 +1726,8 @@ export default function MoneyDashboard({
                         </View>
                       </View>
                       <Text style={styles.historyAmount}>
-                        ¥{getItemTotalExpense(item).toLocaleString()} {/* 🌟 変更 */}
+                        ¥{getItemTotalExpense(item).toLocaleString()}{" "}
+                        {/* 🌟 変更 */}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -2021,7 +2058,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   inputCardTitle: { fontSize: 13, fontWeight: "900", letterSpacing: 0.5 },
-
 
   historyModalContainer: {
     flex: 1,
