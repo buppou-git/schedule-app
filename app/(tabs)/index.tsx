@@ -20,6 +20,9 @@ import { auth, db } from "./firebaseConfig";
 import EventItem from "./components/EventItem";
 import TodoItem from "./components/TodoItem";
 
+//Store
+import { useAppStore } from "../(tabs)/store/useAppStore";
+
 import {
   Alert,
   Keyboard,
@@ -69,6 +72,15 @@ export default function Index() {
 
   const { scheduleData, setScheduleData, lastSyncedAt } = useScheduleManager();
 
+  const {
+    layerMaster,
+    setLayerMaster,
+    tagMaster,
+    setTagMaster,
+    activeMode,
+    setActiveMode,
+  } = useAppStore();
+
   // 🌟 修正：scheduleItemNotification を追加！
   const { cancelItemNotification, scheduleItemNotification } =
     useNotificationManager();
@@ -79,15 +91,9 @@ export default function Index() {
   const [quickActionVisible, setQuickActionVisible] = useState(false);
   const [quickActionItem, setQuickActionItem] = useState<any>(null);
 
-  const [layerMaster, setLayerMaster] = useState<{ [key: string]: string }>({});
-  const [tagMaster, setTagMaster] = useState<{
-    [key: string]: { layer: string; color: string };
-  }>({});
   const [presets, setPresets] = useState<{ [key: string]: string[] }>({});
-
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ScheduleItem | null>(null);
-  const [activeMode, setActiveMode] = useState("calendar");
   // 🌟 追加：家計簿画面の「日別詳細 / 予算管理」のモードを親(index)で管理する
   const [isMoneySummaryMode, setIsMoneySummaryMode] = useState(false);
 
@@ -728,11 +734,7 @@ export default function Index() {
         </TouchableOpacity>
       </View>
 
-      <TabBar
-        activeMode={activeMode}
-        setActiveMode={setActiveMode}
-        themeColor={currentSolidColor}
-      />
+      <TabBar themeColor={currentSolidColor} />
 
       <View style={styles.mainContent}>
         <View style={styles.calendarArea}>
