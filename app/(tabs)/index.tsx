@@ -883,15 +883,10 @@ export default function Index() {
               if (activeMode === "money") {
                 return (
                   <MoneyDashboard
-                    scheduleData={scheduleData}
-                    setScheduleData={setScheduleData}
                     selectedDate={selectedDate}
-                    tagMaster={tagMaster}
                     activeTags={activeTags}
-                    layerMaster={layerMaster}
-                    setTagMaster={setTagMaster}
                     setHasUnsavedChanges={setHasUnsavedChanges}
-                    isSummaryMode={isMoneySummaryMode} // 🌟 子コンポーネントに状態を渡す
+                    isSummaryMode={isMoneySummaryMode}
                   />
                 );
               }

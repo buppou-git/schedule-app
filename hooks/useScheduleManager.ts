@@ -5,10 +5,16 @@ import { useEffect, useState } from "react";
 import { auth, db } from "../app/(tabs)/firebaseConfig";
 import { ScheduleItem } from "../app/(tabs)/types";
 
+// 🌟 追加：Zustand の魔法の倉庫をインポート
+import { useAppStore } from "../app/(tabs)/store/useAppStore";
+
 export const useScheduleManager = () => {
-  const [scheduleData, setScheduleState] = useState<{
-    [key: string]: ScheduleItem[];
-  }>({});
+  // ❌ 消去: const [scheduleData, setScheduleState] = useState(...)
+  // ✅ 変更: 倉庫からデータと「純粋な更新関数」を引き出す
+  // ※関数名が被らないように、Zustandの更新関数を `setZustandScheduleData` という別名で取り出します
+  const { scheduleData, setScheduleData: setZustandScheduleData } =
+    useAppStore();
+
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
 
   // 1. アプリ起動時にローカルデータ（スマホ本体）から読み込む
@@ -17,7 +23,8 @@ export const useScheduleManager = () => {
       try {
         const storedData = await AsyncStorage.getItem("scheduleData");
         if (storedData) {
-          setScheduleState(JSON.parse(storedData));
+          // 🌟 変更: 読み込んだデータを直接Zustandの倉庫に格納する
+          setZustandScheduleData(JSON.parse(storedData));
         }
         const syncedAt = await AsyncStorage.getItem("lastSyncedAt");
         if (syncedAt) setLastSyncedAt(syncedAt);
@@ -32,8 +39,8 @@ export const useScheduleManager = () => {
   const setScheduleData = async (newData: {
     [key: string]: ScheduleItem[];
   }) => {
-    // 画面の表示を即座に更新する（サクサク感を維持）
-    setScheduleState(newData);
+    // 🌟 変更: 画面の表示を即座に更新する（Zustand倉庫を更新！）
+    setZustandScheduleData(newData);
 
     try {
       // ローカル（スマホ本体）に保存
@@ -44,13 +51,11 @@ export const useScheduleManager = () => {
         const userRef = doc(db, "users", auth.currentUser.uid);
         const now = new Date().toISOString();
 
-        // 🌟 追加：Firebaseに送る前に、JSONの変換を通して「undefined」を完全に消去（サニタイズ）する！
         const sanitizedData = JSON.parse(JSON.stringify(newData));
 
-        // merge: true をつけることで、他のデータ（タグ設定など）を消さずに上書きできます
         await setDoc(
           userRef,
-          { scheduleData: sanitizedData, lastSyncedAt: now }, // 🌟 newData を sanitizedData に変更
+          { scheduleData: sanitizedData, lastSyncedAt: now },
           { merge: true },
         );
 
@@ -62,6 +67,6 @@ export const useScheduleManager = () => {
     }
   };
 
-  // index.tsx からは、この3つだけを呼び出せるようにする
+  // index.tsx からは、今まで通りこの3つだけを返します
   return { scheduleData, setScheduleData, lastSyncedAt };
 };

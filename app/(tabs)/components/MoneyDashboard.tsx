@@ -17,31 +17,33 @@ import {
   View,
 } from "react-native";
 import { LineChart, PieChart } from "react-native-chart-kit";
+import { useAppStore } from "../store/useAppStore";
 import { ScheduleItem } from "../types";
 
 interface Props {
-  scheduleData: { [key: string]: ScheduleItem[] };
-  setScheduleData: (data: any) => void;
   selectedDate: string;
-  tagMaster: { [key: string]: { layer: string; color: string } };
-  setTagMaster: (data: any) => void;
-  layerMaster: { [key: string]: string };
   activeTags: string[];
   setHasUnsavedChanges: (val: boolean) => void;
   isSummaryMode?: boolean;
 }
 
 export default function MoneyDashboard({
-  scheduleData,
-  setScheduleData,
   selectedDate,
-  tagMaster,
-  setTagMaster,
-  layerMaster,
   activeTags,
   setHasUnsavedChanges,
   isSummaryMode,
 }: Props) {
+  // 🌟 引数がスッキリ！
+
+  // 🌟 ここを追加：足りなくなったデータは倉庫（Store）から直接引き出す！
+  const {
+    scheduleData,
+    setScheduleData,
+    layerMaster,
+    tagMaster,
+    setTagMaster,
+  } = useAppStore();
+
   const [dashboardMode, setDashboardMode] = useState<"macro" | "micro">(
     "macro",
   );
