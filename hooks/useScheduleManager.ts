@@ -3,35 +3,7 @@ import { doc, setDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
 // ※ auth と db のパスは、ご自身の環境に合わせて修正してください
 import { auth, db } from "../app/(tabs)/firebaseConfig";
-
-// 🌟 index.tsx にあった型定義をここに引っ越し！
-export interface ScheduleItem {
-  id: string;
-  title: string;
-  tag?: string;
-  tags?: string[];
-  amount: number;
-  isDone: boolean;
-  color: string;
-  isEvent: boolean;
-  isTodo: boolean;
-  isExpense: boolean;
-  category?: string;
-  recurringGroupId?: string;
-  repeatType?: "daily" | "weekly" | "monthly" | "custom";
-  repeatDays?: number[];     
-  repeatInterval?: number;
-  isAllDay?: boolean;
-  startDate?: string;
-  endDate?: string;
-  startTime?: string;
-  endTime?: string;
-  notificationId?: string;
-  completedDates?: string[]; // 完了した日付のリスト（例: ["2026-04-18", "2026-04-19"]）
-  exceptionDates?: string[]; // 繰り返しから除外する日付（「今回のみ変更」した時に元の予定を隠す用）
-  linkedMasterId?: string;   // 「今回のみ変更」で作られた予定が、どの元予定から派生したか
-  subTasks?: any[];
-}
+import { ScheduleItem } from "../app/(tabs)/types";
 
 export const useScheduleManager = () => {
   const [scheduleData, setScheduleState] = useState<{

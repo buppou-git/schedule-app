@@ -3,10 +3,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import { StatusBar } from "expo-status-bar";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  ScheduleItem,
-  useScheduleManager,
-} from "../../hooks/useScheduleManager";
+import { useScheduleManager } from "../../hooks/useScheduleManager";
+
+import { ScheduleItem } from "../(tabs)/types";
 
 import { useCalendarData } from "../../hooks/useCalendarData";
 import { useNotificationManager } from "../../hooks/useNotificationManager";
@@ -71,7 +70,8 @@ export default function Index() {
   const { scheduleData, setScheduleData, lastSyncedAt } = useScheduleManager();
 
   // 🌟 修正：scheduleItemNotification を追加！
-  const { cancelItemNotification, scheduleItemNotification } = useNotificationManager();
+  const { cancelItemNotification, scheduleItemNotification } =
+    useNotificationManager();
 
   // 🌟 追加：サブタスク編集モーダル用のState
   const [subTaskModalVisible, setSubTaskModalVisible] = useState(false);
@@ -243,7 +243,7 @@ export default function Index() {
     activeTags,
     layerMaster,
     tagMaster,
-    selectedDate
+    selectedDate,
   );
 
   const currentSolidColor = useMemo(
@@ -289,7 +289,7 @@ export default function Index() {
     let originalDate = "";
 
     for (const d of Object.keys(newData)) {
-      const found = newData[d].find(i => i.id === id);
+      const found = newData[d].find((i) => i.id === id);
       if (found) {
         targetItem = found;
         originalDate = d;
@@ -303,7 +303,7 @@ export default function Index() {
       // 🌟 繰り返し予定の場合：配列を更新
       const completedDates = targetItem.completedDates || [];
       if (completedDates.includes(date)) {
-        targetItem.completedDates = completedDates.filter(d => d !== date);
+        targetItem.completedDates = completedDates.filter((d) => d !== date);
       } else {
         targetItem.completedDates = [...completedDates, date];
       }
@@ -316,8 +316,11 @@ export default function Index() {
     setHasUnsavedChanges(true);
   };
 
-
-  const toggleSubTodo = async (date: string, parentId: string, subTaskId: number) => {
+  const toggleSubTodo = async (
+    date: string,
+    parentId: string,
+    subTaskId: number,
+  ) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const newData = { ...scheduleData };
 
@@ -325,11 +328,14 @@ export default function Index() {
     let found = false;
 
     // 仮想データも考慮して実体を探す
-    if (newData[targetDate] && newData[targetDate].some(i => i.id === parentId)) {
+    if (
+      newData[targetDate] &&
+      newData[targetDate].some((i) => i.id === parentId)
+    ) {
       found = true;
     } else {
       for (const d of Object.keys(newData)) {
-        if (newData[d].some(i => i.id === parentId)) {
+        if (newData[d].some((i) => i.id === parentId)) {
           targetDate = d;
           found = true;
           break;
@@ -339,9 +345,9 @@ export default function Index() {
     if (!found) return;
 
     // 対象の親タスクとそのサブタスクを見つけて更新
-    newData[targetDate] = newData[targetDate].map(item => {
+    newData[targetDate] = newData[targetDate].map((item) => {
       if (item.id === parentId && item.subTasks) {
-        const updatedSubTasks = item.subTasks.map(sub => {
+        const updatedSubTasks = item.subTasks.map((sub) => {
           if (sub.id === subTaskId) {
             const nextStatus = !sub.isDone;
             // 💡 おもてなし：完了にした時、もし通知が予約されていたら自動キャンセル
@@ -352,7 +358,7 @@ export default function Index() {
               ...sub,
               isDone: nextStatus,
               notificationId: nextStatus ? undefined : sub.notificationId,
-              reminderOption: nextStatus ? "none" : sub.reminderOption
+              reminderOption: nextStatus ? "none" : sub.reminderOption,
             };
           }
           return sub;
@@ -383,11 +389,14 @@ export default function Index() {
 
     let targetDate = date;
     let found = false;
-    if (newData[targetDate] && newData[targetDate].some(i => i.id === parentId)) {
+    if (
+      newData[targetDate] &&
+      newData[targetDate].some((i) => i.id === parentId)
+    ) {
       found = true;
     } else {
       for (const d of Object.keys(newData)) {
-        if (newData[d].some(i => i.id === parentId)) {
+        if (newData[d].some((i) => i.id === parentId)) {
           targetDate = d;
           found = true;
           break;
@@ -401,22 +410,34 @@ export default function Index() {
       await cancelItemNotification(updatedSub.notificationId);
       updatedSub.notificationId = undefined;
     }
-    if (updatedSub.hasDateTime && updatedSub.endTime && updatedSub.reminderOption !== "none" && !updatedSub.isDone) {
+    if (
+      updatedSub.hasDateTime &&
+      updatedSub.endTime &&
+      updatedSub.reminderOption !== "none" &&
+      !updatedSub.isDone
+    ) {
       let triggerDate = new Date(updatedSub.endTime);
-      if (updatedSub.reminderOption === "1hour") triggerDate.setHours(triggerDate.getHours() - 1);
-      else if (updatedSub.reminderOption === "1day") triggerDate.setDate(triggerDate.getDate() - 1);
+      if (updatedSub.reminderOption === "1hour")
+        triggerDate.setHours(triggerDate.getHours() - 1);
+      else if (updatedSub.reminderOption === "1day")
+        triggerDate.setDate(triggerDate.getDate() - 1);
 
       if (triggerDate > new Date()) {
-        const id = await scheduleItemNotification(`🔔【${parentTitle}】${updatedSub.title}`, triggerDate);
+        const id = await scheduleItemNotification(
+          `🔔【${parentTitle}】${updatedSub.title}`,
+          triggerDate,
+        );
         if (id) updatedSub.notificationId = id;
       }
     }
 
-    newData[targetDate] = newData[targetDate].map(item => {
+    newData[targetDate] = newData[targetDate].map((item) => {
       if (item.id === parentId && item.subTasks) {
         return {
           ...item,
-          subTasks: item.subTasks.map(sub => sub.id === updatedSub.id ? updatedSub : sub)
+          subTasks: item.subTasks.map((sub) =>
+            sub.id === updatedSub.id ? updatedSub : sub,
+          ),
         };
       }
       return item;
@@ -427,7 +448,6 @@ export default function Index() {
     setSubTaskModalVisible(false);
   };
 
-
   const handleSubTaskDelete = async (subTaskId: number) => {
     if (!editingSubTaskInfo) return;
     const { parentId, date } = editingSubTaskInfo;
@@ -435,23 +455,30 @@ export default function Index() {
 
     // 対象の日付を探す
     let targetDate = date;
-    if (!(newData[targetDate] && newData[targetDate].some(i => i.id === parentId))) {
+    if (
+      !(
+        newData[targetDate] &&
+        newData[targetDate].some((i) => i.id === parentId)
+      )
+    ) {
       for (const d of Object.keys(newData)) {
-        if (newData[d].some(i => i.id === parentId)) {
-          targetDate = d; break;
+        if (newData[d].some((i) => i.id === parentId)) {
+          targetDate = d;
+          break;
         }
       }
     }
 
-    newData[targetDate] = newData[targetDate].map(item => {
+    newData[targetDate] = newData[targetDate].map((item) => {
       if (item.id === parentId && item.subTasks) {
         // 🚨 削除するサブタスクの通知もキャンセル
-        const targetSub = item.subTasks.find(s => s.id === subTaskId);
-        if (targetSub?.notificationId) cancelItemNotification(targetSub.notificationId);
+        const targetSub = item.subTasks.find((s) => s.id === subTaskId);
+        if (targetSub?.notificationId)
+          cancelItemNotification(targetSub.notificationId);
 
         return {
           ...item,
-          subTasks: item.subTasks.filter(sub => sub.id !== subTaskId)
+          subTasks: item.subTasks.filter((sub) => sub.id !== subTaskId),
         };
       }
       return item;
@@ -466,7 +493,9 @@ export default function Index() {
     if (!newTitle.trim()) return;
     const newData = { ...scheduleData };
     for (const d of Object.keys(newData)) {
-      newData[d] = newData[d].map((i: any) => i.id === item.id ? { ...i, title: newTitle } : i);
+      newData[d] = newData[d].map((i: any) =>
+        i.id === item.id ? { ...i, title: newTitle } : i,
+      );
     }
     setScheduleData(newData);
     setHasUnsavedChanges(true);
@@ -493,14 +522,10 @@ export default function Index() {
           }
           setScheduleData(newData);
           setHasUnsavedChanges(true);
-        }
-      }
+        },
+      },
     ]);
   };
-
-
-
-
 
   const handleRestore = async () => {
     const user = auth.currentUser;
@@ -658,8 +683,6 @@ export default function Index() {
     return { dayTasks: dTasks, upcomingTasks: uTasks, dayEvents: dEvents };
   }, [scheduleData, selectedDate, activeTags, activeMode, tagMaster]);
 
-
-
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: currentBgColor }]}
@@ -724,10 +747,28 @@ export default function Index() {
               initialNumToRender={1}
               windowSize={3}
               renderHeader={(date) => (
-                <View style={[styles.monthHeaderContainer, { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingRight: 15 }]}>
-                  <Text style={[styles.monthformat, { color: currentSolidColor }]}>{date.getMonth() + 1}月</Text>
+                <View
+                  style={[
+                    styles.monthHeaderContainer,
+                    {
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      paddingRight: 15,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[styles.monthformat, { color: currentSolidColor }]}
+                  >
+                    {date.getMonth() + 1}月
+                  </Text>
                   <TouchableOpacity onPress={handleOpenNewModal}>
-                    <Ionicons name="add-circle" size={30} color={currentSolidColor} />
+                    <Ionicons
+                      name="add-circle"
+                      size={30}
+                      color={currentSolidColor}
+                    />
                   </TouchableOpacity>
                 </View>
               )}
@@ -745,16 +786,41 @@ export default function Index() {
             <>
               {/* 家計簿モードの時だけタブを表示 */}
               {activeMode === "money" && (
-                <View style={[styles.toggleContainer, { marginHorizontal: 15, marginTop: 10 }]}>
-                  <TouchableOpacity style={[styles.toggleBtn, !isMoneySummaryMode && styles.toggleActive]} onPress={() => setIsMoneySummaryMode(false)}>
+                <View
+                  style={[
+                    styles.toggleContainer,
+                    { marginHorizontal: 15, marginTop: 10 },
+                  ]}
+                >
+                  <TouchableOpacity
+                    style={[
+                      styles.toggleBtn,
+                      !isMoneySummaryMode && styles.toggleActive,
+                    ]}
+                    onPress={() => setIsMoneySummaryMode(false)}
+                  >
                     <View style={styles.toggleItem}>
-                      <Ionicons name="list" size={16} color={!isMoneySummaryMode ? "#1C1C1E" : "#8E8E93"} />
+                      <Ionicons
+                        name="list"
+                        size={16}
+                        color={!isMoneySummaryMode ? "#1C1C1E" : "#8E8E93"}
+                      />
                       <Text style={styles.toggleText}>日別詳細</Text>
                     </View>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[styles.toggleBtn, isMoneySummaryMode && styles.toggleActive]} onPress={() => setIsMoneySummaryMode(true)}>
+                  <TouchableOpacity
+                    style={[
+                      styles.toggleBtn,
+                      isMoneySummaryMode && styles.toggleActive,
+                    ]}
+                    onPress={() => setIsMoneySummaryMode(true)}
+                  >
                     <View style={styles.toggleItem}>
-                      <Ionicons name="pie-chart" size={15} color={isMoneySummaryMode ? "#1C1C1E" : "#8E8E93"} />
+                      <Ionicons
+                        name="pie-chart"
+                        size={15}
+                        color={isMoneySummaryMode ? "#1C1C1E" : "#8E8E93"}
+                      />
                       <Text style={styles.toggleText}>予算管理</Text>
                     </View>
                   </TouchableOpacity>
@@ -762,19 +828,40 @@ export default function Index() {
               )}
 
               {/* ToDoまたは家計簿詳細の時に「週カレンダー」を表示 */}
-              {(activeMode === "todo" || (activeMode === "money" && !isMoneySummaryMode)) && (
+              {(activeMode === "todo" ||
+                (activeMode === "money" && !isMoneySummaryMode)) && (
                 <View style={styles.weekCalendarWrapper}>
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingRight: 20 }}>
-                    <Text style={styles.monthLabel}>{parseInt(selectedDate.split("-")[1])}月</Text>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      paddingRight: 20,
+                    }}
+                  >
+                    <Text style={styles.monthLabel}>
+                      {parseInt(selectedDate.split("-")[1])}月
+                    </Text>
                     <TouchableOpacity onPress={handleOpenNewModal}>
-                      <Ionicons name="add-circle" size={30} color={currentSolidColor} />
+                      <Ionicons
+                        name="add-circle"
+                        size={30}
+                        color={currentSolidColor}
+                      />
                     </TouchableOpacity>
                   </View>
-                  <CalendarProvider date={selectedDate} onDateChanged={setSelectedDate}>
+                  <CalendarProvider
+                    date={selectedDate}
+                    onDateChanged={setSelectedDate}
+                  >
                     <WeekCalendar
                       firstDay={1}
                       markedDates={currentMarkedDates}
-                      theme={{ calendarBackground: "transparent", todayTextColor: currentSolidColor, selectedDayBackgroundColor: currentSolidColor }}
+                      theme={{
+                        calendarBackground: "transparent",
+                        todayTextColor: currentSolidColor,
+                        selectedDayBackgroundColor: currentSolidColor,
+                      }}
                     />
                   </CalendarProvider>
                 </View>
@@ -864,14 +951,15 @@ export default function Index() {
                         onLongPress={(item) => {
                           setQuickActionItem(item);
                           setQuickActionVisible(true);
-
                         }}
                       />
                     ))}
 
                     {upcomingTasks.length > 0 && (
                       <View style={styles.upcomingSection}>
-                        <Text style={styles.upcomingMiniTitle}>今後の予定（未完了）</Text>
+                        <Text style={styles.upcomingMiniTitle}>
+                          今後の予定（未完了）
+                        </Text>
                         {upcomingTasks.map((t) => (
                           <TodoItem
                             key={t.id}
@@ -889,7 +977,6 @@ export default function Index() {
                             onLongPress={(item) => {
                               setQuickActionItem(item);
                               setQuickActionVisible(true);
-
                             }}
                           />
                         ))}
@@ -1057,13 +1144,13 @@ export default function Index() {
                           styles.gridCard,
                           isSelected
                             ? {
-                              backgroundColor: layerMaster[layer],
-                              borderColor: layerMaster[layer],
-                            }
+                                backgroundColor: layerMaster[layer],
+                                borderColor: layerMaster[layer],
+                              }
                             : [
-                              styles.gridCardGhost,
-                              { borderColor: layerMaster[layer] + "40" },
-                            ],
+                                styles.gridCardGhost,
+                                { borderColor: layerMaster[layer] + "40" },
+                              ],
                         ]}
                         onPress={() => toggleTempTag(layer)}
                       >
@@ -1206,8 +1293,6 @@ export default function Index() {
         }}
         onQuickSave={handleQuickSave}
       />
-
-
     </SafeAreaView>
   );
 }

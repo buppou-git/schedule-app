@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useState } from "react";
 
 // 🌟 通知の脳みそをインポート
 import { useNotificationManager } from "../../../hooks/useNotificationManager";
+import { ScheduleItem, SubTask } from "../types";
 
 import {
   ActivityIndicator,
@@ -20,50 +21,6 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-
-interface SubTask {
-  id: number;
-  title: string;
-  date: Date;
-  hasDateTime?: boolean;
-  amount: number;
-  isExpense: boolean;
-  category?: string;
-  endTime?: Date;
-  reminderOption?: string;
-  notificationId?: string;
-  isDone?: boolean;
-}
-
-interface ScheduleItem {
-  id: string;
-  title: string;
-  tag?: string;
-  tags?: string[];
-  amount: number;
-  isDone: boolean;
-  color: string;
-  isEvent: boolean;
-  isTodo: boolean;
-  isExpense: boolean;
-  category?: string;
-  recurringGroupId?: string;
-  isAllDay?: boolean;
-  startDate?: string;
-  endDate?: string;
-  startTime?: string;
-  endTime?: string;
-  notificationIds?: string[];
-  reminderOptions?: string[];
-  customReminderTimes?: string[];
-  completedDates?: string[]; // 完了した日付のリスト（例: ["2026-04-18", "2026-04-19"]）
-  exceptionDates?: string[]; // 繰り返しから除外する日付（「今回のみ変更」した時に元の予定を隠す用）
-  linkedMasterId?: string; // 「今回のみ変更」で作られた予定が、どの元予定から派生したか
-  subTasks?: SubTask[];
-  repeatType?: "daily" | "weekly" | "monthly" | "custom"; // 🌟 custom を追加
-  repeatDays?: number[]; // 🌟 [1, 2, 3, 4, 5] (月〜金) のような配列
-  repeatInterval?: number; // 🌟 1 (毎週), 2 (隔週) などの数値
-}
 
 interface ScheduleModalProps {
   visible: boolean;
@@ -344,7 +301,12 @@ export default function ScheduleModal({
             selectedItem.reminderOptions ||
             (hasOldNotification ? ["exact"] : []),
           // 子タスクの「タイトル」と「完了状態」も結合して監視する
-          subTasksData: selectedItem.subTasks?.map((t: any) => `${t.title}_${t.isDone}_${t.amount}_${t.isExpense}`).join(",") || "",
+          subTasksData:
+            selectedItem.subTasks
+              ?.map(
+                (t: any) => `${t.title}_${t.isDone}_${t.amount}_${t.isExpense}`,
+              )
+              .join(",") || "",
         });
         setInitialSnapshot(snapshot);
       } else {
