@@ -62,10 +62,11 @@ export default function DailyExpense({
   const [editAmount, setEditAmount] = useState("");
   const [editTitle, setEditTitle] = useState("");
 
-  // 🌟 追加：属性の新規作成モーダル用State
   const [addSubTagModalVisible, setAddSubTagModalVisible] = useState(false);
   const [targetLayerForSubTag, setTargetLayerForSubTag] = useState("");
   const [newSubTagName, setNewSubTagName] = useState("");
+  // 🌟 追加：属性作成時のカラー指定
+  const [newSubTagColor, setNewSubTagColor] = useState("");
 
   const screenWidth = Dimensions.get("window").width;
   const exactCardWidth = (screenWidth - 30) * 0.55;
@@ -82,6 +83,19 @@ export default function DailyExpense({
   const themeColor = currentActiveLayer
     ? layerMaster[currentActiveLayer]
     : "#1C1C1E";
+  const presetColors = [
+    "#FF3B30",
+    "#FF9500",
+    "#FFCC00",
+    "#34C759",
+    "#00C7BE",
+    "#32ADE6",
+    "#007AFF",
+    "#5856D6",
+    "#AF52DE",
+    "#FF2D55",
+    "#A2845E",
+  ];
 
   useEffect(() => {
     const load = async () => {
@@ -223,7 +237,6 @@ export default function DailyExpense({
     }, 100);
   };
 
-  // 🌟 新しい属性をマスターデータに保存する処理
   const executeAddSubTag = () => {
     const trimmed = newSubTagName.trim();
     if (!trimmed) return;
@@ -231,18 +244,21 @@ export default function DailyExpense({
       Alert.alert("エラー", "既に同じ名前の属性が存在します");
       return;
     }
+    // 🌟 色が指定されていればそれを使う
     const newColor =
-      targetLayerForSubTag === "共通"
+      newSubTagColor ||
+      (targetLayerForSubTag === "共通"
         ? "#8E8E93"
-        : layerMaster[targetLayerForSubTag] || "#8E8E93";
+        : layerMaster[targetLayerForSubTag] || "#8E8E93");
     const newTagMaster = {
       ...tagMaster,
       [trimmed]: { layer: targetLayerForSubTag, color: newColor },
     };
     setTagMaster(newTagMaster);
     AsyncStorage.setItem("tagMasterData", JSON.stringify(newTagMaster));
-    setSelectedSubTag(trimmed); // 追加したらそれを選択状態にする
+    setSelectedSubTag(trimmed);
     setNewSubTagName("");
+    setNewSubTagColor("");
     setAddSubTagModalVisible(false);
   };
 
@@ -497,7 +513,6 @@ export default function DailyExpense({
                             style={styles.subTagScroll}
                             keyboardShouldPersistTaps="handled"
                           >
-                            {/* 🌟 追加：属性（サブカテゴリ）の新規追加ボタン */}
                             <TouchableOpacity
                               style={[
                                 styles.subChip,
@@ -649,7 +664,7 @@ export default function DailyExpense({
         </TouchableOpacity>
       </Modal>
 
-      {/* 🌟 追加：属性の新規作成モーダル */}
+      {/* 🌟 追加：属性の新規作成モーダル（色指定パレット付き！） */}
       <Modal visible={addSubTagModalVisible} transparent animationType="fade">
         <TouchableOpacity
           style={styles.modalOverlay}
@@ -658,15 +673,43 @@ export default function DailyExpense({
         >
           <View style={styles.editCardModal}>
             <Text style={styles.editTitle}>
-              [{targetLayerForSubTag}] に属性を追加
+              [{targetLayerForSubTag}] に追加
             </Text>
-            <Text style={styles.settingLabel}>属性名</Text>
+            <Text style={styles.settingLabel}>サブカテゴリ名</Text>
             <TextInput
               style={styles.editInputAmount}
               value={newSubTagName}
               onChangeText={setNewSubTagName}
               autoFocus
             />
+
+            <Text style={styles.settingLabel}>カラーを選択（任意）</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ marginBottom: 20 }}
+            >
+              {presetColors.map((color) => (
+                <TouchableOpacity
+                  key={color}
+                  style={[
+                    {
+                      width: 30,
+                      height: 30,
+                      borderRadius: 15,
+                      backgroundColor: color,
+                      marginRight: 10,
+                    },
+                    newSubTagColor === color && {
+                      borderWidth: 3,
+                      borderColor: "#1C1C1E",
+                    },
+                  ]}
+                  onPress={() => setNewSubTagColor(color)}
+                />
+              ))}
+            </ScrollView>
+
             <View
               style={[
                 styles.editActionRow,
@@ -856,7 +899,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 20,
   },
-  editActionRow: { flexDirection: "row", justifyContent: "space-between" },
+  editActionRow: { flexDirection: "row" },
   saveBtn: { paddingHorizontal: 25, paddingVertical: 12, borderRadius: 15 },
   saveText: { color: "#fff", fontWeight: "bold" },
 });

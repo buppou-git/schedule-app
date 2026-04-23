@@ -183,6 +183,23 @@ export default function ScheduleModal({
   const [startTime, setStartTime] = useState(new Date());
   const [endTime, setEndTime] = useState(new Date());
   const [isCreatingNewTag, setIsCreatingNewTag] = useState(false);
+
+  // 🌟 追加：属性の色を選択するStateとカラーパレット
+  const [newTagColor, setNewTagColor] = useState("");
+  const presetColors = [
+    "#FF3B30",
+    "#FF9500",
+    "#FFCC00",
+    "#34C759",
+    "#00C7BE",
+    "#32ADE6",
+    "#007AFF",
+    "#5856D6",
+    "#AF52DE",
+    "#FF2D55",
+    "#A2845E",
+  ];
+
   const [isEvent, setIsEvent] = useState(true);
   const [isTodo, setIsTodo] = useState(false);
   const [isExpense, setIsExpense] = useState(false);
@@ -271,6 +288,7 @@ export default function ScheduleModal({
         setRepeatType(selectedItem.repeatType || "none");
         setRepeatDays(selectedItem.repeatDays || []);
         setRepeatInterval(selectedItem.repeatInterval || 1);
+        setNewTagColor(""); // 🌟 リセット
 
         const snapshot = JSON.stringify({
           title: selectedItem.title || "",
@@ -318,6 +336,7 @@ export default function ScheduleModal({
         setSelectedReminders([]);
         setCustomReminderTimes([]);
         setRepeatType("none");
+        setNewTagColor(""); // 🌟 リセット
       }
       setSubTasks([]);
       setIsCreatingNewTag(false);
@@ -421,14 +440,22 @@ export default function ScheduleModal({
     AsyncStorage.setItem("readingMasterData", JSON.stringify(r));
 
     const finalTag = tagInput.trim() || selectedLayer;
-    const finalColor = tagInput.trim() ? uiThemeColor : uiThemeColor;
+
+    // 🌟 修正ポイント：すでに存在する属性なら元の色を保持。新規なら指定された色を使う。
+    let finalColor = uiThemeColor;
     if (tagInput.trim()) {
-      const m = {
-        ...tagMaster,
-        [tagInput.trim()]: { layer: selectedLayer, color: uiThemeColor },
-      };
-      setTagMaster(m);
-      AsyncStorage.setItem("tagMasterData", JSON.stringify(m));
+      const existingTag = tagMaster[tagInput.trim()];
+      if (existingTag) {
+        finalColor = existingTag.color;
+      } else {
+        finalColor = newTagColor || uiThemeColor;
+        const m = {
+          ...tagMaster,
+          [tagInput.trim()]: { layer: selectedLayer, color: finalColor },
+        };
+        setTagMaster(m);
+        AsyncStorage.setItem("tagMasterData", JSON.stringify(m));
+      }
     }
 
     let finalNotificationIds: string[] = [];
@@ -832,7 +859,7 @@ export default function ScheduleModal({
           ))}
         </View>
 
-        {/* 🌟 ここが修正ポイント！属性追加の入力枠が消えていたのを復元！ */}
+        {/* 🌟 属性とカラーパレットのセクション */}
         <View style={styles.tagSection}>
           <Text style={styles.label}>属性（任意）</Text>
           <ScrollView
@@ -842,8 +869,12 @@ export default function ScheduleModal({
           >
             <TouchableOpacity
               onPress={() => {
-                setIsCreatingNewTag(!isCreatingNewTag);
-                if (!isCreatingNewTag) setTagInput("");
+                const nextState = !isCreatingNewTag;
+                setIsCreatingNewTag(nextState);
+                if (!nextState) {
+                  setTagInput("");
+                  setNewTagColor("");
+                }
               }}
               style={[
                 styles.addTagCircle,
@@ -861,10 +892,13 @@ export default function ScheduleModal({
               <TextInput
                 style={[
                   styles.newTagInput,
-                  { borderColor: uiThemeColor, color: uiThemeColor },
+                  {
+                    borderColor: newTagColor || uiThemeColor,
+                    color: newTagColor || uiThemeColor,
+                  },
                 ]}
                 placeholder="新しい属性..."
-                placeholderTextColor={uiThemeColor + "70"}
+                placeholderTextColor={(newTagColor || uiThemeColor) + "70"}
                 value={tagInput}
                 onChangeText={setTagInput}
                 autoFocus
@@ -876,10 +910,17 @@ export default function ScheduleModal({
               .map((t) => (
                 <TouchableOpacity
                   key={t}
-                  onPress={() => setTagInput(t)}
+                  onPress={() => {
+                    setTagInput(t);
+                    setIsCreatingNewTag(false);
+                    setNewTagColor(""); // 既存のを選ぶ時はカラーをリセット
+                  }}
                   style={[
                     styles.tagChip,
-                    tagInput === t && { backgroundColor: tagMaster[t].color },
+                    tagInput === t && {
+                      backgroundColor: tagMaster[t].color,
+                      borderColor: tagMaster[t].color,
+                    },
                   ]}
                 >
                   <Text
@@ -893,6 +934,38 @@ export default function ScheduleModal({
                 </TouchableOpacity>
               ))}
           </ScrollView>
+
+          {/* 🌟 色選択パレット（新規作成時のみ表示） */}
+          {isCreatingNewTag && (
+            <View style={{ marginTop: 12 }}>
+              <Text style={styles.label}>カラーを選択（任意）</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ paddingBottom: 5 }}
+              >
+                {presetColors.map((color) => (
+                  <TouchableOpacity
+                    key={color}
+                    style={[
+                      {
+                        width: 28,
+                        height: 28,
+                        borderRadius: 14,
+                        backgroundColor: color,
+                        marginRight: 10,
+                      },
+                      newTagColor === color && {
+                        borderWidth: 3,
+                        borderColor: "#1C1C1E",
+                      },
+                    ]}
+                    onPress={() => setNewTagColor(color)}
+                  />
+                ))}
+              </ScrollView>
+            </View>
+          )}
         </View>
       </View>
     );
@@ -909,6 +982,7 @@ export default function ScheduleModal({
     tagMaster,
     tagInput,
     isCreatingNewTag,
+    newTagColor,
     repeatType,
     repeatDays,
     repeatInterval,

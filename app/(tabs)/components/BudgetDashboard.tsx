@@ -15,6 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { LineChart, PieChart } from "react-native-chart-kit";
 import { useAppStore } from "../store/useAppStore";
 import { ScheduleItem } from "../types";
 
@@ -67,10 +68,11 @@ export default function BudgetDashboard({
   const [isSalaryModalVisible, setIsSalaryModalVisible] = useState(false);
   const [salaryInputAmount, setSalaryInputAmount] = useState("");
 
-  // 🌟 追加：予算画面からサブカテゴリを追加するためのState
   const [addSubTagModalVisible, setAddSubTagModalVisible] = useState(false);
   const [targetLayerForSubTag, setTargetLayerForSubTag] = useState("");
   const [newSubTagName, setNewSubTagName] = useState("");
+  // 🌟 追加：サブカテゴリの色を指定するState
+  const [newSubTagColor, setNewSubTagColor] = useState("");
 
   const screenWidth = Dimensions.get("window").width;
   const isSingleFilter = activeTags.length === 1;
@@ -88,6 +90,19 @@ export default function BudgetDashboard({
     "#6AB04C",
     "#E056FD",
     "#FFBE76",
+  ];
+  const presetColors = [
+    "#FF3B30",
+    "#FF9500",
+    "#FFCC00",
+    "#34C759",
+    "#00C7BE",
+    "#32ADE6",
+    "#007AFF",
+    "#5856D6",
+    "#AF52DE",
+    "#FF2D55",
+    "#A2845E",
   ];
 
   useEffect(() => {
@@ -194,7 +209,6 @@ export default function BudgetDashboard({
     };
   }, [scheduleData, cycleRange, tagMaster]);
 
-  // 🌟 ここがポイント！収入がゼロなら仮の予算額、あれば実際の収入額を「100%」の基準にする
   const baseIncome =
     cycleStats.tIncome > 0 ? cycleStats.tIncome : monthlyBudget;
   const isGlobalDeficit = cycleStats.tExpense > baseIncome;
@@ -230,7 +244,6 @@ export default function BudgetDashboard({
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
-  // 🌟 サブカテゴリ追加処理
   const executeAddSubTag = () => {
     const trimmed = newSubTagName.trim();
     if (!trimmed) return;
@@ -238,18 +251,19 @@ export default function BudgetDashboard({
       Alert.alert("エラー", "既に同じ名前の属性が存在します");
       return;
     }
+    // 🌟 色が指定されていればそれを使う
+    const newColor =
+      newSubTagColor || layerMaster[targetLayerForSubTag] || "#8E8E93";
     const newTagMaster = {
       ...tagMaster,
-      [trimmed]: {
-        layer: targetLayerForSubTag,
-        color: layerMaster[targetLayerForSubTag] || "#8E8E93",
-      },
+      [trimmed]: { layer: targetLayerForSubTag, color: newColor },
     };
     setTagMaster(newTagMaster);
     AsyncStorage.setItem("tagMasterData", JSON.stringify(newTagMaster));
     setNewSubTagName("");
+    setNewSubTagColor("");
     setAddSubTagModalVisible(false);
-    setExpandedLayers((prev) => ({ ...prev, [targetLayerForSubTag]: true })); // 追加したレイヤーを開く
+    setExpandedLayers((prev) => ({ ...prev, [targetLayerForSubTag]: true }));
   };
 
   const globalBudgetCalc = useMemo(() => {
@@ -414,6 +428,13 @@ export default function BudgetDashboard({
     showOtherInCharts,
   ]);
 
+  const activeLimit =
+    currentActiveLayer && layerBudgets[currentActiveLayer]
+      ? layerBudgets[currentActiveLayer]
+      : baseIncome;
+  const progress = Math.min(stats.total / (activeLimit || 1), 1);
+  const statusColor = stats.total > activeLimit ? "#FF3B30" : themeColor;
+
   const currentUsable = baseIncome - cycleStats.tExpense;
   const expectedSavings = baseIncome - globalBudgetCalc.totalAllocated;
   const daysToPayday = Math.max(0, payday - new Date(selectedDate).getDate());
@@ -455,6 +476,21 @@ export default function BudgetDashboard({
               AsyncStorage.setItem("myPayday", t);
             }}
           />
+          <View style={styles.settingSwitchRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.settingSwitchLabel}>
+                フィルター外を「その他」で表示
+              </Text>
+            </View>
+            <Switch
+              value={showOtherInCharts}
+              onValueChange={(v) => {
+                setShowOtherInCharts(v);
+                AsyncStorage.setItem("showOtherInCharts", JSON.stringify(v));
+              }}
+              trackColor={{ false: "#E5E5EA", true: themeColor }}
+            />
+          </View>
           <Text style={[styles.settingLabel, { marginTop: 10 }]}>
             予算スライダーの表示切替
           </Text>
@@ -564,12 +600,105 @@ export default function BudgetDashboard({
             </TouchableOpacity>
           </View>
 
+          {/* 🌟 完全に復元されたマクロ画面（円グラフなど） */}
           {dashboardMode === "macro" ? (
             <ScrollView
               style={styles.macroArea}
               showsVerticalScrollIndicator={false}
             >
-              {/* マクロ画面はそのまま */}
+              <View style={styles.progressSection}>
+                <View style={styles.progressLabelRow}>
+                  <Text style={styles.progressLabel}>
+                    {activeTags.length > 0
+                      ? "選択中の進捗（その他を含む）"
+                      : "今サイクルの総支出"}
+                  </Text>
+                  <Text
+                    style={[styles.progressPercent, { color: statusColor }]}
+                  >
+                    {Math.round(progress * 100)}%
+                  </Text>
+                </View>
+                <View style={styles.progressBarBg}>
+                  <View
+                    style={[
+                      styles.progressBarFill,
+                      {
+                        width: `${progress * 100}%`,
+                        backgroundColor: statusColor,
+                      },
+                    ]}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.chartToggleRow}>
+                {["layer", "category", "tag"].map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.chartToggleBtn,
+                      chartGroupBy === type && { backgroundColor: themeColor },
+                    ]}
+                    onPress={() => setChartGroupBy(type as any)}
+                  >
+                    <Text
+                      style={[
+                        styles.chartToggleText,
+                        chartGroupBy === type && { color: "#fff" },
+                      ]}
+                    >
+                      {type === "layer"
+                        ? "レイヤー別"
+                        : type === "category"
+                          ? "項目別"
+                          : "属性別"}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.chartArea}>
+                {Object.keys(stats.totals).length > 0 ? (
+                  <PieChart
+                    data={Object.keys(stats.totals).map((key, index) => ({
+                      name: key,
+                      population: stats.totals[key],
+                      color:
+                        key === "その他"
+                          ? "#C7C7CC"
+                          : chartGroupBy === "layer"
+                            ? key === "共通"
+                              ? "#8E8E93"
+                              : layerMaster[key] ||
+                                palette[index % palette.length]
+                            : tagMaster[key]?.color ||
+                              palette[index % palette.length],
+                      legendFontColor: "#666",
+                      legendFontSize: 11,
+                    }))}
+                    width={screenWidth * 0.8}
+                    height={160}
+                    chartConfig={{ color: () => `black` }}
+                    accessor={"population"}
+                    backgroundColor={"transparent"}
+                    paddingLeft={"15"}
+                    absolute
+                  />
+                ) : (
+                  <Text style={styles.noDataText}>データがありません</Text>
+                )}
+              </View>
+              <TouchableOpacity
+                style={[styles.historyOpenBtn, { borderColor: themeColor }]}
+                onPress={() => setIsHistoryModalVisible(true)}
+              >
+                <Ionicons name="analytics" size={18} color={themeColor} />
+                <Text
+                  style={[styles.historyOpenBtnText, { color: themeColor }]}
+                >
+                  支出推移と履歴レポートを見る
+                </Text>
+              </TouchableOpacity>
             </ScrollView>
           ) : (
             <ScrollView
@@ -578,7 +707,6 @@ export default function BudgetDashboard({
               keyboardShouldPersistTaps="handled"
             >
               {!currentActiveLayer ? (
-                /* 🌟 全体予算表示（ALL LAYERS） */
                 <>
                   <View style={styles.masterBudgetHeader}>
                     <Text style={styles.masterTitle}>
@@ -609,7 +737,6 @@ export default function BudgetDashboard({
                       ))}
                     </View>
                     <View style={styles.masterStackLayer}>
-                      {/* 🌟 支出が収入を超えたらバーを赤色で100%まで埋める */}
                       {isGlobalDeficit ? (
                         <View
                           style={{
@@ -856,7 +983,6 @@ export default function BudgetDashboard({
                                 </View>
                               );
                             })}
-                            {/* 🌟 サブカテゴリ追加ボタンをここに配置 */}
                             <TouchableOpacity
                               style={styles.addSubTagBtn}
                               onPress={() => {
@@ -882,7 +1008,6 @@ export default function BudgetDashboard({
                   })}
                 </>
               ) : (
-                /* 🌟 単一カテゴリ選択時（例：ライブが選ばれた時） */
                 <>
                   <View style={styles.masterBudgetHeader}>
                     <Text style={styles.masterTitle}>
@@ -940,7 +1065,6 @@ export default function BudgetDashboard({
                             ))}
                           </View>
                           <View style={styles.masterStackLayer}>
-                            {/* 🌟 カテゴリ単体で赤字になったら赤色バー */}
                             {isLayerDeficit ? (
                               <View
                                 style={{
@@ -1086,7 +1210,6 @@ export default function BudgetDashboard({
                             </View>
                           );
                         })}
-                        {/* 🌟 単一モードでもサブカテゴリを追加可能に */}
                         <TouchableOpacity
                           style={[styles.addSubTagBtn, { marginTop: 10 }]}
                           onPress={() => {
@@ -1115,7 +1238,7 @@ export default function BudgetDashboard({
         </>
       )}
 
-      {/* 🌟 サブカテゴリ追加モーダル */}
+      {/* 🌟 サブカテゴリ追加モーダル（色指定パレット付き！） */}
       <Modal visible={addSubTagModalVisible} transparent animationType="fade">
         <TouchableOpacity
           style={styles.modalOverlay}
@@ -1133,6 +1256,34 @@ export default function BudgetDashboard({
               onChangeText={setNewSubTagName}
               autoFocus
             />
+
+            <Text style={styles.settingLabel}>カラーを選択（任意）</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ marginBottom: 20 }}
+            >
+              {presetColors.map((color) => (
+                <TouchableOpacity
+                  key={color}
+                  style={[
+                    {
+                      width: 30,
+                      height: 30,
+                      borderRadius: 15,
+                      backgroundColor: color,
+                      marginRight: 10,
+                    },
+                    newSubTagColor === color && {
+                      borderWidth: 3,
+                      borderColor: "#1C1C1E",
+                    },
+                  ]}
+                  onPress={() => setNewSubTagColor(color)}
+                />
+              ))}
+            </ScrollView>
+
             <View
               style={[
                 styles.editActionRow,
@@ -1164,7 +1315,6 @@ export default function BudgetDashboard({
         </TouchableOpacity>
       </Modal>
 
-      {/* 🌟 収入入力モーダル */}
       <Modal visible={isSalaryModalVisible} transparent animationType="fade">
         <TouchableOpacity
           style={styles.modalOverlay}
@@ -1204,6 +1354,46 @@ export default function BudgetDashboard({
             </View>
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      <Modal visible={isHistoryModalVisible} animationType="slide">
+        <View style={styles.historyModalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalHeaderText}>分析レポート</Text>
+            <TouchableOpacity onPress={() => setIsHistoryModalVisible(false)}>
+              <Ionicons name="close-circle" size={32} color="#8E8E93" />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={{ padding: 15 }}>
+            <View style={styles.analysisCard}>
+              <Text style={styles.analysisTitle}>過去6ヶ月の推移</Text>
+              {lineChartData.datasets[0].data.length > 1 ? (
+                <LineChart
+                  data={lineChartData}
+                  width={screenWidth - 60}
+                  height={180}
+                  chartConfig={{
+                    backgroundColor: "#fff",
+                    backgroundGradientFrom: "#fff",
+                    backgroundGradientTo: "#fff",
+                    decimalPlaces: 0,
+                    color: () => themeColor,
+                    labelColor: () => `#333`,
+                    propsForDots: {
+                      r: "5",
+                      strokeWidth: "2",
+                      stroke: themeColor,
+                    },
+                  }}
+                  bezier
+                  style={{ borderRadius: 16 }}
+                />
+              ) : (
+                <Text style={styles.noDataText}>データがありません</Text>
+              )}
+            </View>
+          </ScrollView>
+        </View>
       </Modal>
     </View>
   );
@@ -1484,4 +1674,35 @@ const styles = StyleSheet.create({
   editActionRow: { flexDirection: "row" },
   saveBtn: { paddingHorizontal: 25, paddingVertical: 12, borderRadius: 15 },
   saveText: { color: "#fff", fontWeight: "bold" },
+  historyOpenBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderRadius: 12,
+    marginTop: 5,
+    backgroundColor: "#fff",
+  },
+  historyOpenBtnText: { fontSize: 13, fontWeight: "bold", marginLeft: 8 },
+  historyModalContainer: {
+    flex: 1,
+    backgroundColor: "#F2F2F7",
+    paddingTop: 50,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    marginBottom: 15,
+  },
+  modalHeaderText: { fontSize: 22, fontWeight: "bold", color: "#1C1C1E" },
+  analysisCard: { backgroundColor: "#fff", borderRadius: 20, padding: 15 },
+  analysisTitle: {
+    fontSize: 13,
+    fontWeight: "bold",
+    color: "#8E8E93",
+    marginBottom: 10,
+  },
 });
