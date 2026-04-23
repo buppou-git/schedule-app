@@ -6,6 +6,7 @@ import React, { useEffect, useMemo, useState } from "react";
 // 🌟 通知の脳みそをインポート
 import { useNotificationManager } from "../../../hooks/useNotificationManager";
 import { ScheduleItem, SubTask } from "../types";
+import { PRESET_COLORS } from "../utils/helpers";
 
 import {
   ActivityIndicator,
@@ -186,20 +187,6 @@ export default function ScheduleModal({
 
   // 🌟 追加：属性の色を選択するStateとカラーパレット
   const [newTagColor, setNewTagColor] = useState("");
-  const presetColors = [
-    "#FF3B30",
-    "#FF9500",
-    "#FFCC00",
-    "#34C759",
-    "#00C7BE",
-    "#32ADE6",
-    "#007AFF",
-    "#5856D6",
-    "#AF52DE",
-    "#FF2D55",
-    "#A2845E",
-  ];
-
   const [isEvent, setIsEvent] = useState(true);
   const [isTodo, setIsTodo] = useState(false);
   const [isExpense, setIsExpense] = useState(false);
@@ -944,7 +931,7 @@ export default function ScheduleModal({
                 showsHorizontalScrollIndicator={false}
                 style={{ paddingBottom: 5 }}
               >
-                {presetColors.map((color) => (
+                {PRESET_COLORS.map((color) => (
                   <TouchableOpacity
                     key={color}
                     style={[

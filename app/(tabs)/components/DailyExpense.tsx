@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { useAppStore } from "../store/useAppStore";
 import { ScheduleItem } from "../types";
+import { getItemTotalExpense, getItemTotalIncome, PRESET_COLORS } from "../utils/helpers";
 
 interface DailyExpenseProps {
   selectedDate: string;
@@ -65,11 +66,12 @@ export default function DailyExpense({
   const [addSubTagModalVisible, setAddSubTagModalVisible] = useState(false);
   const [targetLayerForSubTag, setTargetLayerForSubTag] = useState("");
   const [newSubTagName, setNewSubTagName] = useState("");
-  // 🌟 追加：属性作成時のカラー指定
   const [newSubTagColor, setNewSubTagColor] = useState("");
 
+  // 🌟 修正：右側のカード幅をエリアの幅にピタリと合わせる
   const screenWidth = Dimensions.get("window").width;
-  const exactCardWidth = (screenWidth - 30) * 0.55;
+  const rightAreaWidth = screenWidth * 0.62; // 左(35%) + 隙間(3%) の残り62%が右エリア
+  const exactCardWidth = rightAreaWidth - 10; // marginRightの10pxを引くことで1枚ピッタリに
 
   const displayLayers = useMemo(
     () =>
@@ -83,47 +85,16 @@ export default function DailyExpense({
   const themeColor = currentActiveLayer
     ? layerMaster[currentActiveLayer]
     : "#1C1C1E";
-  const presetColors = [
-    "#FF3B30",
-    "#FF9500",
-    "#FFCC00",
-    "#34C759",
-    "#00C7BE",
-    "#32ADE6",
-    "#007AFF",
-    "#5856D6",
-    "#AF52DE",
-    "#FF2D55",
-    "#A2845E",
-  ];
+
 
   useEffect(() => {
     const load = async () => {
       const q = await AsyncStorage.getItem("quickMainTagsData");
-      if (q) setQuickMainTags(JSON.parse(q));
+      if (q) setQuickMainTags(JSON.parse(q || "{}"));
     };
     load();
   }, []);
 
-  const getItemTotalExpense = (item: any) => {
-    let total = item.isExpense ? item.amount || 0 : 0;
-    if (item.subTasks) {
-      item.subTasks.forEach((sub: any) => {
-        if (sub.isExpense && sub.isDone) total += sub.amount || 0;
-      });
-    }
-    return total;
-  };
-
-  const getItemTotalIncome = (item: any) => {
-    let total = item.isIncome ? item.amount || 0 : 0;
-    if (item.subTasks) {
-      item.subTasks.forEach((sub: any) => {
-        if (sub.isIncome && sub.isDone) total += sub.amount || 0;
-      });
-    }
-    return total;
-  };
 
   const mainStats = useMemo(() => {
     let dExpense = 0;
@@ -172,14 +143,7 @@ export default function DailyExpense({
     const newTags = { ...quickMainTags };
     if (!newTags[editingLayer]) {
       newTags[editingLayer] = [
-        ...(quickMainTags["ALL_LAYERS"] || [
-          "食費",
-          "交通",
-          "日用品",
-          "交際費",
-          "趣味",
-          "その他",
-        ]),
+        ...(quickMainTags["ALL_LAYERS"] || ["食費", "交通", "日用品", "交際費", "趣味", "その他"]),
       ];
     }
     newTags[editingLayer][editingTagIndex] = tempQuickTagText.trim();
@@ -244,7 +208,6 @@ export default function DailyExpense({
       Alert.alert("エラー", "既に同じ名前の属性が存在します");
       return;
     }
-    // 🌟 色が指定されていればそれを使う
     const newColor =
       newSubTagColor ||
       (targetLayerForSubTag === "共通"
@@ -380,7 +343,7 @@ export default function DailyExpense({
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          snapToInterval={exactCardWidth + 10}
+          snapToInterval={exactCardWidth + 10} // marginRight分の10pxを足す
           decelerationRate="fast"
           contentContainerStyle={{ paddingRight: 10 }}
           keyboardShouldPersistTaps="handled"
@@ -402,7 +365,7 @@ export default function DailyExpense({
                 style={[
                   styles.inputCard,
                   {
-                    width: exactCardWidth,
+                    width: exactCardWidth, // 🌟 ここがポイント！ピッタリ1枚分に！
                     backgroundColor: c + "15",
                     borderColor: c + "30",
                   },
@@ -664,7 +627,6 @@ export default function DailyExpense({
         </TouchableOpacity>
       </Modal>
 
-      {/* 🌟 追加：属性の新規作成モーダル（色指定パレット付き！） */}
       <Modal visible={addSubTagModalVisible} transparent animationType="fade">
         <TouchableOpacity
           style={styles.modalOverlay}
@@ -689,7 +651,7 @@ export default function DailyExpense({
               showsHorizontalScrollIndicator={false}
               style={{ marginBottom: 20 }}
             >
-              {presetColors.map((color) => (
+              {PRESET_COLORS.map((color) => (
                 <TouchableOpacity
                   key={color}
                   style={[
