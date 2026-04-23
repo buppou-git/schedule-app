@@ -3,16 +3,16 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-    Alert,
-    Dimensions,
-    Keyboard,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  Dimensions,
+  Keyboard,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { useAppStore } from "../store/useAppStore";
 import { ScheduleItem } from "../types";
@@ -62,9 +62,13 @@ export default function DailyExpense({
   const [editAmount, setEditAmount] = useState("");
   const [editTitle, setEditTitle] = useState("");
 
+  // 🌟 追加：属性の新規作成モーダル用State
+  const [addSubTagModalVisible, setAddSubTagModalVisible] = useState(false);
+  const [targetLayerForSubTag, setTargetLayerForSubTag] = useState("");
+  const [newSubTagName, setNewSubTagName] = useState("");
+
   const screenWidth = Dimensions.get("window").width;
-  const containerWidth = screenWidth - 30;
-  const exactCardWidth = containerWidth * 0.55;
+  const exactCardWidth = (screenWidth - 30) * 0.55;
 
   const displayLayers = useMemo(
     () =>
@@ -89,7 +93,7 @@ export default function DailyExpense({
 
   const getItemTotalExpense = (item: any) => {
     let total = item.isExpense ? item.amount || 0 : 0;
-    if (item.subTasks && item.subTasks.length > 0) {
+    if (item.subTasks) {
       item.subTasks.forEach((sub: any) => {
         if (sub.isExpense && sub.isDone) total += sub.amount || 0;
       });
@@ -97,18 +101,38 @@ export default function DailyExpense({
     return total;
   };
 
+  const getItemTotalIncome = (item: any) => {
+    let total = item.isIncome ? item.amount || 0 : 0;
+    if (item.subTasks) {
+      item.subTasks.forEach((sub: any) => {
+        if (sub.isIncome && sub.isDone) total += sub.amount || 0;
+      });
+    }
+    return total;
+  };
+
   const mainStats = useMemo(() => {
-    let dTotal = 0;
+    let dExpense = 0;
+    let dIncome = 0;
     (scheduleData[selectedDate] || []).forEach((item) => {
-      const itemTotal = getItemTotalExpense(item);
-      if (itemTotal === 0) return;
-      const itemTag =
-        item.tags && item.tags.length > 0 ? item.tags[0] : item.tag || "";
+      const eTotal = getItemTotalExpense(item);
+      const iTotal = getItemTotalIncome(item);
+      if (eTotal === 0 && iTotal === 0) return;
+
+      const itemTag = item.tags?.[0] || item.tag || "";
       const itemLayer = tagMaster[itemTag]?.layer || "共通";
-      if (activeTags.length > 0 && !activeTags.includes(itemLayer)) return;
-      dTotal += itemTotal;
+
+      if (
+        !item.isIncome &&
+        activeTags.length > 0 &&
+        !activeTags.includes(itemLayer)
+      )
+        return;
+
+      dExpense += eTotal;
+      dIncome += iTotal;
     });
-    return { dailyTotal: dTotal };
+    return { dailyExpense: dExpense, dailyIncome: dIncome };
   }, [selectedDate, scheduleData, activeTags, tagMaster]);
 
   const toggleManualMode = () => {
@@ -182,6 +206,7 @@ export default function DailyExpense({
       isEvent: false,
       isTodo: false,
       isExpense: true,
+      isIncome: false,
     };
 
     const newData = {
@@ -196,6 +221,29 @@ export default function DailyExpense({
       setScheduleData(newData);
       setHasUnsavedChanges(true);
     }, 100);
+  };
+
+  // 🌟 新しい属性をマスターデータに保存する処理
+  const executeAddSubTag = () => {
+    const trimmed = newSubTagName.trim();
+    if (!trimmed) return;
+    if (tagMaster[trimmed]) {
+      Alert.alert("エラー", "既に同じ名前の属性が存在します");
+      return;
+    }
+    const newColor =
+      targetLayerForSubTag === "共通"
+        ? "#8E8E93"
+        : layerMaster[targetLayerForSubTag] || "#8E8E93";
+    const newTagMaster = {
+      ...tagMaster,
+      [trimmed]: { layer: targetLayerForSubTag, color: newColor },
+    };
+    setTagMaster(newTagMaster);
+    AsyncStorage.setItem("tagMasterData", JSON.stringify(newTagMaster));
+    setSelectedSubTag(trimmed); // 追加したらそれを選択状態にする
+    setNewSubTagName("");
+    setAddSubTagModalVisible(false);
   };
 
   const handleOpenEdit = (item: ScheduleItem, date: string) => {
@@ -229,24 +277,41 @@ export default function DailyExpense({
         <View style={styles.iconTextRowSmall}>
           <Ionicons name="receipt-outline" size={12} color={themeColor} />
           <Text style={[styles.dailyLabel, { color: themeColor }]}>
-            {selectedDate.split("-")[2]}日支出
+            {selectedDate.split("-")[2]}日 収支
           </Text>
         </View>
-        <Text style={styles.dailyTotalText}>
-          ¥{mainStats.dailyTotal.toLocaleString()}
+
+        <Text style={[styles.dailyTotalText, { color: "#333" }]}>
+          -¥{mainStats.dailyExpense.toLocaleString()}
         </Text>
+        {mainStats.dailyIncome > 0 && (
+          <Text
+            style={[styles.dailyTotalText, { color: "#8E8E93", fontSize: 16 }]}
+          >
+            +¥{mainStats.dailyIncome.toLocaleString()}
+          </Text>
+        )}
+
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
           {(scheduleData[selectedDate] || [])
-            .filter((i) => getItemTotalExpense(i) > 0)
+            .filter(
+              (i) => getItemTotalExpense(i) > 0 || getItemTotalIncome(i) > 0,
+            )
             .map((i) => {
-              const itemTag =
-                i.tags && i.tags.length > 0 ? i.tags[0] : i.tag || "";
+              const isIncome = i.isIncome;
+              const itemTag = i.tags?.[0] || i.tag || "";
               const itemLayer = tagMaster[itemTag]?.layer || "共通";
-              if (activeTags.length > 0 && !activeTags.includes(itemLayer))
+
+              if (
+                !isIncome &&
+                activeTags.length > 0 &&
+                !activeTags.includes(itemLayer)
+              )
                 return null;
+
               return (
                 <TouchableOpacity
                   key={i.id}
@@ -257,7 +322,7 @@ export default function DailyExpense({
                     <View
                       style={[
                         styles.dailyItemDot,
-                        { backgroundColor: i.color },
+                        { backgroundColor: isIncome ? "#8E8E93" : i.color },
                       ]}
                     />
                     <View style={{ flex: 1 }}>
@@ -265,7 +330,7 @@ export default function DailyExpense({
                         style={{
                           fontWeight: "bold",
                           fontSize: 11,
-                          color: themeColor,
+                          color: isIncome ? "#8E8E93" : themeColor,
                         }}
                         numberOfLines={1}
                       >
@@ -278,8 +343,13 @@ export default function DailyExpense({
                         {i.title !== i.category && i.title}
                       </Text>
                     </View>
-                    <Text style={styles.dailyItemAmount}>
-                      ¥{i.amount.toLocaleString()}
+                    <Text
+                      style={[
+                        styles.dailyItemAmount,
+                        isIncome && { color: "#8E8E93" },
+                      ]}
+                    >
+                      {isIncome ? "+" : ""}¥{i.amount.toLocaleString()}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -427,44 +497,54 @@ export default function DailyExpense({
                             style={styles.subTagScroll}
                             keyboardShouldPersistTaps="handled"
                           >
-                            {sTags.length > 0 ? (
-                              sTags.map((sub) => (
-                                <TouchableOpacity
-                                  key={sub}
+                            {/* 🌟 追加：属性（サブカテゴリ）の新規追加ボタン */}
+                            <TouchableOpacity
+                              style={[
+                                styles.subChip,
+                                {
+                                  backgroundColor: "transparent",
+                                  borderColor: c,
+                                  borderStyle: "dashed",
+                                  borderWidth: 1.5,
+                                },
+                              ]}
+                              onPress={() => {
+                                setTargetLayerForSubTag(isAll ? "共通" : l);
+                                setAddSubTagModalVisible(true);
+                              }}
+                            >
+                              <Text style={[styles.subChipText, { color: c }]}>
+                                + 新規追加
+                              </Text>
+                            </TouchableOpacity>
+
+                            {sTags.map((sub) => (
+                              <TouchableOpacity
+                                key={sub}
+                                style={[
+                                  styles.subChip,
+                                  {
+                                    backgroundColor:
+                                      selectedSubTag === sub ? c : "#FFF",
+                                    borderColor:
+                                      selectedSubTag === sub ? c : c + "30",
+                                  },
+                                ]}
+                                onPress={() => setSelectedSubTag(sub)}
+                              >
+                                <Text
                                   style={[
-                                    styles.subChip,
+                                    styles.subChipText,
                                     {
-                                      backgroundColor:
-                                        selectedSubTag === sub ? c : "#FFF",
-                                      borderColor:
-                                        selectedSubTag === sub ? c : c + "30",
+                                      color:
+                                        selectedSubTag === sub ? "#FFF" : c,
                                     },
                                   ]}
-                                  onPress={() => setSelectedSubTag(sub)}
                                 >
-                                  <Text
-                                    style={[
-                                      styles.subChipText,
-                                      {
-                                        color:
-                                          selectedSubTag === sub ? "#FFF" : c,
-                                      },
-                                    ]}
-                                  >
-                                    {sub}
-                                  </Text>
-                                </TouchableOpacity>
-                              ))
-                            ) : (
-                              <Text
-                                style={[
-                                  styles.noSubTagText,
-                                  { color: c + "80" },
-                                ]}
-                              >
-                                📝から属性追加
-                              </Text>
-                            )}
+                                  {sub}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
                           </ScrollView>
                         </View>
                       </>
@@ -490,7 +570,7 @@ export default function DailyExpense({
           onPress={() => setEditModalVisible(false)}
         >
           <View style={styles.editCardModal}>
-            <Text style={styles.editTitle}>支出の編集</Text>
+            <Text style={styles.editTitle}>データの編集</Text>
             <Text style={styles.settingLabel}>詳細メモ</Text>
             <TextInput
               style={styles.editInputText}
@@ -507,9 +587,8 @@ export default function DailyExpense({
             <View style={styles.editActionRow}>
               <TouchableOpacity
                 onPress={() => {
-                  if (!editingItem) return; // 🌟 これを追加！
+                  if (!editingItem) return;
                   const newData = { ...scheduleData };
-                  // 🌟 ! を消す
                   newData[editingItem.date] = newData[editingItem.date].filter(
                     (i) => i.id !== editingItem.item.id,
                   );
@@ -569,6 +648,55 @@ export default function DailyExpense({
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* 🌟 追加：属性の新規作成モーダル */}
+      <Modal visible={addSubTagModalVisible} transparent animationType="fade">
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setAddSubTagModalVisible(false)}
+        >
+          <View style={styles.editCardModal}>
+            <Text style={styles.editTitle}>
+              [{targetLayerForSubTag}] に属性を追加
+            </Text>
+            <Text style={styles.settingLabel}>属性名</Text>
+            <TextInput
+              style={styles.editInputAmount}
+              value={newSubTagName}
+              onChangeText={setNewSubTagName}
+              autoFocus
+            />
+            <View
+              style={[
+                styles.editActionRow,
+                { justifyContent: "space-between" },
+              ]}
+            >
+              <TouchableOpacity
+                onPress={() => setAddSubTagModalVisible(false)}
+                style={{ padding: 10 }}
+              >
+                <Text style={{ color: "#8E8E93", fontWeight: "bold" }}>
+                  キャンセル
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.saveBtn,
+                  {
+                    backgroundColor:
+                      layerMaster[targetLayerForSubTag] || themeColor,
+                  },
+                ]}
+                onPress={executeAddSubTag}
+              >
+                <Text style={styles.saveText}>追加</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -596,12 +724,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   dailyLabel: { fontSize: 10, fontWeight: "bold", marginBottom: 2 },
-  dailyTotalText: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 5,
-  },
+  dailyTotalText: { fontWeight: "bold", marginBottom: 2 },
   dailyItemRow: {
     paddingVertical: 6,
     borderBottomWidth: 0.5,
@@ -609,7 +732,7 @@ const styles = StyleSheet.create({
   },
   dailyItemInfo: { flexDirection: "row", alignItems: "center" },
   dailyItemDot: { width: 6, height: 6, borderRadius: 3, marginRight: 6 },
-  dailyItemAmount: { fontSize: 11, color: "#333", fontWeight: "600" },
+  dailyItemAmount: { fontSize: 11, fontWeight: "600" },
   inputCard: {
     padding: 10,
     borderRadius: 20,
@@ -622,7 +745,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: 5,
   },
   inputCardTitle: { fontSize: 13, fontWeight: "900", letterSpacing: 0.5 },
   modernInputWrapper: {
@@ -631,7 +754,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1.5,
     paddingHorizontal: 12,
-    marginVertical: 10,
+    marginVertical: 6,
     height: 48,
   },
   modernCurrency: { fontSize: 18, fontWeight: "900", marginRight: 4 },
@@ -733,11 +856,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 20,
   },
-  editActionRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
+  editActionRow: { flexDirection: "row", justifyContent: "space-between" },
   saveBtn: { paddingHorizontal: 25, paddingVertical: 12, borderRadius: 15 },
   saveText: { color: "#fff", fontWeight: "bold" },
 });

@@ -7,6 +7,7 @@ export interface SubTask {
   date: Date; // または string（API通信後など）
   hasDateTime?: boolean;
   amount: number;
+  isIncome?: boolean;
   isExpense: boolean;
   category?: string;
   endTime?: Date; // または string
@@ -26,6 +27,7 @@ export interface ScheduleItem {
   color: string;
   isEvent: boolean;
   isTodo: boolean;
+  isIncome?: boolean;
   isExpense: boolean;
   category?: string;
   recurringGroupId?: string;

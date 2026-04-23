@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
-  Platform, // 🌟 追加：OSごとのUIを分けるために必要
+  Platform,
   ScrollView,
   StyleSheet,
   Switch,
@@ -39,8 +39,6 @@ interface ScheduleModalProps {
 const formatTime = (d: Date) =>
   `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 
-// 🌟🌟🌟 新開発：Notion風の超絶おしゃれなカスタム日時ピッカー 🌟🌟🌟
-// ダサい標準UIを隠し、美しいボタンとボトムシート（下から出るUI）で包み込みます！
 const ModernDatePicker = ({
   value,
   mode,
@@ -56,7 +54,6 @@ const ModernDatePicker = ({
 }) => {
   const [show, setShow] = useState(false);
 
-  // ボタンに表示する文字（例：2026/04/17 または 10:30）
   const formattedValue =
     mode === "date"
       ? `${value.getFullYear()}/${("0" + (value.getMonth() + 1)).slice(-2)}/${("0" + value.getDate()).slice(-2)}`
@@ -64,7 +61,6 @@ const ModernDatePicker = ({
 
   return (
     <>
-      {/* 普段表示されている美しいボタン */}
       <TouchableOpacity
         style={[
           styles.modernDateBtn,
@@ -88,7 +84,6 @@ const ModernDatePicker = ({
         </Text>
       </TouchableOpacity>
 
-      {/* Androidの挙動（標準のダイアログ） */}
       {show && Platform.OS === "android" && (
         <DateTimePicker
           value={value}
@@ -101,7 +96,6 @@ const ModernDatePicker = ({
         />
       )}
 
-      {/* iOSの挙動（下からスッと出る美しいスピナーUI） */}
       {show && Platform.OS === "ios" && (
         <Modal visible={show} transparent animationType="fade">
           <TouchableOpacity
@@ -127,7 +121,6 @@ const ModernDatePicker = ({
                     </Text>
                   </TouchableOpacity>
                 </View>
-                {/* 🌟 修正：Viewで囲んで中央揃え（alignItems: "center"）の魔法をかける！ */}
                 <View
                   style={{
                     width: "100%",
@@ -143,7 +136,7 @@ const ModernDatePicker = ({
                       if (d) onChange(d);
                     }}
                     textColor="#000"
-                    style={{ height: 210, width: 320 }} // 幅を指定して綺麗にセンタリング
+                    style={{ height: 210, width: 320 }}
                   />
                 </View>
               </View>
@@ -154,7 +147,6 @@ const ModernDatePicker = ({
     </>
   );
 };
-// 🌟🌟🌟 開発ここまで 🌟🌟🌟
 
 export default function ScheduleModal({
   visible,
@@ -179,7 +171,6 @@ export default function ScheduleModal({
 
   const [initialSnapshot, setInitialSnapshot] = useState<string>("");
 
-  // 🌟 修正："custom" を追加し、迷子だった変数をここにお引越し！
   const [repeatType, setRepeatType] = useState<
     "none" | "daily" | "weekly" | "monthly" | "custom"
   >("none");
@@ -300,7 +291,6 @@ export default function ScheduleModal({
           reminderOptions:
             selectedItem.reminderOptions ||
             (hasOldNotification ? ["exact"] : []),
-          // 子タスクの「タイトル」と「完了状態」も結合して監視する
           subTasksData:
             selectedItem.subTasks
               ?.map(
@@ -400,11 +390,9 @@ export default function ScheduleModal({
         subTasksData: subTasks.map((t) => `${t.title}_${t.isDone}`).join(","),
       });
 
-      // 完全に一致（変更なし）の場合は、通信を回避して画面だけを閉じる
       if (initialSnapshot === currentSnapshot) {
-        console.log("変更がないため、無駄な保存・通信処理をスキップしました！");
         onClose();
-        return; // ここで処理を強制終了
+        return;
       }
     }
 
@@ -433,11 +421,11 @@ export default function ScheduleModal({
     AsyncStorage.setItem("readingMasterData", JSON.stringify(r));
 
     const finalTag = tagInput.trim() || selectedLayer;
-    const finalColor = tagInput.trim() ? tagColor : uiThemeColor;
+    const finalColor = tagInput.trim() ? uiThemeColor : uiThemeColor;
     if (tagInput.trim()) {
       const m = {
         ...tagMaster,
-        [tagInput.trim()]: { layer: selectedLayer, color: tagColor },
+        [tagInput.trim()]: { layer: selectedLayer, color: uiThemeColor },
       };
       setTagMaster(m);
       AsyncStorage.setItem("tagMasterData", JSON.stringify(m));
@@ -456,7 +444,6 @@ export default function ScheduleModal({
     if (selectedReminders.length > 0) {
       for (const option of selectedReminders) {
         if (option === "custom") continue;
-
         let triggerDate = new Date(startDate);
         if (isAllDay) {
           if (option === "morning") triggerDate.setHours(7, 0, 0, 0);
@@ -503,17 +490,12 @@ export default function ScheduleModal({
       }
     }
 
-    // 🌟 修正：全子タスクの通知をループで予約する
     const updatedSubTasks = await Promise.all(
       subTasks.map(async (task) => {
-        // 既存の通知があれば一旦キャンセル
         if (task.notificationId) {
           await cancelItemNotification(task.notificationId);
         }
-
         let newNotifId = undefined;
-
-        // 日時が設定されており、かつ通知が「なし」以外の場合
         if (
           task.hasDateTime &&
           task.endTime &&
@@ -521,14 +503,10 @@ export default function ScheduleModal({
           task.reminderOption !== "none"
         ) {
           let triggerDate = new Date(task.endTime);
-
-          // オプションに応じて通知時間を計算
           if (task.reminderOption === "1hour")
             triggerDate.setHours(triggerDate.getHours() - 1);
           else if (task.reminderOption === "1day")
             triggerDate.setDate(triggerDate.getDate() - 1);
-
-          // 未来の時間なら予約実行
           if (triggerDate > new Date()) {
             const id = await scheduleItemNotification(
               `子タスク: ${task.title}`,
@@ -568,9 +546,7 @@ export default function ScheduleModal({
     };
 
     if (selectedItem) {
-      // 🌟 分岐：「今回のみ」を選んだ場合
       if (mode === "single") {
-        // 1. 元の予定の除外リスト（exceptionDates）に今回の日付を追加して、元の予定を見えなくする
         Object.keys(newData).forEach((d) => {
           newData[d] = newData[d].map((i: any) => {
             if (i.id === selectedItem.id) {
@@ -582,19 +558,16 @@ export default function ScheduleModal({
             return i;
           });
         });
-
-        // 2. 今回だけの独立した新しい予定を生成する
         const newItem = {
           ...selectedItem,
           ...itemData,
-          id: Date.now().toString(), // 新しいIDを付与
-          repeatType: undefined, // 繰り返し属性を剥奪
-          linkedMasterId: selectedItem.id, // 念のため元の親IDを記録
+          id: Date.now().toString(),
+          repeatType: undefined,
+          linkedMasterId: selectedItem.id,
         };
         if (!newData[sStr]) newData[sStr] = [];
         newData[sStr].push(newItem);
       } else {
-        // 🌟 分岐：「今後すべて」または「通常」の編集
         Object.keys(newData).forEach((d) => {
           newData[d] = newData[d].filter((i: any) => i.id !== selectedItem.id);
         });
@@ -602,7 +575,6 @@ export default function ScheduleModal({
         newData[sStr].push({ ...selectedItem, ...itemData });
       }
     } else {
-      // 新規作成
       if (!newData[sStr]) newData[sStr] = [];
       newData[sStr].push({
         id: Date.now().toString(),
@@ -618,7 +590,6 @@ export default function ScheduleModal({
     }, 300);
   };
 
-  // 🌟 追加：削除ボタンを押した時の分岐ロジック
   const handleDeletePress = () => {
     if (selectedItem && selectedItem.repeatType) {
       Alert.alert("繰り返しの削除", "この予定をどのように削除しますか？", [
@@ -631,13 +602,11 @@ export default function ScheduleModal({
     }
   };
 
-  // 🌟 変更：削除の実行部分（async をつけて通知キャンセルを待てるようにします）
   const executeDelete = async (mode: "normal" | "all" | "single") => {
     if (!selectedItem) return;
     const newData = { ...scheduleData };
 
     if (mode === "single") {
-      // 🌟 「今回のみ」削除：元の予定の例外リスト（exceptionDates）に今日を追加して隠す
       Object.keys(newData).forEach((d) => {
         newData[d] = newData[d].map((i: any) => {
           if (i.id === selectedItem.id) {
@@ -650,28 +619,20 @@ export default function ScheduleModal({
         });
       });
     } else {
-      // 🌟 「今後すべて」または「通常の予定」の削除
-      // 🚨 ゴースト通知対策：メインの通知をOSからキャンセル
       if (selectedItem.notificationIds) {
-        for (const id of selectedItem.notificationIds) {
+        for (const id of selectedItem.notificationIds)
           await cancelItemNotification(id);
-        }
       }
-      // 🚨 ゴースト通知対策：サブタスクの通知をOSからキャンセル
       if (selectedItem.subTasks) {
         for (const task of selectedItem.subTasks) {
-          if (task.notificationId) {
+          if (task.notificationId)
             await cancelItemNotification(task.notificationId);
-          }
         }
       }
-
-      // データから完全に削除
       Object.keys(newData).forEach((d) => {
         newData[d] = newData[d].filter((i: any) => i.id !== selectedItem.id);
       });
     }
-
     onClose();
     setTimeout(() => {
       setScheduleData(newData);
@@ -797,7 +758,6 @@ export default function ScheduleModal({
                 </Text>
               </TouchableOpacity>
             </View>
-
             <View style={styles.daySelectorRow}>
               {["日", "月", "火", "水", "木", "金", "土"].map((day, idx) => {
                 const isSelected = repeatDays.includes(idx);
@@ -828,7 +788,6 @@ export default function ScheduleModal({
                 );
               })}
             </View>
-
             <View style={styles.intervalRow}>
               <Text style={styles.miniLabel}>繰り返しの間隔:</Text>
               <View
@@ -873,11 +832,19 @@ export default function ScheduleModal({
           ))}
         </View>
 
+        {/* 🌟 ここが修正ポイント！属性追加の入力枠が消えていたのを復元！ */}
         <View style={styles.tagSection}>
           <Text style={styles.label}>属性（任意）</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ alignItems: "center" }}
+          >
             <TouchableOpacity
-              onPress={() => setIsCreatingNewTag(!isCreatingNewTag)}
+              onPress={() => {
+                setIsCreatingNewTag(!isCreatingNewTag);
+                if (!isCreatingNewTag) setTagInput("");
+              }}
               style={[
                 styles.addTagCircle,
                 isCreatingNewTag && { backgroundColor: uiThemeColor },
@@ -889,6 +856,21 @@ export default function ScheduleModal({
                 color={isCreatingNewTag ? "#fff" : uiThemeColor}
               />
             </TouchableOpacity>
+
+            {isCreatingNewTag && (
+              <TextInput
+                style={[
+                  styles.newTagInput,
+                  { borderColor: uiThemeColor, color: uiThemeColor },
+                ]}
+                placeholder="新しい属性..."
+                placeholderTextColor={uiThemeColor + "70"}
+                value={tagInput}
+                onChangeText={setTagInput}
+                autoFocus
+              />
+            )}
+
             {Object.keys(tagMaster)
               .filter((t) => tagMaster[t].layer === selectedLayer)
               .map((t) => (
@@ -959,7 +941,6 @@ export default function ScheduleModal({
                 key={task.id}
                 style={[styles.subTaskCard, { borderLeftColor: uiThemeColor }]}
               >
-                {/* 1. タイトル入力 & 削除ボタン */}
                 <View
                   style={{
                     flexDirection: "row",
@@ -977,7 +958,6 @@ export default function ScheduleModal({
                     <TextInput
                       style={[
                         styles.subTaskInput,
-                        // 🌟 完了時は文字をグレーにして打ち消し線を引く
                         task.isDone && {
                           textDecorationLine: "line-through",
                           color: "#8E8E93",
@@ -986,7 +966,7 @@ export default function ScheduleModal({
                       placeholder="やる事..."
                       placeholderTextColor="#BBB"
                       value={task.title}
-                      editable={!task.isDone} // 🌟 完了済みは編集不可にする（お好みで）
+                      editable={!task.isDone}
                       onChangeText={(t) => {
                         const n = [...subTasks];
                         n[idx].title = t;
@@ -1003,7 +983,6 @@ export default function ScheduleModal({
                   </TouchableOpacity>
                 </View>
 
-                {/* 🌟 2. 日時設定UI */}
                 {!task.hasDateTime ? (
                   <TouchableOpacity
                     style={[
@@ -1013,7 +992,7 @@ export default function ScheduleModal({
                     onPress={() => {
                       const n = [...subTasks];
                       n[idx].hasDateTime = true;
-                      n[idx].reminderOption = "1day"; // 🌟 デフォルトを「1日前」に設定
+                      n[idx].reminderOption = "1day";
                       if (!n[idx].date) n[idx].date = new Date(selectedDate);
                       if (!n[idx].endTime) {
                         const future = new Date();
@@ -1034,7 +1013,6 @@ export default function ScheduleModal({
                     </Text>
                   </TouchableOpacity>
                 ) : (
-                  /* 🌟 修正：<> (フラグメント) で囲んで、複数の要素を1つにまとめる */
                   <>
                     <View
                       style={{
@@ -1067,7 +1045,6 @@ export default function ScheduleModal({
                         themeColor={uiThemeColor}
                         icon="time-outline"
                       />
-
                       <TouchableOpacity
                         style={{ marginLeft: 6 }}
                         onPress={() => {
@@ -1083,8 +1060,6 @@ export default function ScheduleModal({
                         />
                       </TouchableOpacity>
                     </View>
-
-                    {/* 🌟 修正：通知リマインチップ（「なし」付き） */}
                     <View
                       style={{
                         flexDirection: "row",
@@ -1132,7 +1107,6 @@ export default function ScheduleModal({
                   </>
                 )}
 
-                {/* 🌟 3. 金銭（支出）設定（ここを subTasks.map の内側に移動！） */}
                 <View
                   style={{
                     flexDirection: "row",
@@ -1175,7 +1149,6 @@ export default function ScheduleModal({
                       }}
                     />
                   </View>
-
                   {task.isExpense && (
                     <View
                       style={{
@@ -1223,9 +1196,7 @@ export default function ScheduleModal({
             <TouchableOpacity
               style={styles.addSubTaskBtn}
               onPress={() => {
-                // 🌟 追加：子タスクを作るということは「ToDo」なので、自動でスイッチON！
                 setIsTodo(true);
-
                 setSubTasks([
                   ...subTasks,
                   {
@@ -1335,7 +1306,6 @@ export default function ScheduleModal({
                     { borderLeftColor: uiThemeColor },
                   ]}
                 >
-                  {/* 🔔 ベルアイコン＆折り返しのモダンな通知UI */}
                   <View style={{ marginBottom: 20 }}>
                     <View
                       style={{
@@ -1476,7 +1446,6 @@ export default function ScheduleModal({
                       })}
                     </View>
 
-                    {/* 🌟 複数追加できるカスタム時間ピッカーUIも新UIに置き換え！ */}
                     {selectedReminders.includes("custom") && (
                       <View
                         style={{
@@ -1498,7 +1467,6 @@ export default function ScheduleModal({
                         >
                           通知する日時を設定:
                         </Text>
-
                         {customReminderTimes.map((time, idx) => (
                           <View
                             key={idx}
@@ -1556,7 +1524,6 @@ export default function ScheduleModal({
                             </TouchableOpacity>
                           </View>
                         ))}
-
                         <TouchableOpacity
                           style={{
                             flexDirection: "row",
@@ -1788,6 +1755,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginRight: 8,
   },
+
+  // 🌟 追加：新しい属性入力枠のスタイル
+  newTagInput: {
+    borderWidth: 1,
+    borderRadius: 15,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 8,
+    minWidth: 120,
+    backgroundColor: "#FFF",
+    fontSize: 12,
+    fontWeight: "bold",
+  },
+
   tagChip: {
     flexDirection: "row",
     alignItems: "center",
@@ -1884,8 +1865,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: "#F2F2F7",
   },
-
-  /* 🌟 新しいピッカー用のスタイル */
   modernDateBtn: {
     flexDirection: "row",
     alignItems: "center",

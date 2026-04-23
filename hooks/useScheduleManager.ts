@@ -9,9 +9,7 @@ import { ScheduleItem } from "../app/(tabs)/types";
 import { useAppStore } from "../app/(tabs)/store/useAppStore";
 
 export const useScheduleManager = () => {
-  // ❌ 消去: const [scheduleData, setScheduleState] = useState(...)
-  // ✅ 変更: 倉庫からデータと「純粋な更新関数」を引き出す
-  // ※関数名が被らないように、Zustandの更新関数を `setZustandScheduleData` という別名で取り出します
+  // 🌟 倉庫からデータと「純粋な更新関数」を引き出す
   const { scheduleData, setScheduleData: setZustandScheduleData } =
     useAppStore();
 
@@ -23,7 +21,7 @@ export const useScheduleManager = () => {
       try {
         const storedData = await AsyncStorage.getItem("scheduleData");
         if (storedData) {
-          // 🌟 変更: 読み込んだデータを直接Zustandの倉庫に格納する
+          // 🌟 読み込んだデータを直接Zustandの倉庫に格納
           setZustandScheduleData(JSON.parse(storedData));
         }
         const syncedAt = await AsyncStorage.getItem("lastSyncedAt");
@@ -39,7 +37,7 @@ export const useScheduleManager = () => {
   const setScheduleData = async (newData: {
     [key: string]: ScheduleItem[];
   }) => {
-    // 🌟 変更: 画面の表示を即座に更新する（Zustand倉庫を更新！）
+    // 🌟 画面の表示を即座に更新する（Zustand倉庫を更新！）
     setZustandScheduleData(newData);
 
     try {
@@ -67,6 +65,5 @@ export const useScheduleManager = () => {
     }
   };
 
-  // index.tsx からは、今まで通りこの3つだけを返します
   return { scheduleData, setScheduleData, lastSyncedAt };
 };

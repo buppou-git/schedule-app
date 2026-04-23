@@ -22,7 +22,7 @@ export default function MoneyDashboard({
 }: Props) {
   if (isSummaryMode) {
     return (
-      <BudgetDashboard selectedDate={selectedDate} activeTags={activeTags} />
+      <BudgetDashboard selectedDate={selectedDate} activeTags={activeTags} setHasUnsavedChanges={setHasUnsavedChanges}/>
     );
   }
 
