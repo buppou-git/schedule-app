@@ -9,6 +9,8 @@ import { useNotificationManager } from "../../../hooks/useNotificationManager";
 import { ScheduleItem, SubTask } from "../types";
 import { PRESET_COLORS } from "../utils/helpers";
 
+import { exportToStandardCalendar } from "../../../hooks/useCalendarExport";
+
 import {
   ActivityIndicator,
   Alert,
@@ -675,6 +677,16 @@ export default function ScheduleModal({
         ...itemData,
       });
     }
+
+    const startForExport = isAllDay 
+      ? startDate 
+      : new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), startTime.getHours(), startTime.getMinutes());
+    const endForExport = isAllDay 
+      ? endDate 
+      : new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), endTime.getHours(), endTime.getMinutes());
+
+    // await を付けずに実行することで、保存完了を待たせずに非同期で処理します
+    exportToStandardCalendar(inputText, startForExport, endForExport, isAllDay);
 
     onClose();
     setTimeout(() => {

@@ -58,6 +58,8 @@ import ScheduleModal from "./components/ScheduleModal";
 import SubTaskEditModal from "./components/SubTaskEditModal";
 import TabBar from "./components/TabBar";
 
+import { useExternalCalendar } from "../../hooks/useExternalCalendar";
+
 const getTodayString = () => {
   const date = new Date();
   return `${date.getFullYear()}-${("0" + (date.getMonth() + 1)).slice(-2)}-${("0" + date.getDate()).slice(-2)}`;
@@ -86,6 +88,8 @@ export default function Index() {
   const [selectedDate, setSelectedDate] = useState(getTodayString());
 
   const { scheduleData, setScheduleData, lastSyncedAt } = useScheduleManager();
+
+  const { externalEvents } = useExternalCalendar(selectedDate);
 
   const {
     layerMaster,
@@ -300,8 +304,17 @@ export default function Index() {
     // 🌟 ポイント：依存配列から scheduleData を外してスッキリさせています
   }, [layerMaster, tagMaster, presets, activeTags]);
 
+  const displayData = useMemo(() => {
+    const combined = { ...scheduleData };
+    Object.keys(externalEvents).forEach(date => {
+      combined[date] = [...(combined[date] || []), ...externalEvents[date]];
+    });
+    return combined;
+  }, [scheduleData, externalEvents]);
+
+  // 🌟 ここを修正！（引数を scheduleData から displayData に変更）
   const { expandedScheduleData, currentMarkedDates } = useCalendarData(
-    scheduleData,
+    displayData,
     activeMode,
     activeTags,
     layerMaster,
@@ -743,7 +756,7 @@ export default function Index() {
     }
 
     return { dayTasks: dTasks, upcomingTasks: uTasks, dayEvents: dEvents };
-  }, [scheduleData, selectedDate, activeTags, activeMode, tagMaster]);
+  }, [expandedScheduleData, selectedDate, activeTags, activeMode, tagMaster]);
 
   return (
     <SafeAreaView
