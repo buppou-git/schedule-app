@@ -42,6 +42,7 @@ import {
 } from "react-native";
 
 import CryptoJS from 'crypto-js';
+import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
 
 import {
@@ -115,6 +116,43 @@ export default function Index() {
   const [selectedItem, setSelectedItem] = useState<ScheduleItem | null>(null);
   // 🌟 追加：家計簿画面の「日別詳細 / 予算管理」のモードを親(index)で管理する
   const [isMoneySummaryMode, setIsMoneySummaryMode] = useState(false);
+  
+  //セキュリティ強化関連
+  const [isAppLocked, setIsAppLocked] = useState(false);
+
+  const handleAuthenticate = async () => {
+    const isSet = await AsyncStorage.getItem("useBiometricLock");
+    if (isSet !== "true") {
+      setIsAppLocked(false);
+      return;
+    }
+
+    const result = await LocalAuthentication.authenticateAsync({
+      promptMessage: "認証してUniCalを開く",
+      fallbackLabel: "パスコードを入力",
+    });
+
+    if (result.success) {
+      setIsAppLocked(false);
+    } else {
+      setIsAppLocked(true);
+    }
+  };
+
+  useEffect(() => {
+    // 初回起動時と、アプリがバックグラウンドから復帰した時に認証を走らせる
+    handleAuthenticate();
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (nextAppState === "active") {
+        handleAuthenticate();
+      } else if (nextAppState === "background") {
+        AsyncStorage.getItem("useBiometricLock").then(val => {
+          if (val === "true") setIsAppLocked(true); // 裏に回った瞬間にロック
+        });
+      }
+    });
+    return () => subscription.remove();
+  }, []);
 
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -757,6 +795,21 @@ export default function Index() {
 
     return { dayTasks: dTasks, upcomingTasks: uTasks, dayEvents: dEvents };
   }, [expandedScheduleData, selectedDate, activeTags, activeMode, tagMaster]);
+
+  if (isAppLocked) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: currentBgColor }]}>
+        <Ionicons name="lock-closed" size={80} color="#AEAEB2" />
+        <Text style={{ marginTop: 20, fontSize: 18, fontWeight: 'bold', color: '#1C1C1E' }}>UniCalはロックされています</Text>
+        <TouchableOpacity 
+          style={{ marginTop: 30, backgroundColor: currentSolidColor, paddingHorizontal: 30, paddingVertical: 12, borderRadius: 12 }}
+          onPress={handleAuthenticate}
+        >
+          <Text style={{ color: '#FFF', fontWeight: 'bold' }}>ロックを解除</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView

@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import * as Calendar from 'expo-calendar'; // 🌟 追加
+import * as LocalAuthentication from 'expo-local-authentication';
 import { GoogleAuthProvider, linkWithCredential } from "firebase/auth";
 import React, { useEffect, useState } from "react";
 import {
@@ -55,6 +56,9 @@ export default function ConfigModal({
   // 🌟 追加：カレンダー同期のON/OFF状態
   const [isCalendarSyncEnabled, setIsCalendarSyncEnabled] = useState(false);
 
+  //生体認証のオンオフ
+  const [isBiometricEnabled, setIsBiometricEnabled] = useState(false);
+
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
       setIsAnonymous(user?.isAnonymous ?? true);
@@ -63,6 +67,10 @@ export default function ConfigModal({
     // 🌟 追加：保存されているカレンダー同期設定を読み込む
     AsyncStorage.getItem("externalCalendarSync").then(val => {
       setIsCalendarSyncEnabled(val === "true");
+    });
+
+    AsyncStorage.getItem("useBiometricLock").then(val => {
+      setIsBiometricEnabled(val === "true");
     });
 
     return unsubscribe;
@@ -132,6 +140,34 @@ export default function ConfigModal({
     }
   };
 
+
+  const handleBiometricToggle = async (value: boolean) => {
+    if (value) {
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+
+      if (!hasHardware || !isEnrolled) {
+        Alert.alert("エラー", "この端末では生体認証やパスコードが設定されていません。");
+        return;
+      }
+
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: "UniCalのロックを有効にする",
+      });
+
+      if (result.success) {
+        setIsBiometricEnabled(true);
+        await AsyncStorage.setItem("useBiometricLock", "true");
+        Alert.alert("セキュリティON", "アプリを開く際に認証が必要になりました。");
+      } else {
+        setIsBiometricEnabled(false);
+      }
+    } else {
+      setIsBiometricEnabled(false);
+      await AsyncStorage.setItem("useBiometricLock", "false");
+    }
+  };
+
   return (
     <Modal visible={visible} transparent={true} animationType="fade">
       <TouchableOpacity
@@ -198,6 +234,21 @@ export default function ConfigModal({
                     )}
                   </TouchableOpacity>
                 )}
+              </View>
+
+              <Text style={styles.sectionLabel}>SECURITY</Text>
+              <View style={styles.card}>
+                <View style={styles.row}>
+                  <View style={styles.rowLeft}>
+                    <Ionicons name="finger-print-outline" size={20} color="#1C1C1E" />
+                    <Text style={styles.rowText}>生体認証ロック</Text>
+                  </View>
+                  <Switch
+                    value={isBiometricEnabled}
+                    onValueChange={handleBiometricToggle}
+                    trackColor={{ false: "#E5E5EA", true: "#34C759" }}
+                  />
+                </View>
               </View>
 
               <Text style={[styles.sectionLabel, { marginTop: 20 }]}>NOTIFICATIONS</Text>
