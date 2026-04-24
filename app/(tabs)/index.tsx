@@ -104,6 +104,10 @@ export default function Index() {
   const [tempPresetName, setTempPresetName] = useState("");
   const [tempActiveTags, setTempActiveTags] = useState<string[]>([]);
 
+  const [editPresetModalVisible, setEditPresetModalVisible] = useState(false);
+  const [editingPresetOriginalName, setEditingPresetOriginalName] = useState("");
+  const [editingPresetName, setEditingPresetName] = useState("");
+
   const calendarKey = useMemo(() => activeMode, [activeMode]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
@@ -161,6 +165,37 @@ export default function Index() {
     await AsyncStorage.setItem("filterPresets", JSON.stringify(newPresets));
 
     setHasUnsavedChanges(true);
+    setEditPresetModalVisible(false); // 🌟 モーダルを閉じる処理を追加
+  };
+
+  // 🌟 追加：プリセット長押し時の処理
+  const handleLongPressPreset = (name: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setEditingPresetOriginalName(name);
+    setEditingPresetName(name);
+    setEditPresetModalVisible(true);
+  };
+
+  // 🌟 追加：編集したプリセット名の保存処理
+  const saveEditedPreset = async () => {
+    const trimmed = editingPresetName.trim();
+    if (!trimmed || trimmed === editingPresetOriginalName) {
+      setEditPresetModalVisible(false);
+      return;
+    }
+    const newPresets = { ...presets };
+    if (newPresets[trimmed]) {
+      Alert.alert("エラー", "既に同じ名前のプリセットが存在します");
+      return;
+    }
+    // 古い名前のデータを新しい名前に移し替えて、古い方を消す
+    newPresets[trimmed] = newPresets[editingPresetOriginalName];
+    delete newPresets[editingPresetOriginalName];
+
+    setPresets(newPresets);
+    await AsyncStorage.setItem("filterPresets", JSON.stringify(newPresets));
+    setHasUnsavedChanges(true);
+    setEditPresetModalVisible(false);
   };
 
   useEffect(() => {
@@ -832,42 +867,42 @@ export default function Index() {
               {/* ToDoまたは家計簿詳細の時に「週カレンダー」を表示 */}
               {(activeMode === "todo" ||
                 (activeMode === "money" && !isMoneySummaryMode)) && (
-                <View style={styles.weekCalendarWrapper}>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      paddingRight: 20,
-                    }}
-                  >
-                    <Text style={styles.monthLabel}>
-                      {parseInt(selectedDate.split("-")[1])}月
-                    </Text>
-                    <TouchableOpacity onPress={handleOpenNewModal}>
-                      <Ionicons
-                        name="add-circle"
-                        size={30}
-                        color={currentSolidColor}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                  <CalendarProvider
-                    date={selectedDate}
-                    onDateChanged={setSelectedDate}
-                  >
-                    <WeekCalendar
-                      firstDay={1}
-                      markedDates={currentMarkedDates}
-                      theme={{
-                        calendarBackground: "transparent",
-                        todayTextColor: currentSolidColor,
-                        selectedDayBackgroundColor: currentSolidColor,
+                  <View style={styles.weekCalendarWrapper}>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        paddingRight: 20,
                       }}
-                    />
-                  </CalendarProvider>
-                </View>
-              )}
+                    >
+                      <Text style={styles.monthLabel}>
+                        {parseInt(selectedDate.split("-")[1])}月
+                      </Text>
+                      <TouchableOpacity onPress={handleOpenNewModal}>
+                        <Ionicons
+                          name="add-circle"
+                          size={30}
+                          color={currentSolidColor}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                    <CalendarProvider
+                      date={selectedDate}
+                      onDateChanged={setSelectedDate}
+                    >
+                      <WeekCalendar
+                        firstDay={1}
+                        markedDates={currentMarkedDates}
+                        theme={{
+                          calendarBackground: "transparent",
+                          todayTextColor: currentSolidColor,
+                          selectedDayBackgroundColor: currentSolidColor,
+                        }}
+                      />
+                    </CalendarProvider>
+                  </View>
+                )}
             </>
           )}
           {/* ここまでを差し替え。直後に <ScrollView style={styles.scheduleList} が続くようにします */}
@@ -1051,8 +1086,8 @@ export default function Index() {
                 <View style={styles.presetContainer}>
                   {Object.keys(presets).map((pName) => {
                     const isMatch =
-                      JSON.stringify(tempActiveTags.sort()) ===
-                      JSON.stringify(presets[pName].sort());
+                      JSON.stringify([...tempActiveTags].sort()) ===
+                      JSON.stringify([...(presets[pName] || [])].sort());
                     return (
                       <TouchableOpacity
                         key={pName}
@@ -1064,20 +1099,7 @@ export default function Index() {
                           },
                         ]}
                         onPress={() => setTempActiveTags(presets[pName])}
-                        onLongPress={() => {
-                          Alert.alert(
-                            "削除",
-                            `プリセット「${pName}」を削除しますか？`,
-                            [
-                              { text: "キャンセル", style: "cancel" },
-                              {
-                                text: "削除",
-                                style: "destructive",
-                                onPress: () => deletePreset(pName),
-                              },
-                            ],
-                          );
-                        }}
+                        onLongPress={() => handleLongPressPreset(pName)} // 🌟 ここをスッキリ差し替え！
                       >
                         <Text
                           style={[
@@ -1141,13 +1163,13 @@ export default function Index() {
                           styles.gridCard,
                           isSelected
                             ? {
-                                backgroundColor: layerMaster[layer],
-                                borderColor: layerMaster[layer],
-                              }
+                              backgroundColor: layerMaster[layer],
+                              borderColor: layerMaster[layer],
+                            }
                             : [
-                                styles.gridCardGhost,
-                                { borderColor: layerMaster[layer] + "40" },
-                              ],
+                              styles.gridCardGhost,
+                              { borderColor: layerMaster[layer] + "40" },
+                            ],
                         ]}
                         onPress={() => toggleTempTag(layer)}
                       >
@@ -1238,6 +1260,54 @@ export default function Index() {
           </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       </Modal>
+
+      <Modal visible={editPresetModalVisible} transparent={true} animationType="fade">
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.namingOverlay}>
+              <TouchableWithoutFeedback>
+                <View style={styles.namingContent}>
+                  <Text style={styles.namingLabel}>EDIT_PRESET</Text>
+                  <Text style={styles.namingTitle}>プリセット名の編集</Text>
+
+                  <TextInput
+                    style={styles.namingInput}
+                    value={editingPresetName}
+                    onChangeText={setEditingPresetName}
+                    autoFocus={true}
+                  />
+
+                  <View style={[styles.namingActionRow, { justifyContent: "space-between" }]}>
+                    <TouchableOpacity
+                      style={styles.namingCancelBtn}
+                      onPress={() => deletePreset(editingPresetOriginalName)}
+                    >
+                      <Text style={[styles.namingCancelText, { color: "#FF3B30" }]}>削除</Text>
+                    </TouchableOpacity>
+
+                    <View style={{ flexDirection: "row", gap: 10 }}>
+                      <TouchableOpacity
+                        style={styles.namingCancelBtn}
+                        onPress={() => setEditPresetModalVisible(false)}
+                      >
+                        <Text style={styles.namingCancelText}>キャンセル</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.namingConfirmBtn}
+                        onPress={saveEditedPreset}
+                      >
+                        <Text style={styles.namingConfirmText}>保存</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
+      </Modal>
+
 
       <ScheduleModal
         visible={modalVisible}

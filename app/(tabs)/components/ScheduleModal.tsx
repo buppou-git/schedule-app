@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import * as Haptics from "expo-haptics";
 import React, { useEffect, useMemo, useState } from "react";
 
 // 🌟 通知の脳みそをインポート
@@ -200,6 +201,82 @@ export default function ScheduleModal({
   const [readingMaster, setReadingMaster] = useState<{
     [title: string]: string;
   }>({});
+
+  const [editQuickTagModal, setEditQuickTagModal] = useState(false);
+  const [editingTagIndex, setEditingTagIndex] = useState<number | null>(null);
+  const [tempQuickTagText, setTempQuickTagText] = useState("");
+  const [editingLayerForQuick, setEditingLayerForQuick] = useState("ALL_LAYERS");
+
+  // 🌟 追加：属性編集用State
+  const [editSubTagModalVisible, setEditSubTagModalVisible] = useState(false);
+  const [editingSubTagOriginalName, setEditingSubTagOriginalName] = useState("");
+  const [editingSubTagName, setEditingSubTagName] = useState("");
+  const [editingSubTagColor, setEditingSubTagColor] = useState("");
+
+  const handleLongPressQuickTag = (index: number, currentText: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setEditingLayerForQuick(selectedLayer);
+    setEditingTagIndex(index);
+    setTempQuickTagText(currentText);
+    setEditQuickTagModal(true);
+  };
+
+  const saveQuickTag = async () => {
+    if (editingTagIndex === null || !tempQuickTagText.trim()) return;
+    const newTags = { ...quickMainTags };
+    if (!newTags[editingLayerForQuick]) {
+      newTags[editingLayerForQuick] = [...(quickMainTags["ALL_LAYERS"] || ["食費", "交通", "日用品", "交際費", "趣味", "その他"])];
+    }
+    newTags[editingLayerForQuick][editingTagIndex] = tempQuickTagText.trim();
+    setQuickMainTags(newTags);
+    await AsyncStorage.setItem("quickMainTagsData", JSON.stringify(newTags));
+    if (selectedCategory === quickMainTags[editingLayerForQuick]?.[editingTagIndex]) {
+      setSelectedCategory(tempQuickTagText.trim());
+    }
+    setEditQuickTagModal(false);
+  };
+
+  const handleLongPressSubTag = (tagName: string, color: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setEditingSubTagOriginalName(tagName);
+    setEditingSubTagName(tagName);
+    setEditingSubTagColor(color);
+    setEditSubTagModalVisible(true);
+  };
+
+  const saveEditedSubTag = async () => {
+    const trimmed = editingSubTagName.trim();
+    if (!trimmed) return;
+    const newTagMaster = { ...tagMaster };
+    if (trimmed !== editingSubTagOriginalName) {
+      if (newTagMaster[trimmed]) return Alert.alert("エラー", "既に存在します");
+      const oldLayer = newTagMaster[editingSubTagOriginalName].layer;
+      delete newTagMaster[editingSubTagOriginalName];
+      newTagMaster[trimmed] = { layer: oldLayer, color: editingSubTagColor };
+      if (tagInput === editingSubTagOriginalName) setTagInput(trimmed);
+    } else {
+      newTagMaster[trimmed].color = editingSubTagColor;
+    }
+    setTagMaster(newTagMaster);
+    await AsyncStorage.setItem("tagMasterData", JSON.stringify(newTagMaster));
+    setEditSubTagModalVisible(false);
+  };
+
+  const deleteSubTag = async () => {
+    Alert.alert("確認", `属性「${editingSubTagOriginalName}」を削除しますか？`, [
+      { text: "キャンセル", style: "cancel" },
+      {
+        text: "削除", style: "destructive", onPress: async () => {
+          const newTagMaster = { ...tagMaster };
+          delete newTagMaster[editingSubTagOriginalName];
+          setTagMaster(newTagMaster);
+          await AsyncStorage.setItem("tagMasterData", JSON.stringify(newTagMaster));
+          if (tagInput === editingSubTagOriginalName) setTagInput("");
+          setEditSubTagModalVisible(false);
+        }
+      }
+    ]);
+  };
 
   const [selectedReminders, setSelectedReminders] = useState<string[]>([]);
   const [customReminderTimes, setCustomReminderTimes] = useState<Date[]>([]);
@@ -902,6 +979,7 @@ export default function ScheduleModal({
                     setIsCreatingNewTag(false);
                     setNewTagColor(""); // 既存のを選ぶ時はカラーをリセット
                   }}
+                  onLongPress={() => handleLongPressSubTag(t, tagMaster[t].color)} // 🌟 追加：長押しで編集
                   style={[
                     styles.tagChip,
                     tagInput === t && {
@@ -1080,6 +1158,7 @@ export default function ScheduleModal({
                         flexDirection: "row",
                         alignItems: "center",
                         marginTop: 12,
+
                         marginBottom: 4,
                         gap: 8,
                       }}
@@ -1438,19 +1517,19 @@ export default function ScheduleModal({
 
                       {(isAllDay
                         ? [
-                            { label: "当日の朝", value: "morning" },
-                            { label: "前日", value: "dayBefore" },
-                            { label: "2日前", value: "2daysBefore" },
-                            { label: "カスタム", value: "custom" },
-                          ]
+                          { label: "当日の朝", value: "morning" },
+                          { label: "前日", value: "dayBefore" },
+                          { label: "2日前", value: "2daysBefore" },
+                          { label: "カスタム", value: "custom" },
+                        ]
                         : [
-                            { label: "ちょうど", value: "exact" },
-                            { label: "10分前", value: "10min" },
-                            { label: "30分前", value: "30min" },
-                            { label: "1時間前", value: "1hour" },
-                            { label: "当日の朝", value: "morning" },
-                            { label: "カスタム", value: "custom" },
-                          ]
+                          { label: "ちょうど", value: "exact" },
+                          { label: "10分前", value: "10min" },
+                          { label: "30分前", value: "30min" },
+                          { label: "1時間前", value: "1hour" },
+                          { label: "当日の朝", value: "morning" },
+                          { label: "カスタム", value: "custom" },
+                        ]
                       ).map((opt) => {
                         const isSelected = selectedReminders.includes(
                           opt.value,
@@ -1664,7 +1743,7 @@ export default function ScheduleModal({
                           marginTop: 10,
                         }}
                       >
-                        {currentQuickTags.map((cat) => (
+                        {currentQuickTags.map((cat, idx) => (
                           <TouchableOpacity
                             key={cat}
                             style={[
@@ -1717,6 +1796,50 @@ export default function ScheduleModal({
           </View>
         </TouchableWithoutFeedback>
       </TouchableOpacity>
+
+      {editSubTagModalVisible && (
+        <Modal visible={editSubTagModalVisible} transparent animationType="fade">
+          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setEditSubTagModalVisible(false)}>
+            <View style={[styles.modalContent, { height: "auto", borderTopWidth: 8, borderTopColor: editingSubTagColor || uiThemeColor }]}>
+              <Text style={[styles.modalTitle, { marginBottom: 15 }]}>属性の編集</Text>
+
+              <Text style={styles.label}>属性名</Text>
+              <TextInput style={styles.input} value={editingSubTagName} onChangeText={setEditingSubTagName} autoFocus />
+
+              <Text style={[styles.label, { marginTop: 15 }]}>カラー</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20, paddingBottom: 5 }}>
+                {PRESET_COLORS.map((color) => (
+                  <TouchableOpacity key={color} style={[{ width: 30, height: 30, borderRadius: 15, backgroundColor: color, marginRight: 10 }, editingSubTagColor === color && { borderWidth: 3, borderColor: "#1C1C1E" }]} onPress={() => setEditingSubTagColor(color)} />
+                ))}
+              </ScrollView>
+
+              <View style={[styles.actionButtons, { justifyContent: "space-between", marginTop: 0 }]}>
+                <TouchableOpacity onPress={deleteSubTag} style={styles.cancelBtn}><Text style={{ color: "#FF3B30", fontWeight: "bold" }}>削除</Text></TouchableOpacity>
+                <TouchableOpacity style={[styles.saveBtn, { backgroundColor: editingSubTagColor || uiThemeColor }]} onPress={saveEditedSubTag}><Text style={styles.saveBtnText}>保存</Text></TouchableOpacity>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      )}
+
+      {/* 🌟 追加：カテゴリ（プリセット）の名称編集モーダル */}
+      {editQuickTagModal && (
+        <Modal visible={editQuickTagModal} transparent animationType="fade">
+          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setEditQuickTagModal(false)}>
+            <View style={[styles.modalContent, { height: "auto", borderTopWidth: 8, borderTopColor: uiThemeColor }]}>
+              <Text style={[styles.modalTitle, { marginBottom: 15 }]}>カテゴリ名の編集</Text>
+              <Text style={styles.label}>新しい名称を入力</Text>
+              <TextInput style={styles.input} value={tempQuickTagText} onChangeText={setTempQuickTagText} autoFocus />
+              <View style={[styles.actionButtons, { justifyContent: "center", marginTop: 20 }]}>
+                <TouchableOpacity style={[styles.saveBtn, { backgroundColor: uiThemeColor, width: "100%", alignItems: "center" }]} onPress={saveQuickTag}>
+                  <Text style={styles.saveBtnText}>保存する</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      )}
+
     </Modal>
   );
 }

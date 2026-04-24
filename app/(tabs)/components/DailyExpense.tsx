@@ -68,6 +68,55 @@ export default function DailyExpense({
   const [newSubTagName, setNewSubTagName] = useState("");
   const [newSubTagColor, setNewSubTagColor] = useState("");
 
+  const [editSubTagModalVisible, setEditSubTagModalVisible] = useState(false);
+  const [editingSubTagOriginalName, setEditingSubTagOriginalName] = useState("");
+  const [editingSubTagName, setEditingSubTagName] = useState("");
+  const [editingSubTagColor, setEditingSubTagColor] = useState("");
+
+  const handleLongPressSubTag = (tagName: string, color: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setEditingSubTagOriginalName(tagName);
+    setEditingSubTagName(tagName);
+    setEditingSubTagColor(color);
+    setEditSubTagModalVisible(true);
+  };
+
+  const saveEditedSubTag = async () => {
+    const trimmed = editingSubTagName.trim();
+    if (!trimmed) return;
+    const newTagMaster = { ...tagMaster };
+
+    if (trimmed !== editingSubTagOriginalName) {
+      if (newTagMaster[trimmed]) return Alert.alert("エラー", "既に同じ名前が存在します");
+      const oldLayer = newTagMaster[editingSubTagOriginalName].layer;
+      delete newTagMaster[editingSubTagOriginalName];
+      newTagMaster[trimmed] = { layer: oldLayer, color: editingSubTagColor };
+      if (selectedSubTag === editingSubTagOriginalName) setSelectedSubTag(trimmed);
+    } else {
+      newTagMaster[trimmed].color = editingSubTagColor;
+    }
+
+    setTagMaster(newTagMaster);
+    await AsyncStorage.setItem("tagMasterData", JSON.stringify(newTagMaster));
+    setEditSubTagModalVisible(false);
+  };
+
+  const deleteSubTag = async () => {
+    Alert.alert("確認", `属性「${editingSubTagOriginalName}」を削除しますか？`, [
+      { text: "キャンセル", style: "cancel" },
+      {
+        text: "削除", style: "destructive", onPress: async () => {
+          const newTagMaster = { ...tagMaster };
+          delete newTagMaster[editingSubTagOriginalName];
+          setTagMaster(newTagMaster);
+          await AsyncStorage.setItem("tagMasterData", JSON.stringify(newTagMaster));
+          if (selectedSubTag === editingSubTagOriginalName) setSelectedSubTag("");
+          setEditSubTagModalVisible(false);
+        }
+      }
+    ]);
+  };
+
   // 🌟 修正：右側のカード幅をエリアの幅にピタリと合わせる
   const screenWidth = Dimensions.get("window").width;
   const rightAreaWidth = screenWidth * 0.62; // 左(35%) + 隙間(3%) の残り62%が右エリア
@@ -355,8 +404,8 @@ export default function DailyExpense({
             const qTags = quickMainTags[l] || quickMainTags["ALL_LAYERS"] || [];
             const sTags = isAll
               ? Object.keys(tagMaster).filter(
-                  (t) => tagMaster[t].layer === "共通",
-                )
+                (t) => tagMaster[t].layer === "共通",
+              )
               : Object.keys(tagMaster).filter((t) => tagMaster[t].layer === l);
 
             return (
@@ -499,28 +548,11 @@ export default function DailyExpense({
                             {sTags.map((sub) => (
                               <TouchableOpacity
                                 key={sub}
-                                style={[
-                                  styles.subChip,
-                                  {
-                                    backgroundColor:
-                                      selectedSubTag === sub ? c : "#FFF",
-                                    borderColor:
-                                      selectedSubTag === sub ? c : c + "30",
-                                  },
-                                ]}
+                                style={[styles.subChip, { backgroundColor: selectedSubTag === sub ? c : "#FFF", borderColor: selectedSubTag === sub ? c : c + "30" }]}
                                 onPress={() => setSelectedSubTag(sub)}
+                                onLongPress={() => handleLongPressSubTag(sub, tagMaster[sub].color)} // 🌟 追加：長押しで編集
                               >
-                                <Text
-                                  style={[
-                                    styles.subChipText,
-                                    {
-                                      color:
-                                        selectedSubTag === sub ? "#FFF" : c,
-                                    },
-                                  ]}
-                                >
-                                  {sub}
-                                </Text>
+                                <Text style={[styles.subChipText, { color: selectedSubTag === sub ? "#FFF" : c }]}>{sub}</Text>
                               </TouchableOpacity>
                             ))}
                           </ScrollView>
@@ -702,6 +734,31 @@ export default function DailyExpense({
           </View>
         </TouchableOpacity>
       </Modal>
+
+      <Modal visible={editSubTagModalVisible} transparent animationType="fade">
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setEditSubTagModalVisible(false)}>
+          <View style={styles.editCardModal}>
+            <Text style={styles.editTitle}>属性の編集</Text>
+            
+            <Text style={styles.settingLabel}>属性名</Text>
+            <TextInput style={styles.editInputAmount} value={editingSubTagName} onChangeText={setEditingSubTagName} />
+            
+            <Text style={styles.settingLabel}>カラーを変更</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
+              {PRESET_COLORS.map((color) => (
+                <TouchableOpacity key={color} style={[{ width: 30, height: 30, borderRadius: 15, backgroundColor: color, marginRight: 10 }, editingSubTagColor === color && { borderWidth: 3, borderColor: "#1C1C1E" }]} onPress={() => setEditingSubTagColor(color)} />
+              ))}
+            </ScrollView>
+            
+            <View style={[styles.editActionRow, { justifyContent: "space-between" }]}>
+              <TouchableOpacity onPress={deleteSubTag} style={{ padding: 10 }}><Text style={{ color: "#FF3B30", fontWeight: "bold" }}>削除</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.saveBtn, { backgroundColor: editingSubTagColor || themeColor }]} onPress={saveEditedSubTag}><Text style={styles.saveText}>保存</Text></TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+
     </View>
   );
 }

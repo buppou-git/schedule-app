@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ScheduleItem } from "./useScheduleManager";
+import { ScheduleItem } from "../app/(tabs)/types";
 
 export function useCalendarData(
   scheduleData: { [key: string]: ScheduleItem[] },
@@ -13,11 +13,11 @@ export function useCalendarData(
   const expandedScheduleData = useMemo(() => {
     const expanded: { [key: string]: ScheduleItem[] } = {};
     const targetDateObj = new Date(selectedDate);
-    
+
     // 前後6ヶ月の限界ラインを設定
     const limitStartDate = new Date(targetDateObj);
     limitStartDate.setMonth(limitStartDate.getMonth() - 6);
-    
+
     const limitEndDate = new Date(targetDateObj);
     limitEndDate.setMonth(limitEndDate.getMonth() + 6);
 
@@ -87,7 +87,7 @@ export function useCalendarData(
           (activeMode === "money" && item.isExpense);
         if (!matchesMode) return;
         const itemTags = item.tags && item.tags.length > 0 ? item.tags : item.tag ? [item.tag] : [];
-        itemTags.forEach((tag) => {
+        itemTags.forEach((tag: string) => {
           const info = tagMaster[tag] || { layer: tag, color: layerMaster[tag] || "#999" };
           if (!isAllLayers && !activeTagsSet.has(info.layer)) return;
           dayDots.add(info.color);
@@ -103,7 +103,7 @@ export function useCalendarData(
     () => ({
       ...markedDatesBase,
       [selectedDate]: {
-        ...markedDatesBase[selectedDate],
+        ...(markedDatesBase[selectedDate] || {}), // 🌟 修正：空だった時のために || {} を追加！
         selected: true,
         selectedColor: activeTags.length === 1 ? layerMaster[activeTags[0]] || "#1C1C1E" : "#1C1C1E",
       },

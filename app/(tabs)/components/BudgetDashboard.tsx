@@ -15,7 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { LineChart, PieChart } from "react-native-chart-kit";
+import { PieChart } from "react-native-chart-kit";
 import { useAppStore } from "../store/useAppStore";
 import { ScheduleItem } from "../types";
 import { CHART_PALETTE, getItemTotalExpense, getItemTotalIncome, PRESET_COLORS } from "../utils/helpers";
@@ -31,13 +31,7 @@ export default function BudgetDashboard({
   activeTags,
   setHasUnsavedChanges,
 }: BudgetDashboardProps) {
-  const {
-    scheduleData,
-    setScheduleData,
-    layerMaster,
-    tagMaster,
-    setTagMaster,
-  } = useAppStore();
+  const { scheduleData, setScheduleData, layerMaster, tagMaster, setTagMaster } = useAppStore();
 
   const [isSettingMode, setIsSettingMode] = useState(false);
   const [dashboardMode, setDashboardMode] = useState<"macro" | "micro">("macro");
@@ -48,7 +42,6 @@ export default function BudgetDashboard({
   const [layerBudgets, setLayerBudgets] = useState<{ [key: string]: number }>({});
   const [subTagBudgets, setSubTagBudgets] = useState<{ [key: string]: number }>({});
   const [layerBudgetEnabled, setLayerBudgetEnabled] = useState<{ [key: string]: boolean }>({});
-  const [showOtherInCharts, setShowOtherInCharts] = useState(true);
 
   const [isSavingsHidden, setIsSavingsHidden] = useState(false);
   const [isHistoryModalVisible, setIsHistoryModalVisible] = useState(false);
@@ -63,21 +56,19 @@ export default function BudgetDashboard({
   const [newSubTagColor, setNewSubTagColor] = useState("");
 
   const screenWidth = Dimensions.get("window").width;
-  const isSingleFilter = activeTags.length === 1;
-  const currentActiveLayer = isSingleFilter && !showOtherInCharts ? activeTags[0] : null;
-
+  
+  // 🌟 条件① 単一カテゴリが選択されているかを厳密に判定
+  const currentActiveLayer = activeTags.length === 1 ? activeTags[0] : null;
   const themeColor = currentActiveLayer ? layerMaster[currentActiveLayer] : "#1C1C1E";
-
 
   useEffect(() => {
     const load = async () => {
-      const [b, p, lb, sb, le, soc, hidden] = await Promise.all([
+      const [b, p, lb, sb, le, hidden] = await Promise.all([
         AsyncStorage.getItem("myMonthlyBudget"),
         AsyncStorage.getItem("myPayday"),
         AsyncStorage.getItem("layerBudgetsData"),
         AsyncStorage.getItem("subTagBudgetsData"),
         AsyncStorage.getItem("layerBudgetEnabledData"),
-        AsyncStorage.getItem("showOtherInCharts"),
         AsyncStorage.getItem("isSavingsHidden"),
       ]);
       if (b) setMonthlyBudget(parseInt(b));
@@ -85,7 +76,6 @@ export default function BudgetDashboard({
       if (lb) setLayerBudgets(JSON.parse(lb || "{}"));
       if (sb) setSubTagBudgets(JSON.parse(sb || "{}"));
       if (le) setLayerBudgetEnabled(JSON.parse(le || "{}"));
-      if (soc !== null) setShowOtherInCharts(JSON.parse(soc));
       if (hidden !== null) setIsSavingsHidden(JSON.parse(hidden));
     };
     load();
@@ -103,48 +93,37 @@ export default function BudgetDashboard({
     AsyncStorage.setItem("isSavingsHidden", JSON.stringify(newValue));
   };
 
-
   const getCycleRange = (dateStr: string, pDay: number) => {
     const date = new Date(dateStr);
     let startYear = date.getFullYear();
     let startMonth = date.getMonth();
     if (date.getDate() < pDay) {
       startMonth -= 1;
-      if (startMonth < 0) {
-        startMonth = 11;
-        startYear -= 1;
-      }
+      if (startMonth < 0) { startMonth = 11; startYear -= 1; }
     }
     const startDate = new Date(startYear, startMonth, pDay);
     const endDate = new Date(startYear, startMonth + 1, pDay - 1);
-    const formatDate = (d: Date) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const formatDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     return { start: formatDate(startDate), end: formatDate(endDate) };
   };
 
   const cycleRange = useMemo(() => getCycleRange(selectedDate, payday), [selectedDate, payday]);
 
-  // 🌟 パフォーマンス改善：必要な日付の配列だけを作る関数
   const getDatesInRange = (startStr: string, endStr: string) => {
     const dates = [];
     let curr = new Date(startStr);
     const end = new Date(endStr);
     while (curr <= end) {
-      dates.push(
-        `${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, "0")}-${String(curr.getDate()).padStart(2, "0")}`
-      );
+      dates.push(`${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, "0")}-${String(curr.getDate()).padStart(2, "0")}`);
       curr.setDate(curr.getDate() + 1);
     }
     return dates;
   };
 
-  // 🌟 パフォーマンス改善：O(1)アクセスによる集計
   const { layerActuals, subTagActuals, cycleStats } = useMemo(() => {
     const lActuals: Record<string, number> = {};
     const sActuals: Record<string, number> = {};
-    let tIncome = 0;
-    let tExpense = 0;
-
+    let tIncome = 0; let tExpense = 0;
     const cycleDates = getDatesInRange(cycleRange.start, cycleRange.end);
 
     cycleDates.forEach((date) => {
@@ -163,11 +142,7 @@ export default function BudgetDashboard({
       });
     });
 
-    return {
-      layerActuals: lActuals,
-      subTagActuals: sActuals,
-      cycleStats: { tIncome, tExpense },
-    };
+    return { layerActuals: lActuals, subTagActuals: sActuals, cycleStats: { tIncome, tExpense } };
   }, [scheduleData, cycleRange, tagMaster]);
 
   const baseIncome = cycleStats.tIncome > 0 ? cycleStats.tIncome : monthlyBudget;
@@ -175,29 +150,13 @@ export default function BudgetDashboard({
 
   const executeSalaryRecord = () => {
     const amount = parseInt(salaryInputAmount);
-    if (isNaN(amount) || amount <= 0)
-      return Alert.alert("エラー", "正しい金額を入力してください");
-
+    if (isNaN(amount) || amount <= 0) return Alert.alert("エラー", "正しい金額を入力してください");
     const targetDateStr = cycleRange.start;
     const newItem: ScheduleItem = {
-      id: Date.now().toString(),
-      category: "収入",
-      tag: "給料",
-      tags: ["給料"],
-      title: "給料",
-      amount: amount,
-      isDone: false,
-      color: "#8E8E93",
-      isEvent: false,
-      isTodo: false,
-      isExpense: false,
-      isIncome: true,
+      id: Date.now().toString(), category: "収入", tag: "給料", tags: ["給料"], title: "給料", amount: amount,
+      isDone: false, color: "#8E8E93", isEvent: false, isTodo: false, isExpense: false, isIncome: true,
     };
-
-    const newData = {
-      ...scheduleData,
-      [targetDateStr]: [...(scheduleData[targetDateStr] || []), newItem],
-    };
+    const newData = { ...scheduleData, [targetDateStr]: [...(scheduleData[targetDateStr] || []), newItem] };
     setScheduleData(newData);
     setTimeout(() => setHasUnsavedChanges(true), 100);
     setIsSalaryModalVisible(false);
@@ -207,61 +166,35 @@ export default function BudgetDashboard({
   const executeAddSubTag = () => {
     const trimmed = newSubTagName.trim();
     if (!trimmed) return;
-    if (tagMaster[trimmed]) {
-      Alert.alert("エラー", "既に同じ名前の属性が存在します");
-      return;
-    }
+    if (tagMaster[trimmed]) { Alert.alert("エラー", "既に同じ名前の属性が存在します"); return; }
     const newColor = newSubTagColor || layerMaster[targetLayerForSubTag] || "#8E8E93";
-    const newTagMaster = {
-      ...tagMaster,
-      [trimmed]: { layer: targetLayerForSubTag, color: newColor },
-    };
+    const newTagMaster = { ...tagMaster, [trimmed]: { layer: targetLayerForSubTag, color: newColor } };
     setTagMaster(newTagMaster);
     AsyncStorage.setItem("tagMasterData", JSON.stringify(newTagMaster));
-    setNewSubTagName("");
-    setNewSubTagColor("");
-    setAddSubTagModalVisible(false);
+    setNewSubTagName(""); setNewSubTagColor(""); setAddSubTagModalVisible(false);
     setExpandedLayers((prev) => ({ ...prev, [targetLayerForSubTag]: true }));
   };
 
   const globalBudgetCalc = useMemo(() => {
     const totalAllocated = Object.keys(layerMaster).reduce((sum, l) => {
       if (layerBudgetEnabled[l] === false) return sum;
-      if (activeTags.length > 0 && !activeTags.includes(l) && !showOtherInCharts) return sum;
       return sum + (layerBudgets[l] || 0);
     }, 0);
-
-    let commonActual = 0;
-    const isCommonActive = activeTags.length === 0 || activeTags.includes("共通");
-    if (layerBudgetEnabled["共通"] !== false && (isCommonActive || showOtherInCharts)) {
-      commonActual = layerActuals["共通"] || 0;
-    }
-
-    const unallocatedBuffer = baseIncome - totalAllocated - commonActual;
-    return {
-      totalAllocated,
-      commonActual,
-      unallocatedBuffer,
-      isOverflow: unallocatedBuffer < 0,
-    };
-  }, [baseIncome, layerBudgets, layerMaster, layerBudgetEnabled, layerActuals, activeTags, showOtherInCharts]);
+    return { totalAllocated, unallocatedBuffer: baseIncome - totalAllocated, isOverflow: baseIncome - totalAllocated < 0 };
+  }, [baseIncome, layerBudgets, layerMaster, layerBudgetEnabled]);
 
   const singleLayerBudgetCalc = useMemo(() => {
     if (!currentActiveLayer) return { totalAllocated: 0, unallocatedBuffer: 0, isOverflow: false };
     const budget = layerBudgets[currentActiveLayer] || 0;
     const subTags = Object.keys(tagMaster).filter((t) => tagMaster[t].layer === currentActiveLayer);
     const total = subTags.reduce((sum, s) => sum + (subTagBudgets[s] || 0), 0);
-    return {
-      totalAllocated: total,
-      unallocatedBuffer: budget - total,
-      isOverflow: budget < total,
-    };
+    return { totalAllocated: total, unallocatedBuffer: budget - total, isOverflow: budget < total };
   }, [currentActiveLayer, layerBudgets, subTagBudgets, tagMaster]);
 
+  // 🌟 条件② バーのセグメントに「その他」を合成する処理
   const barSegments = useMemo(() => {
     const segments: { color: string; actual: number; budget: number }[] = [];
-    let otherActual = 0;
-    let otherBudget = 0;
+    let otherActual = 0; let otherBudget = 0;
 
     const layers = [...Object.keys(layerMaster), "共通"];
     layers.forEach((l) => {
@@ -270,24 +203,26 @@ export default function BudgetDashboard({
       const budget = l === "共通" ? 0 : layerBudgets[l] || 0;
       const isMatched = activeTags.length === 0 || activeTags.includes(l);
 
-      if (isMatched) segments.push({ color: l === "共通" ? "#8E8E93" : layerMaster[l], actual, budget });
-      else if (showOtherInCharts) {
+      if (isMatched) {
+        segments.push({ color: l === "共通" ? "#8E8E93" : layerMaster[l], actual, budget });
+      } else if (activeTags.length > 1) {
         otherActual += actual;
         otherBudget += budget;
       }
     });
 
-    if (showOtherInCharts && (otherActual > 0 || otherBudget > 0)) {
+    if (activeTags.length > 1 && (otherActual > 0 || otherBudget > 0)) {
       segments.push({ color: "#C7C7CC", actual: otherActual, budget: otherBudget });
     }
     return segments;
-  }, [layerMaster, layerActuals, layerBudgets, activeTags, layerBudgetEnabled, showOtherInCharts]);
+  }, [layerMaster, layerActuals, layerBudgets, activeTags, layerBudgetEnabled]);
 
-  // 🌟 パフォーマンス改善：チャート用のデータもO(1)で取得
+  // 🌟 条件①＆② グラフや全体の合計値の計算ロジック
   const getStatsForCycle = (startStr: string, endStr: string) => {
     let total = 0;
     const totals: Record<string, number> = {};
     const dates = getDatesInRange(startStr, endStr);
+    const isSingle = activeTags.length === 1;
 
     dates.forEach((date) => {
       const items = scheduleData[date] || [];
@@ -299,42 +234,43 @@ export default function BudgetDashboard({
         const isMatch = activeTags.length === 0 || activeTags.includes(itemLayer);
 
         if (!isMatch) {
-          if (showOtherInCharts) {
+          if (!isSingle) { // 複数選択時は「その他」として合算
             total += itemTotal;
             totals["その他"] = (totals["その他"] || 0) + itemTotal;
           }
-          return;
+          return; // 単一選択時は関係ないデータは完全に無視
         }
 
         total += itemTotal;
-        let groupKey = itemTag;
-        if (chartGroupBy === "layer") groupKey = itemLayer;
-        else if (chartGroupBy === "category") groupKey = item.category || itemTag;
-        if (!groupKey) groupKey = item.category || "未分類";
-
-        totals[groupKey] = (totals[groupKey] || 0) + itemTotal;
+        if (isSingle) { // 単一選択時は強制的に属性（サブカテゴリ）でグループ化
+          totals[itemTag] = (totals[itemTag] || 0) + itemTotal;
+        } else {
+          let groupKey = itemTag;
+          if (chartGroupBy === "layer") groupKey = itemLayer;
+          else if (chartGroupBy === "category") groupKey = item.category || itemTag;
+          if (!groupKey) groupKey = item.category || "未分類";
+          totals[groupKey] = (totals[groupKey] || 0) + itemTotal;
+        }
       });
     });
     return { total, totals };
   };
 
-  const stats = useMemo(() => getStatsForCycle(cycleRange.start, cycleRange.end), [scheduleData, cycleRange, activeTags, tagMaster, chartGroupBy, showOtherInCharts]);
+  const stats = useMemo(() => getStatsForCycle(cycleRange.start, cycleRange.end), [scheduleData, cycleRange, activeTags, tagMaster, chartGroupBy]);
 
   const lineChartData = useMemo(() => {
-    const labels: string[] = [];
-    const data: number[] = [];
+    const labels: string[] = []; const data: number[] = [];
     for (let i = 5; i >= 0; i--) {
-      const d = new Date(selectedDate);
-      d.setMonth(d.getMonth() - i);
+      const d = new Date(selectedDate); d.setMonth(d.getMonth() - i);
       const pastCycle = getCycleRange(d.toISOString().split("T")[0], payday);
       labels.push(`${pastCycle.start.split("-")[1]}月度`);
       data.push(getStatsForCycle(pastCycle.start, pastCycle.end).total || 0);
     }
     return { labels, datasets: [{ data }] };
-  }, [scheduleData, selectedDate, payday, activeTags, chartGroupBy, showOtherInCharts]);
+  }, [scheduleData, selectedDate, payday, activeTags, chartGroupBy]);
 
-  const activeLimit = currentActiveLayer && layerBudgets[currentActiveLayer] ? layerBudgets[currentActiveLayer] : baseIncome;
-  const progress = Math.min(stats.total / (activeLimit || 1), 1);
+  const activeLimit = currentActiveLayer ? (layerBudgets[currentActiveLayer] || 1) : baseIncome;
+  const progress = Math.min(stats.total / activeLimit, 1);
   const statusColor = stats.total > activeLimit ? "#FF3B30" : themeColor;
 
   const currentUsable = baseIncome - cycleStats.tExpense;
@@ -357,10 +293,7 @@ export default function BudgetDashboard({
         <ScrollView style={styles.settingArea} showsVerticalScrollIndicator={false}>
           <Text style={styles.settingLabel}>給料日指定</Text>
           <TextInput style={styles.settingInput} keyboardType="numeric" value={payday.toString()} onChangeText={(t) => { setPayday(parseInt(t) || 25); AsyncStorage.setItem("myPayday", t); }} />
-          <View style={styles.settingSwitchRow}>
-            <View style={{ flex: 1 }}><Text style={styles.settingSwitchLabel}>フィルター外を「その他」で表示</Text></View>
-            <Switch value={showOtherInCharts} onValueChange={(v) => { setShowOtherInCharts(v); AsyncStorage.setItem("showOtherInCharts", JSON.stringify(v)); }} trackColor={{ false: "#E5E5EA", true: themeColor }} />
-          </View>
+          
           <Text style={[styles.settingLabel, { marginTop: 10 }]}>予算スライダーの表示切替</Text>
           {[...Object.keys(layerMaster), "共通"].map((l) => (
             <View key={l} style={styles.settingSwitchRow}>
@@ -394,50 +327,52 @@ export default function BudgetDashboard({
           </View>
 
           <View style={styles.dashboardToggleRow}>
-            <TouchableOpacity style={[styles.dashToggleBtn, dashboardMode === "macro" && { backgroundColor: themeColor }]} onPress={() => setDashboardMode("macro")}>
-              <Text style={[styles.dashToggleText, dashboardMode === "macro" && { color: "#FFF" }]}>実績俯瞰</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.dashToggleBtn, dashboardMode === "micro" && { backgroundColor: themeColor }]} onPress={() => setDashboardMode("micro")}>
-              <Text style={[styles.dashToggleText, dashboardMode === "micro" && { color: "#FFF" }]}>予算調整</Text>
-            </TouchableOpacity>
+            <TouchableOpacity style={[styles.dashToggleBtn, dashboardMode === "macro" && { backgroundColor: themeColor }]} onPress={() => setDashboardMode("macro")}><Text style={[styles.dashToggleText, dashboardMode === "macro" && { color: "#FFF" }]}>実績俯瞰</Text></TouchableOpacity>
+            <TouchableOpacity style={[styles.dashToggleBtn, dashboardMode === "micro" && { backgroundColor: themeColor }]} onPress={() => setDashboardMode("micro")}><Text style={[styles.dashToggleText, dashboardMode === "micro" && { color: "#FFF" }]}>予算調整</Text></TouchableOpacity>
           </View>
 
           {dashboardMode === "macro" ? (
             <ScrollView style={styles.macroArea} showsVerticalScrollIndicator={false}>
               <View style={styles.progressSection}>
                 <View style={styles.progressLabelRow}>
-                  <Text style={styles.progressLabel}>{activeTags.length > 0 ? "選択中の進捗（その他を含む）" : "今サイクルの総支出"}</Text>
+                  <Text style={styles.progressLabel}>{currentActiveLayer ? `${currentActiveLayer}の進捗` : "全体の進捗"}</Text>
                   <Text style={[styles.progressPercent, { color: statusColor }]}>{Math.round(progress * 100)}%</Text>
                 </View>
                 <View style={styles.progressBarBg}><View style={[styles.progressBarFill, { width: `${progress * 100}%`, backgroundColor: statusColor }]} /></View>
               </View>
 
-              <View style={styles.chartToggleRow}>
-                {["layer", "category", "tag"].map((type) => (
-                  <TouchableOpacity key={type} style={[styles.chartToggleBtn, chartGroupBy === type && { backgroundColor: themeColor }]} onPress={() => setChartGroupBy(type as any)}>
-                    <Text style={[styles.chartToggleText, chartGroupBy === type && { color: "#fff" }]}>{type === "layer" ? "レイヤー別" : type === "category" ? "項目別" : "属性別"}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              {/* 単一カテゴリ選択時は切り替えボタンを隠し、属性別に固定 */}
+              {!currentActiveLayer && (
+                <View style={styles.chartToggleRow}>
+                  {["layer", "category", "tag"].map((type) => (
+                    <TouchableOpacity key={type} style={[styles.chartToggleBtn, chartGroupBy === type && { backgroundColor: themeColor }]} onPress={() => setChartGroupBy(type as any)}>
+                      <Text style={[styles.chartToggleText, chartGroupBy === type && { color: "#fff" }]}>{type === "layer" ? "レイヤー別" : type === "category" ? "項目別" : "属性別"}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+              
               <View style={styles.chartArea}>
                 {Object.keys(stats.totals).length > 0 ? (
                   <PieChart
-                    data={Object.keys(stats.totals).map((key, index) => ({ name: key, population: stats.totals[key], color: key === "その他" ? "#C7C7CC" : chartGroupBy === "layer" ? key === "共通" ? "#8E8E93" : layerMaster[key] || CHART_PALETTE[index % CHART_PALETTE.length] : tagMaster[key]?.color || CHART_PALETTE[index % CHART_PALETTE.length], legendFontColor: "#666", legendFontSize: 11 }))}
+                    data={Object.keys(stats.totals).map((key, index) => ({
+                      name: key, population: stats.totals[key],
+                      color: key === "その他" ? "#C7C7CC" : (!currentActiveLayer && chartGroupBy === "layer") ? (key === "共通" ? "#8E8E93" : layerMaster[key] || CHART_PALETTE[index % CHART_PALETTE.length]) : tagMaster[key]?.color || CHART_PALETTE[index % CHART_PALETTE.length],
+                      legendFontColor: "#666", legendFontSize: 11,
+                    }))}
                     width={screenWidth * 0.8} height={160} chartConfig={{ color: () => `black` }} accessor={"population"} backgroundColor={"transparent"} paddingLeft={"15"} absolute
                   />
-                ) : <Text style={styles.noDataText}>データがありません</Text>}
+                ) : (
+                  <Text style={styles.noDataText}>データがありません</Text>
+                )}
               </View>
-              <TouchableOpacity style={[styles.historyOpenBtn, { borderColor: themeColor }]} onPress={() => setIsHistoryModalVisible(true)}>
-                <Ionicons name="analytics" size={18} color={themeColor} />
-                <Text style={[styles.historyOpenBtnText, { color: themeColor }]}>支出推移と履歴レポートを見る</Text>
-              </TouchableOpacity>
             </ScrollView>
           ) : (
             <ScrollView style={styles.microArea} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               {!currentActiveLayer ? (
                 <>
                   <View style={styles.masterBudgetHeader}>
-                    <Text style={styles.masterTitle}>全体収入枠 (ALL LAYERS)</Text>
+                    <Text style={styles.masterTitle}>全体収入・予算枠</Text>
                     <Text style={{ fontSize: 16, fontWeight: "bold", color: "#1C1C1E" }}>¥{baseIncome.toLocaleString()}</Text>
                   </View>
 
@@ -464,9 +399,11 @@ export default function BudgetDashboard({
                   </View>
                   <View style={styles.divider} />
 
+                  {/* 選択されたカテゴリのスライダー */}
                   {Object.keys(layerMaster).map((l) => {
                     if (layerBudgetEnabled[l] === false) return null;
                     if (activeTags.length > 0 && !activeTags.includes(l)) return null;
+
                     const b = layerBudgets[l] || 0; const a = layerActuals[l] || 0; const color = layerMaster[l];
                     const limit = b + Math.max(0, globalBudgetCalc.unallocatedBuffer);
                     const layerSubTags = Object.keys(tagMaster).filter((t) => tagMaster[t].layer === l);
@@ -520,8 +457,33 @@ export default function BudgetDashboard({
                       </View>
                     );
                   })}
+
+                  {/* 🌟 条件② 複数カテゴリ選択時の「その他」カード */}
+                  {activeTags.length > 1 && (() => {
+                    let otherB = 0; let otherA = 0;
+                    [...Object.keys(layerMaster), "共通"].forEach(l => {
+                      if (!activeTags.includes(l) && layerBudgetEnabled[l] !== false) {
+                        otherB += l === "共通" ? 0 : (layerBudgets[l] || 0);
+                        otherA += layerActuals[l] || 0;
+                      }
+                    });
+                    if (otherB === 0 && otherA === 0) return null;
+                    return (
+                      <View style={styles.sliderCard}>
+                        <View style={styles.sliderHeader}>
+                          <Text style={{ fontWeight: "bold", color: "#8E8E93", fontSize: 16 }}>その他 (未選択)</Text>
+                          <Text style={styles.sliderSubText}>実績 ¥{otherA.toLocaleString()} / 予算 ¥{otherB.toLocaleString()}</Text>
+                        </View>
+                        <View style={[styles.absoluteScaleBar, { height: 10, borderRadius: 5 }]}>
+                          <View style={{ position: "absolute", width: `${Math.min(otherB / baseIncome, 1) * 100}%`, height: "100%", backgroundColor: "#C7C7CC3A" }} />
+                          <View style={{ position: "absolute", width: `${Math.min(otherA / baseIncome, 1) * 100}%`, height: "100%", backgroundColor: otherA > otherB && otherB > 0 ? "#FF3B30" : "#C7C7CC" }} />
+                        </View>
+                      </View>
+                    );
+                  })()}
                 </>
               ) : (
+                /* 🌟 条件① 単一カテゴリ選択時のUI */
                 <>
                   <View style={styles.masterBudgetHeader}>
                     <Text style={styles.masterTitle}>{currentActiveLayer} の予算設定</Text>
@@ -540,7 +502,9 @@ export default function BudgetDashboard({
                     return (
                       <>
                         <View style={styles.masterStackContainer}>
-                          <View style={[styles.masterStackLayer, { opacity: 0.2 }]}>{layerSubTags.map((sub) => (<View key={`bg-${sub}`} style={{ width: `${((subTagBudgets[sub] || 0) / validB) * 100}%`, height: "100%", backgroundColor: tagMaster[sub]?.color || themeColor }} />))}</View>
+                          <View style={[styles.masterStackLayer, { opacity: 0.2 }]}>
+                            {layerSubTags.map((sub) => (<View key={`bg-${sub}`} style={{ width: `${((subTagBudgets[sub] || 0) / validB) * 100}%`, height: "100%", backgroundColor: tagMaster[sub]?.color || themeColor }} />))}
+                          </View>
                           <View style={styles.masterStackLayer}>
                             {isLayerDeficit ? (
                               <View style={{ width: "100%", height: "100%", backgroundColor: "#FF3B30" }} />
@@ -616,6 +580,7 @@ export default function BudgetDashboard({
         </TouchableOpacity>
       </Modal>
 
+      {/* 給料入力モーダル */}
       <Modal visible={isSalaryModalVisible} transparent animationType="fade">
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setIsSalaryModalVisible(false)}>
           <View style={styles.editCardModal}>
@@ -628,23 +593,6 @@ export default function BudgetDashboard({
             </View>
           </View>
         </TouchableOpacity>
-      </Modal>
-
-      <Modal visible={isHistoryModalVisible} animationType="slide">
-        <View style={styles.historyModalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalHeaderText}>分析レポート</Text>
-            <TouchableOpacity onPress={() => setIsHistoryModalVisible(false)}><Ionicons name="close-circle" size={32} color="#8E8E93" /></TouchableOpacity>
-          </View>
-          <ScrollView style={{ padding: 15 }}>
-            <View style={styles.analysisCard}>
-              <Text style={styles.analysisTitle}>過去6ヶ月の推移</Text>
-              {lineChartData.datasets[0].data.length > 1 ? (
-                <LineChart data={lineChartData} width={screenWidth - 60} height={180} chartConfig={{ backgroundColor: "#fff", backgroundGradientFrom: "#fff", backgroundGradientTo: "#fff", decimalPlaces: 0, color: () => themeColor, labelColor: () => `#333`, propsForDots: { r: "5", strokeWidth: "2", stroke: themeColor } }} bezier style={{ borderRadius: 16 }} />
-              ) : <Text style={styles.noDataText}>データがありません</Text>}
-            </View>
-          </ScrollView>
-        </View>
       </Modal>
     </View>
   );
@@ -669,6 +617,7 @@ const styles = StyleSheet.create({
   dashToggleBtn: { flex: 1, paddingVertical: 8, alignItems: "center", borderRadius: 6 },
   dashToggleText: { fontSize: 12, fontWeight: "bold", color: "#8E8E93" },
   settingArea: { paddingVertical: 5 },
+  settingLabel: { fontSize: 12, fontWeight: "bold", color: "#666", marginBottom: 8, marginTop: 10 },
   settingInput: { backgroundColor: "#F9F9F9", borderWidth: 1, borderColor: "#EEE", borderRadius: 10, padding: 12, marginBottom: 15, fontSize: 16 },
   settingSwitchRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#F2F2F7" },
   settingSwitchLabel: { fontSize: 14, fontWeight: "600", color: "#1C1C1E" },
@@ -705,17 +654,8 @@ const styles = StyleSheet.create({
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
   editCardModal: { width: "85%", backgroundColor: "#fff", borderRadius: 25, padding: 25 },
   editTitle: { fontSize: 16, fontWeight: "bold", marginBottom: 15, textAlign: "center", color: "#333" },
-  settingLabel: { fontSize: 12, fontWeight: "bold", color: "#666", marginBottom: 8, marginTop: 10 },
-  editInputText: { backgroundColor: "#F2F2F7", padding: 10, borderRadius: 10, fontSize: 16, textAlign: "center", marginBottom: 10 },
   editInputAmount: { backgroundColor: "#F2F2F7", padding: 15, borderRadius: 15, fontSize: 24, fontWeight: "bold", textAlign: "center", marginBottom: 20 },
   editActionRow: { flexDirection: "row" },
   saveBtn: { paddingHorizontal: 25, paddingVertical: 12, borderRadius: 15 },
   saveText: { color: "#fff", fontWeight: "bold" },
-  historyOpenBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 12, borderWidth: 1, borderRadius: 12, marginTop: 5, backgroundColor: "#fff" },
-  historyOpenBtnText: { fontSize: 13, fontWeight: "bold", marginLeft: 8 },
-  historyModalContainer: { flex: 1, backgroundColor: "#F2F2F7", paddingTop: 50 },
-  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, marginBottom: 15 },
-  modalHeaderText: { fontSize: 22, fontWeight: "bold", color: "#1C1C1E" },
-  analysisCard: { backgroundColor: "#fff", borderRadius: 20, padding: 15 },
-  analysisTitle: { fontSize: 13, fontWeight: "bold", color: "#8E8E93", marginBottom: 10 },
 });
