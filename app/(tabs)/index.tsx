@@ -1,3 +1,5 @@
+import 'react-native-get-random-values';
+
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
@@ -39,6 +41,9 @@ import {
   View,
 } from "react-native";
 
+import CryptoJS from 'crypto-js';
+import * as SecureStore from 'expo-secure-store';
+
 import {
   CalendarList,
   CalendarProvider,
@@ -65,6 +70,16 @@ const getPastelColor = (hex: string) => {
     b = parseInt(hex.slice(5, 7), 16);
   const mix = 0.08;
   return `rgb(${Math.round(r * mix + 255 * (1 - mix))}, ${Math.round(g * mix + 255 * (1 - mix))}, ${Math.round(b * mix + 255 * (1 - mix))})`;
+};
+
+const getOrGenerateMasterKey = async () => {
+  let key = await SecureStore.getItemAsync("myAppMasterKey");
+  if (!key) {
+    // 鍵が存在しない場合は、ランダムな文字列を生成してSecureStoreに保存
+    key = CryptoJS.lib.WordArray.random(32).toString();
+    await SecureStore.setItemAsync("myAppMasterKey", key);
+  }
+  return key;
 };
 
 export default function Index() {
@@ -212,19 +227,26 @@ export default function Index() {
 
           try {
             console.log("Auto-save: クラウドへの保存を開始...");
-            const dataToSave = JSON.parse(
-              JSON.stringify({
-                scheduleData,
-                layerMaster,
-                tagMaster,
-                presets,
-                activeTags,
-                lastSyncedAt: new Date().toISOString(),
-              }),
-            );
 
-            await setDoc(doc(db, "users", user.uid), dataToSave);
-            console.log("Auto-save: 完了！🚀");
+            // 🌟 変更：データを文字列化
+            const rawDataString = JSON.stringify({
+              scheduleData,
+              layerMaster,
+              tagMaster,
+              presets,
+              activeTags,
+            });
+
+            // 🌟 変更：マスターキーを取得して暗号化（AES）
+            const masterKey = await getOrGenerateMasterKey();
+            const encryptedData = CryptoJS.AES.encrypt(rawDataString, masterKey).toString();
+
+            // 🌟 変更：Firebaseには暗号文と同期時刻だけを送る
+            await setDoc(doc(db, "users", user.uid), {
+              secureData: encryptedData,
+              lastSyncedAt: new Date().toISOString()
+            });
+            console.log("Auto-save: 暗号化バックアップ完了！🔒🚀");
           } catch (error) {
             console.error("Auto-save Error:", error);
           }
@@ -587,38 +609,37 @@ export default function Index() {
       if (docSnap.exists()) {
         const cloudData = docSnap.data();
 
+        // 🌟 変更：過去の未暗号化データとの互換性を保ちつつ復号する
+        let parsedData;
+        if (cloudData.secureData) {
+          // 暗号化されている場合
+          const masterKey = await getOrGenerateMasterKey();
+          const bytes = CryptoJS.AES.decrypt(cloudData.secureData, masterKey);
+          const decryptedString = bytes.toString(CryptoJS.enc.Utf8);
+          if (!decryptedString) throw new Error("復号失敗");
+          parsedData = JSON.parse(decryptedString);
+        } else {
+          // 過去の未暗号化データの場合（移行措置）
+          parsedData = cloudData;
+        }
+
         await Promise.all([
-          AsyncStorage.setItem(
-            "myScheduleData",
-            JSON.stringify(cloudData.scheduleData || {}),
-          ),
-          AsyncStorage.setItem(
-            "layerMasterData",
-            JSON.stringify(cloudData.layerMaster || {}),
-          ),
-          AsyncStorage.setItem(
-            "tagMasterData",
-            JSON.stringify(cloudData.tagMaster || {}),
-          ),
-          AsyncStorage.setItem(
-            "filterPresets",
-            JSON.stringify(cloudData.presets || {}),
-          ),
-          AsyncStorage.setItem(
-            "activeTags",
-            JSON.stringify(cloudData.activeTags || []),
-          ),
+          AsyncStorage.setItem("myScheduleData", JSON.stringify(parsedData.scheduleData || {})),
+          AsyncStorage.setItem("layerMasterData", JSON.stringify(parsedData.layerMaster || {})),
+          AsyncStorage.setItem("tagMasterData", JSON.stringify(parsedData.tagMaster || {})),
+          AsyncStorage.setItem("filterPresets", JSON.stringify(parsedData.presets || {})),
+          AsyncStorage.setItem("activeTags", JSON.stringify(parsedData.activeTags || [])),
         ]);
 
-        setScheduleData(cloudData.scheduleData || {});
-        setLayerMaster(cloudData.layerMaster || {});
-        setTagMaster(cloudData.tagMaster || {});
-        setPresets(cloudData.presets || {});
-        setActiveTags(cloudData.activeTags || []);
+        setScheduleData(parsedData.scheduleData || {});
+        setLayerMaster(parsedData.layerMaster || {});
+        setTagMaster(parsedData.tagMaster || {});
+        setPresets(parsedData.presets || {});
+        setActiveTags(parsedData.activeTags || []);
 
         Alert.alert(
           "復元完了",
-          "クラウドから最新データを正常に読み込みました！🚀",
+          "クラウドデータを正常に復元しました！🔓🚀",
         );
         setConfigModalVisible(false);
       } else {

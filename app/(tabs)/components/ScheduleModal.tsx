@@ -12,6 +12,8 @@ import { PRESET_COLORS } from "../utils/helpers";
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   ScrollView,
@@ -1383,463 +1385,470 @@ export default function ScheduleModal({
       transparent={true}
       onShow={() => setIsReady(true)}
     >
-      <TouchableOpacity
-        style={styles.modalOverlay}
-        activeOpacity={1}
-        onPress={onClose}
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
       >
-        <TouchableWithoutFeedback>
-          <View
-            style={[
-              styles.modalContent,
-              { borderTopWidth: 8, borderTopColor: uiThemeColor },
-            ]}
-          >
-            {!isReady ? (
-              <View style={{ flex: 1, justifyContent: "center" }}>
-                <ActivityIndicator size="large" color={uiThemeColor} />
-              </View>
-            ) : (
-              <ScrollView
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-                keyboardDismissMode="on-drag"
-              >
-                <View style={styles.headerRow}>
-                  <Text style={[styles.modalTitle, { color: uiThemeColor }]}>
-                    {selectedItem ? "予定を編集" : "新規作成"}
-                  </Text>
-                  <Text style={styles.dateBadge}>{selectedDate}</Text>
+
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={Keyboard.dismiss}
+        >
+          <TouchableWithoutFeedback>
+            <View
+              style={[
+                styles.modalContent,
+                { borderTopWidth: 8, borderTopColor: uiThemeColor },
+              ]}
+            >
+              {!isReady ? (
+                <View style={{ flex: 1, justifyContent: "center" }}>
+                  <ActivityIndicator size="large" color={uiThemeColor} />
                 </View>
-                <TextInput
-                  style={styles.mainInput}
-                  placeholder="予定のタイトル"
-                  placeholderTextColor="#AEAEB2"
-                  value={inputText}
-                  onChangeText={setInputText}
-                />
-
-                {suggestions.length > 0 && (
-                  <View style={styles.suggestionWrapper}>
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                    >
-                      {suggestions.map((s, i) => (
-                        <TouchableOpacity
-                          key={i}
-                          style={styles.suggestionBadge}
-                          onPress={() => setInputText(s)}
-                        >
-                          <Text style={styles.suggestionText}>{s}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
-
-                {timeAndTagSection}
-
-                <View
-                  style={[
-                    styles.optionSection,
-                    { borderLeftColor: uiThemeColor },
-                  ]}
+              ) : (
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  keyboardDismissMode="on-drag"
                 >
-                  <View style={{ marginBottom: 20 }}>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        marginBottom: 10,
-                      }}
-                    >
-                      <Ionicons
-                        name="notifications"
-                        size={18}
-                        color={uiThemeColor}
-                        style={{ marginRight: 6 }}
-                      />
-                      <Text
-                        style={[
-                          styles.switchLabel,
-                          {
-                            color: uiThemeColor,
-                            fontWeight: "800",
-                            letterSpacing: 0.5,
-                          },
-                        ]}
-                      >
-                        通知リマインダー
-                      </Text>
-                    </View>
+                  <View style={styles.headerRow}>
+                    <Text style={[styles.modalTitle, { color: uiThemeColor }]}>
+                      {selectedItem ? "予定を編集" : "新規作成"}
+                    </Text>
+                    <Text style={styles.dateBadge}>{selectedDate}</Text>
+                  </View>
+                  <TextInput
+                    style={styles.mainInput}
+                    placeholder="予定のタイトル"
+                    placeholderTextColor="#AEAEB2"
+                    value={inputText}
+                    onChangeText={setInputText}
+                  />
 
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        flexWrap: "wrap",
-                        gap: 8,
-                        paddingBottom: 8,
-                      }}
-                    >
-                      <TouchableOpacity
-                        style={[
-                          styles.layerChip,
-                          {
-                            borderWidth: 1,
-                            borderColor: "#E5E5EA",
-                            borderRadius: 20,
-                            paddingHorizontal: 16,
-                            backgroundColor: "#FFF",
-                          },
-                          selectedReminders.length === 0 && {
-                            backgroundColor: uiThemeColor,
-                            borderColor: uiThemeColor,
-                          },
-                        ]}
-                        onPress={() => {
-                          setSelectedReminders([]);
-                          setCustomReminderTimes([]);
+                  {suggestions.length > 0 && (
+                    <View style={styles.suggestionWrapper}>
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                      >
+                        {suggestions.map((s, i) => (
+                          <TouchableOpacity
+                            key={i}
+                            style={styles.suggestionBadge}
+                            onPress={() => setInputText(s)}
+                          >
+                            <Text style={styles.suggestionText}>{s}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+
+                  {timeAndTagSection}
+
+                  <View
+                    style={[
+                      styles.optionSection,
+                      { borderLeftColor: uiThemeColor },
+                    ]}
+                  >
+                    <View style={{ marginBottom: 20 }}>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          marginBottom: 10,
                         }}
                       >
+                        <Ionicons
+                          name="notifications"
+                          size={18}
+                          color={uiThemeColor}
+                          style={{ marginRight: 6 }}
+                        />
                         <Text
                           style={[
-                            styles.layerChipText,
-                            selectedReminders.length === 0 && {
-                              color: "#fff",
-                              fontWeight: "bold",
+                            styles.switchLabel,
+                            {
+                              color: uiThemeColor,
+                              fontWeight: "800",
+                              letterSpacing: 0.5,
                             },
                           ]}
                         >
-                          なし
+                          通知リマインダー
                         </Text>
-                      </TouchableOpacity>
-
-                      {(isAllDay
-                        ? [
-                          { label: "当日の朝", value: "morning" },
-                          { label: "前日", value: "dayBefore" },
-                          { label: "2日前", value: "2daysBefore" },
-                          { label: "カスタム", value: "custom" },
-                        ]
-                        : [
-                          { label: "ちょうど", value: "exact" },
-                          { label: "10分前", value: "10min" },
-                          { label: "30分前", value: "30min" },
-                          { label: "1時間前", value: "1hour" },
-                          { label: "当日の朝", value: "morning" },
-                          { label: "カスタム", value: "custom" },
-                        ]
-                      ).map((opt) => {
-                        const isSelected = selectedReminders.includes(
-                          opt.value,
-                        );
-                        return (
-                          <TouchableOpacity
-                            key={opt.value}
-                            style={[
-                              styles.layerChip,
-                              {
-                                borderWidth: 1,
-                                borderColor: "#E5E5EA",
-                                borderRadius: 20,
-                                paddingHorizontal: 16,
-                                backgroundColor: isSelected
-                                  ? uiThemeColor
-                                  : "#FFF",
-                                shadowColor: isSelected ? uiThemeColor : "#000",
-                                shadowOffset: { width: 0, height: 2 },
-                                shadowOpacity: isSelected ? 0.4 : 0.05,
-                                shadowRadius: 3,
-                                elevation: 2,
-                              },
-                            ]}
-                            onPress={() =>
-                              setSelectedReminders((prev) => {
-                                if (prev.includes(opt.value)) {
-                                  return prev.filter((v) => v !== opt.value);
-                                } else {
-                                  if (
-                                    opt.value === "custom" &&
-                                    customReminderTimes.length === 0
-                                  ) {
-                                    setCustomReminderTimes([new Date()]);
-                                  }
-                                  return [...prev, opt.value];
-                                }
-                              })
-                            }
-                          >
-                            <Text
-                              style={[
-                                styles.layerChipText,
-                                isSelected && {
-                                  color: "#fff",
-                                  fontWeight: "bold",
-                                },
-                              ]}
-                            >
-                              {opt.label}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-
-                    {selectedReminders.includes("custom") && (
-                      <View
-                        style={{
-                          marginTop: 12,
-                          padding: 12,
-                          backgroundColor: uiThemeColor + "12",
-                          borderRadius: 15,
-                          borderLeftWidth: 3,
-                          borderLeftColor: uiThemeColor,
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 13,
-                            fontWeight: "bold",
-                            color: uiThemeColor,
-                            marginBottom: 10,
-                          }}
-                        >
-                          通知する日時を設定:
-                        </Text>
-                        {customReminderTimes.map((time, idx) => (
-                          <View
-                            key={idx}
-                            style={{
-                              flexDirection: "row",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              marginBottom: 10,
-                            }}
-                          >
-                            <View
-                              style={{
-                                flexDirection: "row",
-                                alignItems: "center",
-                                gap: 8,
-                              }}
-                            >
-                              <ModernDatePicker
-                                value={time}
-                                mode="date"
-                                onChange={(d) => {
-                                  const n = [...customReminderTimes];
-                                  n[idx] = d;
-                                  setCustomReminderTimes(n);
-                                }}
-                                themeColor={uiThemeColor}
-                                icon="calendar-outline"
-                              />
-                              <ModernDatePicker
-                                value={time}
-                                mode="time"
-                                onChange={(d) => {
-                                  const n = [...customReminderTimes];
-                                  n[idx] = d;
-                                  setCustomReminderTimes(n);
-                                }}
-                                themeColor={uiThemeColor}
-                                icon="time-outline"
-                              />
-                            </View>
-                            <TouchableOpacity
-                              onPress={() =>
-                                setCustomReminderTimes(
-                                  customReminderTimes.filter(
-                                    (_, i) => i !== idx,
-                                  ),
-                                )
-                              }
-                            >
-                              <Ionicons
-                                name="remove-circle"
-                                size={24}
-                                color="#FF3B30"
-                              />
-                            </TouchableOpacity>
-                          </View>
-                        ))}
-                        <TouchableOpacity
-                          style={{
-                            flexDirection: "row",
-                            alignItems: "center",
-                            marginTop: 5,
-                            alignSelf: "flex-start",
-                          }}
-                          onPress={() =>
-                            setCustomReminderTimes([
-                              ...customReminderTimes,
-                              new Date(),
-                            ])
-                          }
-                        >
-                          <Ionicons
-                            name="add-circle"
-                            size={20}
-                            color={uiThemeColor}
-                          />
-                          <Text
-                            style={{
-                              color: uiThemeColor,
-                              fontWeight: "bold",
-                              marginLeft: 5,
-                            }}
-                          >
-                            さらに時間を追加
-                          </Text>
-                        </TouchableOpacity>
                       </View>
-                    )}
-                  </View>
 
-                  <View style={styles.switchRow}>
-                    <Text style={styles.switchLabel}>予定として表示</Text>
-                    <Switch
-                      value={isEvent}
-                      onValueChange={setIsEvent}
-                      trackColor={{ false: "#C7C7CC", true: uiThemeColor }}
-                      ios_backgroundColor="#E5E5EA"
-                    />
-                  </View>
-                  <View style={styles.switchRow}>
-                    <Text style={styles.switchLabel}>ToDoリストに表示</Text>
-                    <Switch
-                      value={isTodo}
-                      onValueChange={setIsTodo}
-                      trackColor={{ false: "#C7C7CC", true: uiThemeColor }}
-                      ios_backgroundColor="#E5E5EA"
-                    />
-                  </View>
-                  <View style={styles.switchRow}>
-                    <Text style={styles.switchLabel}>支出を記録</Text>
-                    <Switch
-                      value={isExpense}
-                      onValueChange={setIsExpense}
-                      trackColor={{ false: "#C7C7CC", true: uiThemeColor }}
-                      ios_backgroundColor="#E5E5EA"
-                    />
-                  </View>
-
-                  {isExpense && (
-                    <View>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="金額 (¥)"
-                        placeholderTextColor="#AEAEB2"
-                        keyboardType="numeric"
-                        value={inputAmount}
-                        onChangeText={setInputAmount}
-                      />
                       <View
                         style={{
                           flexDirection: "row",
                           flexWrap: "wrap",
-                          gap: 6,
-                          marginTop: 10,
+                          gap: 8,
+                          paddingBottom: 8,
                         }}
                       >
-                        {currentQuickTags.map((cat, idx) => (
-                          <TouchableOpacity
-                            key={cat}
+                        <TouchableOpacity
+                          style={[
+                            styles.layerChip,
+                            {
+                              borderWidth: 1,
+                              borderColor: "#E5E5EA",
+                              borderRadius: 20,
+                              paddingHorizontal: 16,
+                              backgroundColor: "#FFF",
+                            },
+                            selectedReminders.length === 0 && {
+                              backgroundColor: uiThemeColor,
+                              borderColor: uiThemeColor,
+                            },
+                          ]}
+                          onPress={() => {
+                            setSelectedReminders([]);
+                            setCustomReminderTimes([]);
+                          }}
+                        >
+                          <Text
                             style={[
-                              styles.layerChip,
-                              selectedCategory === cat && {
-                                backgroundColor: uiThemeColor,
+                              styles.layerChipText,
+                              selectedReminders.length === 0 && {
+                                color: "#fff",
+                                fontWeight: "bold",
                               },
                             ]}
-                            onPress={() => setSelectedCategory(cat)}
                           >
-                            <Text
+                            なし
+                          </Text>
+                        </TouchableOpacity>
+
+                        {(isAllDay
+                          ? [
+                            { label: "当日の朝", value: "morning" },
+                            { label: "前日", value: "dayBefore" },
+                            { label: "2日前", value: "2daysBefore" },
+                            { label: "カスタム", value: "custom" },
+                          ]
+                          : [
+                            { label: "ちょうど", value: "exact" },
+                            { label: "10分前", value: "10min" },
+                            { label: "30分前", value: "30min" },
+                            { label: "1時間前", value: "1hour" },
+                            { label: "当日の朝", value: "morning" },
+                            { label: "カスタム", value: "custom" },
+                          ]
+                        ).map((opt) => {
+                          const isSelected = selectedReminders.includes(
+                            opt.value,
+                          );
+                          return (
+                            <TouchableOpacity
+                              key={opt.value}
                               style={[
-                                styles.layerChipText,
-                                selectedCategory === cat && { color: "#fff" },
+                                styles.layerChip,
+                                {
+                                  borderWidth: 1,
+                                  borderColor: "#E5E5EA",
+                                  borderRadius: 20,
+                                  paddingHorizontal: 16,
+                                  backgroundColor: isSelected
+                                    ? uiThemeColor
+                                    : "#FFF",
+                                  shadowColor: isSelected ? uiThemeColor : "#000",
+                                  shadowOffset: { width: 0, height: 2 },
+                                  shadowOpacity: isSelected ? 0.4 : 0.05,
+                                  shadowRadius: 3,
+                                  elevation: 2,
+                                },
                               ]}
+                              onPress={() =>
+                                setSelectedReminders((prev) => {
+                                  if (prev.includes(opt.value)) {
+                                    return prev.filter((v) => v !== opt.value);
+                                  } else {
+                                    if (
+                                      opt.value === "custom" &&
+                                      customReminderTimes.length === 0
+                                    ) {
+                                      setCustomReminderTimes([new Date()]);
+                                    }
+                                    return [...prev, opt.value];
+                                  }
+                                })
+                              }
                             >
-                              {cat}
+                              <Text
+                                style={[
+                                  styles.layerChipText,
+                                  isSelected && {
+                                    color: "#fff",
+                                    fontWeight: "bold",
+                                  },
+                                ]}
+                              >
+                                {opt.label}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+
+                      {selectedReminders.includes("custom") && (
+                        <View
+                          style={{
+                            marginTop: 12,
+                            padding: 12,
+                            backgroundColor: uiThemeColor + "12",
+                            borderRadius: 15,
+                            borderLeftWidth: 3,
+                            borderLeftColor: uiThemeColor,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 13,
+                              fontWeight: "bold",
+                              color: uiThemeColor,
+                              marginBottom: 10,
+                            }}
+                          >
+                            通知する日時を設定:
+                          </Text>
+                          {customReminderTimes.map((time, idx) => (
+                            <View
+                              key={idx}
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                marginBottom: 10,
+                              }}
+                            >
+                              <View
+                                style={{
+                                  flexDirection: "row",
+                                  alignItems: "center",
+                                  gap: 8,
+                                }}
+                              >
+                                <ModernDatePicker
+                                  value={time}
+                                  mode="date"
+                                  onChange={(d) => {
+                                    const n = [...customReminderTimes];
+                                    n[idx] = d;
+                                    setCustomReminderTimes(n);
+                                  }}
+                                  themeColor={uiThemeColor}
+                                  icon="calendar-outline"
+                                />
+                                <ModernDatePicker
+                                  value={time}
+                                  mode="time"
+                                  onChange={(d) => {
+                                    const n = [...customReminderTimes];
+                                    n[idx] = d;
+                                    setCustomReminderTimes(n);
+                                  }}
+                                  themeColor={uiThemeColor}
+                                  icon="time-outline"
+                                />
+                              </View>
+                              <TouchableOpacity
+                                onPress={() =>
+                                  setCustomReminderTimes(
+                                    customReminderTimes.filter(
+                                      (_, i) => i !== idx,
+                                    ),
+                                  )
+                                }
+                              >
+                                <Ionicons
+                                  name="remove-circle"
+                                  size={24}
+                                  color="#FF3B30"
+                                />
+                              </TouchableOpacity>
+                            </View>
+                          ))}
+                          <TouchableOpacity
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              marginTop: 5,
+                              alignSelf: "flex-start",
+                            }}
+                            onPress={() =>
+                              setCustomReminderTimes([
+                                ...customReminderTimes,
+                                new Date(),
+                              ])
+                            }
+                          >
+                            <Ionicons
+                              name="add-circle"
+                              size={20}
+                              color={uiThemeColor}
+                            />
+                            <Text
+                              style={{
+                                color: uiThemeColor,
+                                fontWeight: "bold",
+                                marginLeft: 5,
+                              }}
+                            >
+                              さらに時間を追加
                             </Text>
                           </TouchableOpacity>
-                        ))}
-                      </View>
+                        </View>
+                      )}
                     </View>
+
+                    <View style={styles.switchRow}>
+                      <Text style={styles.switchLabel}>予定として表示</Text>
+                      <Switch
+                        value={isEvent}
+                        onValueChange={setIsEvent}
+                        trackColor={{ false: "#C7C7CC", true: uiThemeColor }}
+                        ios_backgroundColor="#E5E5EA"
+                      />
+                    </View>
+                    <View style={styles.switchRow}>
+                      <Text style={styles.switchLabel}>ToDoリストに表示</Text>
+                      <Switch
+                        value={isTodo}
+                        onValueChange={setIsTodo}
+                        trackColor={{ false: "#C7C7CC", true: uiThemeColor }}
+                        ios_backgroundColor="#E5E5EA"
+                      />
+                    </View>
+                    <View style={styles.switchRow}>
+                      <Text style={styles.switchLabel}>支出を記録</Text>
+                      <Switch
+                        value={isExpense}
+                        onValueChange={setIsExpense}
+                        trackColor={{ false: "#C7C7CC", true: uiThemeColor }}
+                        ios_backgroundColor="#E5E5EA"
+                      />
+                    </View>
+
+                    {isExpense && (
+                      <View>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="金額 (¥)"
+                          placeholderTextColor="#AEAEB2"
+                          keyboardType="numeric"
+                          value={inputAmount}
+                          onChangeText={setInputAmount}
+                        />
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            flexWrap: "wrap",
+                            gap: 6,
+                            marginTop: 10,
+                          }}
+                        >
+                          {currentQuickTags.map((cat, idx) => (
+                            <TouchableOpacity
+                              key={cat}
+                              style={[
+                                styles.layerChip,
+                                selectedCategory === cat && {
+                                  backgroundColor: uiThemeColor,
+                                },
+                              ]}
+                              onPress={() => setSelectedCategory(cat)}
+                            >
+                              <Text
+                                style={[
+                                  styles.layerChipText,
+                                  selectedCategory === cat && { color: "#fff" },
+                                ]}
+                              >
+                                {cat}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+                    {subTaskSection}
+                  </View>
+
+                  <View style={styles.actionButtons}>
+                    <TouchableOpacity onPress={onClose} style={styles.cancelBtn}>
+                      <Text style={{ color: "#999" }}>キャンセル</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={handleSavePress}
+                      style={[styles.saveBtn, { backgroundColor: uiThemeColor }]}
+                    >
+                      <Text style={styles.saveBtnText}>保存して閉じる</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {selectedItem && (
+                    <TouchableOpacity
+                      onPress={handleDeletePress}
+                      style={styles.deleteBtn}
+                    >
+                      <Ionicons name="trash-outline" size={18} color="#FF3B30" />
+                      <Text style={styles.deleteBtnText}>この予定を削除する</Text>
+                    </TouchableOpacity>
                   )}
-                  {subTaskSection}
+                </ScrollView>
+              )}
+            </View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
+
+        {editSubTagModalVisible && (
+          <Modal visible={editSubTagModalVisible} transparent animationType="fade">
+            <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setEditSubTagModalVisible(false)}>
+              <View style={[styles.modalContent, { height: "auto", borderTopWidth: 8, borderTopColor: editingSubTagColor || uiThemeColor }]}>
+                <Text style={[styles.modalTitle, { marginBottom: 15 }]}>属性の編集</Text>
+
+                <Text style={styles.label}>属性名</Text>
+                <TextInput style={styles.input} value={editingSubTagName} onChangeText={setEditingSubTagName} autoFocus />
+
+                <Text style={[styles.label, { marginTop: 15 }]}>カラー</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20, paddingBottom: 5 }}>
+                  {PRESET_COLORS.map((color) => (
+                    <TouchableOpacity key={color} style={[{ width: 30, height: 30, borderRadius: 15, backgroundColor: color, marginRight: 10 }, editingSubTagColor === color && { borderWidth: 3, borderColor: "#1C1C1E" }]} onPress={() => setEditingSubTagColor(color)} />
+                  ))}
+                </ScrollView>
+
+                <View style={[styles.actionButtons, { justifyContent: "space-between", marginTop: 0 }]}>
+                  <TouchableOpacity onPress={deleteSubTag} style={styles.cancelBtn}><Text style={{ color: "#FF3B30", fontWeight: "bold" }}>削除</Text></TouchableOpacity>
+                  <TouchableOpacity style={[styles.saveBtn, { backgroundColor: editingSubTagColor || uiThemeColor }]} onPress={saveEditedSubTag}><Text style={styles.saveBtnText}>保存</Text></TouchableOpacity>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </Modal>
+        )}
+
+        {/* 🌟 追加：カテゴリ（プリセット）の名称編集モーダル */}
+        {editQuickTagModal && (
+          <Modal visible={editQuickTagModal} transparent animationType="fade">
+            <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setEditQuickTagModal(false)}>
+              <View style={[styles.modalContent, { height: "auto", borderTopWidth: 8, borderTopColor: uiThemeColor }]}>
+                <Text style={[styles.modalTitle, { marginBottom: 15 }]}>カテゴリ名の編集</Text>
+                <Text style={styles.label}>新しい名称を入力</Text>
+                <TextInput style={styles.input} value={tempQuickTagText} onChangeText={setTempQuickTagText} autoFocus />
+                <View style={[styles.actionButtons, { justifyContent: "center", marginTop: 20 }]}>
+                  <TouchableOpacity style={[styles.saveBtn, { backgroundColor: uiThemeColor, width: "100%", alignItems: "center" }]} onPress={saveQuickTag}>
+                    <Text style={styles.saveBtnText}>保存する</Text>
+                  </TouchableOpacity>
                 </View>
 
-                <View style={styles.actionButtons}>
-                  <TouchableOpacity onPress={onClose} style={styles.cancelBtn}>
-                    <Text style={{ color: "#999" }}>キャンセル</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={handleSavePress}
-                    style={[styles.saveBtn, { backgroundColor: uiThemeColor }]}
-                  >
-                    <Text style={styles.saveBtnText}>保存して閉じる</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {selectedItem && (
-                  <TouchableOpacity
-                    onPress={handleDeletePress}
-                    style={styles.deleteBtn}
-                  >
-                    <Ionicons name="trash-outline" size={18} color="#FF3B30" />
-                    <Text style={styles.deleteBtnText}>この予定を削除する</Text>
-                  </TouchableOpacity>
-                )}
-              </ScrollView>
-            )}
-          </View>
-        </TouchableWithoutFeedback>
-      </TouchableOpacity>
-
-      {editSubTagModalVisible && (
-        <Modal visible={editSubTagModalVisible} transparent animationType="fade">
-          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setEditSubTagModalVisible(false)}>
-            <View style={[styles.modalContent, { height: "auto", borderTopWidth: 8, borderTopColor: editingSubTagColor || uiThemeColor }]}>
-              <Text style={[styles.modalTitle, { marginBottom: 15 }]}>属性の編集</Text>
-
-              <Text style={styles.label}>属性名</Text>
-              <TextInput style={styles.input} value={editingSubTagName} onChangeText={setEditingSubTagName} autoFocus />
-
-              <Text style={[styles.label, { marginTop: 15 }]}>カラー</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20, paddingBottom: 5 }}>
-                {PRESET_COLORS.map((color) => (
-                  <TouchableOpacity key={color} style={[{ width: 30, height: 30, borderRadius: 15, backgroundColor: color, marginRight: 10 }, editingSubTagColor === color && { borderWidth: 3, borderColor: "#1C1C1E" }]} onPress={() => setEditingSubTagColor(color)} />
-                ))}
-              </ScrollView>
-
-              <View style={[styles.actionButtons, { justifyContent: "space-between", marginTop: 0 }]}>
-                <TouchableOpacity onPress={deleteSubTag} style={styles.cancelBtn}><Text style={{ color: "#FF3B30", fontWeight: "bold" }}>削除</Text></TouchableOpacity>
-                <TouchableOpacity style={[styles.saveBtn, { backgroundColor: editingSubTagColor || uiThemeColor }]} onPress={saveEditedSubTag}><Text style={styles.saveBtnText}>保存</Text></TouchableOpacity>
               </View>
-            </View>
-          </TouchableOpacity>
-        </Modal>
-      )}
-
-      {/* 🌟 追加：カテゴリ（プリセット）の名称編集モーダル */}
-      {editQuickTagModal && (
-        <Modal visible={editQuickTagModal} transparent animationType="fade">
-          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setEditQuickTagModal(false)}>
-            <View style={[styles.modalContent, { height: "auto", borderTopWidth: 8, borderTopColor: uiThemeColor }]}>
-              <Text style={[styles.modalTitle, { marginBottom: 15 }]}>カテゴリ名の編集</Text>
-              <Text style={styles.label}>新しい名称を入力</Text>
-              <TextInput style={styles.input} value={tempQuickTagText} onChangeText={setTempQuickTagText} autoFocus />
-              <View style={[styles.actionButtons, { justifyContent: "center", marginTop: 20 }]}>
-                <TouchableOpacity style={[styles.saveBtn, { backgroundColor: uiThemeColor, width: "100%", alignItems: "center" }]} onPress={saveQuickTag}>
-                  <Text style={styles.saveBtnText}>保存する</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </TouchableOpacity>
-        </Modal>
-      )}
-
+            </TouchableOpacity>
+          </Modal>
+        )}
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
