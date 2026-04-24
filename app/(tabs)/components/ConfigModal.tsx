@@ -4,6 +4,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import * as Calendar from 'expo-calendar'; // 🌟 追加
 import * as LocalAuthentication from 'expo-local-authentication';
+import * as SecureStore from 'expo-secure-store';
 import { GoogleAuthProvider, linkWithCredential } from "firebase/auth";
 import React, { useEffect, useState } from "react";
 import {
@@ -16,6 +17,7 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   TouchableOpacity,
   TouchableWithoutFeedback,
   View
@@ -58,6 +60,11 @@ export default function ConfigModal({
 
   //生体認証のオンオフ
   const [isBiometricEnabled, setIsBiometricEnabled] = useState(false);
+  //パスワードのオンオフ
+  const [isPinEnabled, setIsPinEnabled] = useState(false);
+
+  const [isPinSetupVisible, setIsPinSetupVisible] = useState(false);
+  const [pinInput, setPinInput] = useState("");
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
@@ -71,6 +78,9 @@ export default function ConfigModal({
 
     AsyncStorage.getItem("useBiometricLock").then(val => {
       setIsBiometricEnabled(val === "true");
+    });
+    AsyncStorage.getItem("usePinLock").then(val => {
+      setIsPinEnabled(val === "true");
     });
 
     return unsubscribe;
@@ -168,6 +178,30 @@ export default function ConfigModal({
     }
   };
 
+  const handlePinToggle = async (value: boolean) => {
+    if (value) {
+      setIsPinSetupVisible(true); // モーダルを開く
+    } else {
+      setIsPinEnabled(false);
+      await AsyncStorage.setItem("usePinLock", "false");
+      await SecureStore.deleteItemAsync("app_pin_code");
+    }
+  };
+
+  // 🌟 追加：モーダルから呼ばれる保存処理
+  const savePin = async () => {
+    if (pinInput.length === 4 && /^\d+$/.test(pinInput)) {
+      await SecureStore.setItemAsync("app_pin_code", pinInput);
+      await AsyncStorage.setItem("usePinLock", "true");
+      setIsPinEnabled(true);
+      setIsPinSetupVisible(false);
+      setPinInput("");
+      Alert.alert("設定完了", "暗証番号ロックを有効にしました。");
+    } else {
+      Alert.alert("エラー", "4桁の数字を入力してください。");
+    }
+  };
+
   return (
     <Modal visible={visible} transparent={true} animationType="fade">
       <TouchableOpacity
@@ -203,6 +237,7 @@ export default function ConfigModal({
                     trackColor={{ false: "#E5E5EA", true: "#34C759" }}
                   />
                 </View>
+
               </View>
 
               <Text style={[styles.sectionLabel, { marginTop: 20 }]}>ACCOUNT</Text>
@@ -236,7 +271,9 @@ export default function ConfigModal({
                 )}
               </View>
 
-              <Text style={styles.sectionLabel}>SECURITY</Text>
+
+
+              <Text style={[styles.sectionLabel, { marginTop: 20 }]}>SECURITY</Text>
               <View style={styles.card}>
                 <View style={styles.row}>
                   <View style={styles.rowLeft}>
@@ -249,7 +286,19 @@ export default function ConfigModal({
                     trackColor={{ false: "#E5E5EA", true: "#34C759" }}
                   />
                 </View>
+                <View style={[styles.row, styles.borderTop]}>
+                  <View style={styles.rowLeft}>
+                    <Ionicons name="keypad-outline" size={20} color="#1C1C1E" />
+                    <Text style={styles.rowText}>暗証番号ロック</Text>
+                  </View>
+                  <Switch
+                    value={isPinEnabled}
+                    onValueChange={handlePinToggle}
+                    trackColor={{ false: "#E5E5EA", true: "#34C759" }}
+                  />
+                </View>
               </View>
+
 
               <Text style={[styles.sectionLabel, { marginTop: 20 }]}>NOTIFICATIONS</Text>
               <View style={styles.card}>
@@ -360,6 +409,35 @@ export default function ConfigModal({
           </View>
         </TouchableWithoutFeedback>
       </TouchableOpacity>
+
+      <Modal visible={isPinSetupVisible} transparent={true} animationType="fade">
+        <View style={styles.overlay}>
+          <View style={[styles.content, { maxHeight: 300 }]}>
+            <Text style={styles.title}>PIN SETTING</Text>
+            <Text style={styles.subTitle}>4桁の暗証番号を入力してください</Text>
+
+            <TextInput
+              style={{ backgroundColor: "#E5E5EA", padding: 16, borderRadius: 12, fontSize: 24, letterSpacing: 15, textAlign: 'center', marginTop: 20, marginBottom: 20, fontWeight: "bold" }}
+              keyboardType="number-pad"
+              maxLength={4}
+              secureTextEntry
+              autoFocus
+              value={pinInput}
+              onChangeText={setPinInput}
+            />
+
+            <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 16, marginBottom: 20 }}>
+              <TouchableOpacity onPress={() => { setIsPinSetupVisible(false); setPinInput(""); setIsPinEnabled(false); }} style={{ padding: 10 }}>
+                <Text style={{ fontSize: 14, fontWeight: "700", color: "#8E8E93" }}>キャンセル</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={savePin} style={{ backgroundColor: "#1C1C1E", paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 }}>
+                <Text style={{ fontSize: 14, fontWeight: "700", color: "#FFF" }}>保存する</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </Modal>
   );
 }

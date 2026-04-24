@@ -116,26 +116,53 @@ export default function Index() {
   const [selectedItem, setSelectedItem] = useState<ScheduleItem | null>(null);
   // 🌟 追加：家計簿画面の「日別詳細 / 予算管理」のモードを親(index)で管理する
   const [isMoneySummaryMode, setIsMoneySummaryMode] = useState(false);
-  
+
   //セキュリティ強化関連
   const [isAppLocked, setIsAppLocked] = useState(false);
+  const [pinForUnlock, setPinForUnlock] = useState("");
 
   const handleAuthenticate = async () => {
-    const isSet = await AsyncStorage.getItem("useBiometricLock");
-    if (isSet !== "true") {
+    const useBio = await AsyncStorage.getItem("useBiometricLock");
+    const usePin = await AsyncStorage.getItem("usePinLock");
+
+    // どちらも設定されていなければパス
+    if (useBio !== "true" && usePin !== "true") {
       setIsAppLocked(false);
       return;
     }
 
-    const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: "認証してUniCalを開く",
-      fallbackLabel: "パスコードを入力",
-    });
+    // まず生体認証を試みる
+    if (useBio === "true") {
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: "認証してUniCalを開く",
+        fallbackLabel: "パスコードを入力",
+      });
+      if (result.success) {
+        setIsAppLocked(false);
+        setPinForUnlock("");
+        return;
+      }
+    }
 
-    if (result.success) {
-      setIsAppLocked(false);
+    // 生体認証が失敗した、または設定されていないがPINは設定されている場合
+    if (usePin === "true") {
+      setIsAppLocked(true); // 入力画面を表示し続ける
     } else {
-      setIsAppLocked(true);
+      setIsAppLocked(false);
+    }
+  };
+
+
+  const authenticatePin = async (pin: string) => {
+    const savedPin = await SecureStore.getItemAsync("app_pin_code");
+    if (pin === savedPin) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setIsAppLocked(false);
+      setPinForUnlock(""); // 🌟 解除成功時に入力をクリア
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("エラー", "暗証番号が違います");
+      setPinForUnlock(""); // 🌟 失敗時に入力をクリアしてUXを高める
     }
   };
 
@@ -151,6 +178,7 @@ export default function Index() {
         });
       }
     });
+
     return () => subscription.remove();
   }, []);
 
@@ -798,15 +826,55 @@ export default function Index() {
 
   if (isAppLocked) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: currentBgColor }]}>
-        <Ionicons name="lock-closed" size={80} color="#AEAEB2" />
-        <Text style={{ marginTop: 20, fontSize: 18, fontWeight: 'bold', color: '#1C1C1E' }}>UniCalはロックされています</Text>
-        <TouchableOpacity 
-          style={{ marginTop: 30, backgroundColor: currentSolidColor, paddingHorizontal: 30, paddingVertical: 12, borderRadius: 12 }}
-          onPress={handleAuthenticate}
-        >
-          <Text style={{ color: '#FFF', fontWeight: 'bold' }}>ロックを解除</Text>
-        </TouchableOpacity>
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#F2F2F7' }]}>
+        <View style={{ backgroundColor: '#FFF', padding: 30, borderRadius: 30, alignItems: 'center', width: '80%', shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 10 }}>
+          <Ionicons name="lock-closed" size={50} color={currentSolidColor} />
+          <Text style={{ marginTop: 15, fontSize: 18, fontWeight: '800', color: '#1C1C1E' }}>UniCal Locked</Text>
+          <Text style={{ fontSize: 12, color: '#8E8E93', marginBottom: 25, marginTop: 5 }}>パスコードを入力してください</Text>
+
+          <View style={styles.pinInputWrapper}>
+            {/* 実際の入力用（透明にして重ねる） */}
+            <TextInput
+              style={styles.hiddenTextInput}
+              keyboardType="number-pad"
+              maxLength={4}
+              secureTextEntry
+              autoFocus
+              value={pinForUnlock} // 🌟 Stateで値を管理
+              onChangeText={(text) => {
+                setPinForUnlock(text); // 🌟 入力値をStateに保存
+                if (text.length === 4) {
+                  authenticatePin(text); // 🌟 4桁になったら認証関数を呼ぶ
+                }
+              }}
+            />
+
+            {/* 見た目用（4つの丸枠を並べる） */}
+            <View style={styles.pinDisplayContainer}>
+              {[...Array(4)].map((_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.pinBox,
+                    // 現在入力中の枠を強調
+                    pinForUnlock.length === i && styles.pinBoxFocused
+                  ]}
+                >
+                  {pinForUnlock.length > i && (
+                    <Text style={styles.pinDot}>●</Text> // 入力されたら●を表示
+                  )}
+                </View>
+              ))}
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={{ marginTop: 25, padding: 10 }}
+            onPress={handleAuthenticate}
+          >
+            <Text style={{ color: currentSolidColor, fontWeight: '700', fontSize: 14 }}>生体認証を使用する</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -1845,4 +1913,11 @@ const styles = StyleSheet.create({
     color: "#333",
     flex: 1,
   },
+
+  pinInputWrapper: { marginTop: 10, marginBottom: 10, justifyContent: 'center', alignItems: 'center', width: '100%' },
+  hiddenTextInput: { position: 'absolute', width: '100%', height: '100%', opacity: 0, zIndex: 1 },
+  pinDisplayContainer: { flexDirection: 'row', gap: 15 },
+  pinBox: { width: 55, height: 65, borderWidth: 1, borderRadius: 16, borderColor: '#C7C7CC', justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF' },
+  pinBoxFocused: { borderColor: '#1C1C1E', borderWidth: 2, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 5 },
+  pinDot: { fontSize: 36, color: '#1C1C1E' },
 });
