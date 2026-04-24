@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
-import * as Calendar from 'expo-calendar';
+import * as Calendar from 'expo-calendar'; // 🌟 追加
 import { GoogleAuthProvider, linkWithCredential } from "firebase/auth";
 import React, { useEffect, useState } from "react";
 import {
@@ -60,7 +60,7 @@ export default function ConfigModal({
       setIsAnonymous(user?.isAnonymous ?? true);
     });
 
-    // 🌟 追加：現在のカレンダー同期設定を読み込む
+    // 🌟 追加：保存されているカレンダー同期設定を読み込む
     AsyncStorage.getItem("externalCalendarSync").then(val => {
       setIsCalendarSyncEnabled(val === "true");
     });
@@ -113,19 +113,18 @@ export default function ConfigModal({
     }
   };
 
-  // 🌟 追加：カレンダー同期スイッチの処理
+  // 🌟 追加：カレンダー同期スイッチが押された時の処理
   const handleCalendarSyncToggle = async (value: boolean) => {
     if (value) {
-      // ONにした瞬間、OSの権限ポップアップを呼び出す
+      // スイッチをONにした瞬間、OSの権限要求ポップアップを出す
       const { status } = await Calendar.requestCalendarPermissionsAsync();
       if (status === 'granted') {
         setIsCalendarSyncEnabled(true);
         await AsyncStorage.setItem("externalCalendarSync", "true");
-        Alert.alert("同期オン", "標準カレンダーとの連携を有効にしました。\n※反映にはアプリの再起動が必要な場合があります。");
+        Alert.alert("同期ON", "標準カレンダーとの連携を有効にしました。");
       } else {
-        Alert.alert("権限エラー", "カレンダーへのアクセスが許可されませんでした。");
+        Alert.alert("権限エラー", "カレンダーへのアクセスが許可されませんでした。Androidの設定から許可してください。");
         setIsCalendarSyncEnabled(false);
-        await AsyncStorage.setItem("externalCalendarSync", "false");
       }
     } else {
       setIsCalendarSyncEnabled(false);
@@ -145,7 +144,7 @@ export default function ConfigModal({
             <View style={styles.header}>
               <View>
                 <Text style={styles.title}>CONFIG</Text>
-                <Text style={styles.subTitle}>設定と連携</Text>
+                <Text style={styles.subTitle}>設定とバックアップ</Text>
               </View>
               <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
                 <Ionicons name="close" size={24} color="#1C1C1E" />
@@ -154,7 +153,7 @@ export default function ConfigModal({
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
 
-              {/* 🌟 追加：カレンダー連携セクション */}
+              {/* 🌟 修正：追加された「カレンダー連携」セクション */}
               <Text style={styles.sectionLabel}>INTEGRATION</Text>
               <View style={styles.card}>
                 <View style={styles.row}>
@@ -219,7 +218,9 @@ export default function ConfigModal({
                   <View style={[styles.row, styles.borderTop]}>
                     <View style={styles.rowLeft}>
                       <Ionicons name="time-outline" size={20} color="#8E8E93" />
-                      <Text style={[styles.rowText, { color: "#8E8E93" }]}>通知時間</Text>
+                      <Text style={[styles.rowText, { color: "#8E8E93" }]}>
+                        通知時間
+                      </Text>
                     </View>
 
                     {Platform.OS === "ios" ? (
@@ -232,13 +233,22 @@ export default function ConfigModal({
                       />
                     ) : (
                       <>
-                        <TouchableOpacity style={styles.timeBtnAndroid} onPress={() => setShowTimePickerAndroid(true)}>
+                        <TouchableOpacity
+                          style={styles.timeBtnAndroid}
+                          onPress={() => setShowTimePickerAndroid(true)}
+                        >
                           <Text style={styles.timeBtnTextAndroid}>
-                            {("0" + notificationTime.getHours()).slice(-2)}:{("0" + notificationTime.getMinutes()).slice(-2)}
+                            {("0" + notificationTime.getHours()).slice(-2)}:
+                            {("0" + notificationTime.getMinutes()).slice(-2)}
                           </Text>
                         </TouchableOpacity>
                         {showTimePickerAndroid && (
-                          <DateTimePicker value={notificationTime} mode="time" display="default" onChange={handleTimeChange} />
+                          <DateTimePicker
+                            value={notificationTime}
+                            mode="time"
+                            display="default"
+                            onChange={handleTimeChange}
+                          />
                         )}
                       </>
                     )}
@@ -253,24 +263,43 @@ export default function ConfigModal({
                     <Ionicons name="cloud-done-outline" size={20} color="#1C1C1E" />
                     <Text style={styles.rowText}>最終同期</Text>
                   </View>
-                  <Text style={styles.timeText}>{lastSyncedAt ? lastSyncedAt : "未同期"}</Text>
+                  <Text style={styles.timeText}>
+                    {lastSyncedAt ? lastSyncedAt : "未同期"}
+                  </Text>
                 </View>
-                <TouchableOpacity style={[styles.row, styles.borderTop]} onPress={onRestore}>
+                <TouchableOpacity
+                  style={[styles.row, styles.borderTop]}
+                  onPress={onRestore}
+                >
                   <View style={styles.rowLeft}>
                     <Ionicons name="cloud-download-outline" size={20} color="#007AFF" />
-                    <Text style={[styles.rowText, { color: "#007AFF", fontWeight: "bold" }]}>クラウドからデータを復元</Text>
+                    <Text style={[styles.rowText, { color: "#007AFF", fontWeight: "bold" }]}>
+                      クラウドからデータを復元
+                    </Text>
                   </View>
                 </TouchableOpacity>
               </View>
 
               <Text style={[styles.sectionLabel, { marginTop: 20 }]}>LEGAL</Text>
               <View style={styles.card}>
-                <TouchableOpacity style={styles.row} onPress={() => Linking.openURL('https://www.notion.so/3466f7789c6e806f8880ed9241a38b99?source=copy_link')}>
-                  <View style={styles.rowLeft}><Ionicons name="document-text-outline" size={20} color="#1C1C1E" /><Text style={styles.rowText}>利用規約</Text></View>
+                <TouchableOpacity
+                  style={styles.row}
+                  onPress={() => Linking.openURL('https://www.notion.so/3466f7789c6e806f8880ed9241a38b99?source=copy_link')}
+                >
+                  <View style={styles.rowLeft}>
+                    <Ionicons name="document-text-outline" size={20} color="#1C1C1E" />
+                    <Text style={styles.rowText}>利用規約</Text>
+                  </View>
                   <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.row, styles.borderTop]} onPress={() => Linking.openURL('https://www.notion.so/3466f7789c6e80958ff2e31ae7f89e16?source=copy_link')}>
-                  <View style={styles.rowLeft}><Ionicons name="shield-checkmark-outline" size={20} color="#1C1C1E" /><Text style={styles.rowText}>プライバシーポリシー</Text></View>
+                <TouchableOpacity
+                  style={[styles.row, styles.borderTop]}
+                  onPress={() => Linking.openURL('https://www.notion.so/3466f7789c6e80958ff2e31ae7f89e16?source=copy_link')}
+                >
+                  <View style={styles.rowLeft}>
+                    <Ionicons name="shield-checkmark-outline" size={20} color="#1C1C1E" />
+                    <Text style={styles.rowText}>プライバシーポリシー</Text>
+                  </View>
                   <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
                 </TouchableOpacity>
               </View>
@@ -300,5 +329,5 @@ const styles = StyleSheet.create({
   timeText: { fontSize: 14, color: "#8E8E93", fontWeight: "500" },
   timeBtnAndroid: { backgroundColor: "#F2F2F7", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   timeBtnTextAndroid: { fontSize: 16, fontWeight: "600", color: "#1C1C1E" },
-  copyright: { textAlign: "center", fontSize: 12, color: "#C7C7CC", marginTop: 32, fontWeight: "600", marginBottom: 20 },
+  copyright: { textAlign: "center", fontSize: 12, color: "#C7C7CC", marginTop: 32, fontWeight: "600" },
 });
