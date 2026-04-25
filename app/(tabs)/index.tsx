@@ -504,31 +504,44 @@ export default function Index() {
     return () => unsubscribes.forEach((unsub) => unsub());
   }, [sharedRooms]);
 
-  // 🌟 変更：複数ルームを統合するディスプレイデータの生成
+  // 🌟 変更：アルゴリズムを最適化して描画カクつきを防止！
   const displayData = useMemo(() => {
-    const combined: { [key: string]: ScheduleItem[] } = {};
-    const allDates = new Set([...Object.keys(scheduleData), ...Object.keys(externalEvents)]);
+    // 日付をキーに、IDをキーとしたScheduleItemのMapを持つ
+    const combinedMap: { [date: string]: Map<string, ScheduleItem> } = {};
 
-    // 全ての共有ルームから日付をかき集める
+    // Mapを初期化・取得するヘルパー
+    const getMapForDate = (date: string) => {
+      if (!combinedMap[date]) combinedMap[date] = new Map();
+      return combinedMap[date];
+    };
+
+    // 1. ローカルデータをベースにする
+    Object.keys(scheduleData).forEach(date => {
+      const map = getMapForDate(date);
+      scheduleData[date].forEach(item => map.set(item.id, item));
+    });
+    
+    // 2. 共有データを上書きマージ（同IDなら上書きされて重複が消える）
     Object.values(roomSchedules).forEach(roomData => {
-      Object.keys(roomData).forEach(d => allDates.add(d));
-    });
-
-    allDates.forEach(date => {
-      const itemMap = new Map<string, ScheduleItem>();
-
-      (scheduleData[date] || []).forEach(item => itemMap.set(item.id, item));
-
-      // すべての共有ルームの予定を合流（同じIDなら上書きして重複を防ぐ）
-      Object.values(roomSchedules).forEach(roomData => {
-        (roomData[date] || []).forEach(item => itemMap.set(item.id, item));
+      Object.keys(roomData).forEach(date => {
+        const map = getMapForDate(date);
+        roomData[date].forEach(item => map.set(item.id, item));
       });
-
-      (externalEvents[date] || []).forEach(item => itemMap.set(item.id, item));
-
-      combined[date] = Array.from(itemMap.values());
     });
-    return combined;
+    
+    // 3. 外部カレンダーをマージ
+    Object.keys(externalEvents).forEach(date => {
+      const map = getMapForDate(date);
+      externalEvents[date].forEach(item => map.set(item.id, item));
+    });
+
+    // 最後に Map から Array に変換して返す
+    const result: { [date: string]: ScheduleItem[] } = {};
+    Object.keys(combinedMap).forEach(date => {
+      result[date] = Array.from(combinedMap[date].values());
+    });
+
+    return result;
   }, [scheduleData, roomSchedules, externalEvents]);
 
   const { expandedScheduleData, currentMarkedDates } = useCalendarData(
