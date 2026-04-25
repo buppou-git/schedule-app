@@ -30,6 +30,7 @@ interface TodoItemProps {
 
   setSubTaskModalVisible: (visible: boolean) => void;
   onLongPress: (item: ScheduleItem) => void; // 🌟
+  streakCount?: number;
 }
 
 export default function TodoItem({
@@ -45,6 +46,7 @@ export default function TodoItem({
   setEditingSubTaskInfo,
   setSubTaskModalVisible,
   onLongPress,
+  streakCount = 0,
 }: TodoItemProps) {
   const itemTags =
     item.tags && item.tags.length > 0 ? item.tags : item.tag ? [item.tag] : [];
@@ -119,6 +121,13 @@ export default function TodoItem({
             </ScrollView>
           </View>
           <View style={styles.todoSubRow}>
+          {streakCount > 0 && (
+              <View style={styles.streakBadge}>
+                <Ionicons name="flame" size={10} color="#FF9500" style={{ marginRight: 2 }} />
+                <Text style={styles.streakText}>{streakCount} Days</Text>
+              </View>
+            )}
+
             {isFinalDay && !item.isDone ? (
               <View style={styles.deadlineBadgeUrgent}>
                 <Ionicons
@@ -324,4 +333,21 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   subTaskMiniTitle: { fontSize: 13, fontWeight: "600", color: "#333", flex: 1 },
+
+  streakBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFF4E5",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#FF9500",
+  },
+  streakText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#FF9500",
+    letterSpacing: 0.5,
+  },
 });

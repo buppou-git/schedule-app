@@ -11,6 +11,9 @@ import { PRESET_COLORS } from "../utils/helpers";
 
 import { exportToStandardCalendar } from "../../../hooks/useCalendarExport";
 
+import { deleteDoc, doc, setDoc } from "firebase/firestore";
+import { db } from "../firebaseConfig";
+
 import {
   ActivityIndicator,
   Alert,
@@ -640,6 +643,74 @@ export default function ScheduleModal({
       subTasks: updatedSubTasks,
     };
 
+
+    // 🌟 1. 共有レイヤーかどうかの判定
+    const isShared = selectedLayer === "共有" || finalTag === "共有";
+
+    if (isShared) {
+      // 🌍 2. 共有レイヤーの場合：Firestoreに直接保存！
+      try {
+        const docId = selectedItem ? selectedItem.id : Date.now().toString();
+        const docRef = doc(db, "shared_schedules", docId);
+        await setDoc(docRef, {
+          ...itemData,
+          id: docId,
+          date: sStr, // Firestoreで検索しやすいように日付を持たせる
+          updatedAt: new Date().toISOString(),
+        });
+        console.log("🌍 共有データとしてFirestoreに保存しました！");
+      } catch (e) {
+        console.error("共有保存エラー:", e);
+        Alert.alert("エラー", "共有データの保存に失敗しました。");
+      }
+
+      // 💡 おもてなし：元々プライベートだった予定を「共有」に変更したなら、ローカルからは消す
+      if (selectedItem && !(selectedItem.tags?.includes("共有") || selectedItem.tag === "共有")) {
+        Object.keys(newData).forEach((d) => {
+          newData[d] = newData[d].filter((i: any) => i.id !== selectedItem.id);
+        });
+      }
+    } else {
+      // 🔐 3. プライベートデータの場合：今まで通りローカル(newData)に保存
+      if (selectedItem) {
+        if (mode === "single") {
+          Object.keys(newData).forEach((d) => {
+            newData[d] = newData[d].map((i: any) => {
+              if (i.id === selectedItem.id) {
+                return {
+                  ...i,
+                  exceptionDates: [...(i.exceptionDates || []), selectedDate],
+                };
+              }
+              return i;
+            });
+          });
+          const newItem = {
+            ...selectedItem,
+            ...itemData,
+            id: Date.now().toString(),
+            repeatType: undefined,
+            linkedMasterId: selectedItem.id,
+          };
+          if (!newData[sStr]) newData[sStr] = [];
+          newData[sStr].push(newItem);
+        } else {
+          Object.keys(newData).forEach((d) => {
+            newData[d] = newData[d].filter((i: any) => i.id !== selectedItem.id);
+          });
+          if (!newData[sStr]) newData[sStr] = [];
+          newData[sStr].push({ ...selectedItem, ...itemData });
+        }
+      } else {
+        if (!newData[sStr]) newData[sStr] = [];
+        newData[sStr].push({
+          id: Date.now().toString(),
+          isDone: false,
+          ...itemData,
+        });
+      }
+    }
+
     if (selectedItem) {
       if (mode === "single") {
         Object.keys(newData).forEach((d) => {
@@ -734,9 +805,22 @@ export default function ScheduleModal({
             await cancelItemNotification(task.notificationId);
         }
       }
-      Object.keys(newData).forEach((d) => {
-        newData[d] = newData[d].filter((i: any) => i.id !== selectedItem.id);
-      });
+
+      // 🌟 ここから分岐：共有データならFirestoreから削除
+      const isShared = selectedItem.tags?.includes("共有") || selectedItem.tag === "共有";
+      if (isShared) {
+        try {
+          await deleteDoc(doc(db, "shared_schedules", selectedItem.id));
+          console.log("🌍 共有データをFirestoreから削除しました！");
+        } catch (e) {
+          console.error("共有データ削除エラー:", e);
+        }
+      } else {
+        // 🔐 プライベートデータならローカルから削除
+        Object.keys(newData).forEach((d) => {
+          newData[d] = newData[d].filter((i: any) => i.id !== selectedItem.id);
+        });
+      }
     }
     onClose();
     setTimeout(() => {

@@ -12,9 +12,10 @@ import { ScheduleItem } from "../(tabs)/types";
 import { useCalendarData } from "../../hooks/useCalendarData";
 import { useNotificationManager } from "../../hooks/useNotificationManager";
 
+
 //データベース関係
 import { signInAnonymously } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
+import { collection, doc, onSnapshot, setDoc } from "firebase/firestore"; // 🌟 追加
 import { AppState } from "react-native";
 import { auth, db } from "./firebaseConfig";
 
@@ -85,7 +86,47 @@ const getOrGenerateMasterKey = async () => {
   return key;
 };
 
+// 🌟 ここから追加：ハビットの連続達成日数（ストリーク）を計算する関数
+const calculateStreak = (completedDates: string[] | undefined) => {
+  if (!completedDates || completedDates.length === 0) return 0;
+
+  const sortedDates = [...completedDates].sort((a, b) => (a > b ? -1 : 1));
+  let streak = 0;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let checkDate = new Date(today);
+  const firstDateInArray = new Date(sortedDates[0]);
+  firstDateInArray.setHours(0, 0, 0, 0);
+
+  const diffTime = today.getTime() - firstDateInArray.getTime();
+  const diffDays = diffTime / (1000 * 3600 * 24);
+
+  if (diffDays > 1) {
+    return 0; // 一昨日以前なら途切れている
+  } else if (diffDays === 1) {
+    checkDate.setDate(checkDate.getDate() - 1); // 昨日からカウント開始
+  }
+
+  for (const dateStr of sortedDates) {
+    const d = new Date(dateStr);
+    d.setHours(0, 0, 0, 0);
+
+    if (d.getTime() === checkDate.getTime()) {
+      streak++;
+      checkDate.setDate(checkDate.getDate() - 1);
+    } else if (d.getTime() > checkDate.getTime()) {
+      continue;
+    } else {
+      break;
+    }
+  }
+  return streak;
+};
+
 export default function Index() {
+  const [sharedScheduleData, setSharedScheduleData] = useState<{ [key: string]: ScheduleItem[] }>({});
+  
   const [selectedDate, setSelectedDate] = useState(getTodayString());
 
   const { scheduleData, setScheduleData, lastSyncedAt } = useScheduleManager();
@@ -283,6 +324,38 @@ export default function Index() {
     setEditPresetModalVisible(false);
   };
 
+  //共有レイヤー
+  // 🌟 共有レイヤーかどうかを判定するヘルパー
+const isSharedItem = (item: ScheduleItem) => {
+  const itemTags = item.tags || (item.tag ? [item.tag] : []);
+  // ここではシンプルに「共有」という名前のレイヤー/タグが含まれているか判定
+  return itemTags.includes("共有");
+};
+
+// 🌟 保存・更新時の交通整理（ScheduleModalなどで保存ボタンを押した時の処理に組み込む）
+const handleSaveItem = async (newItem: ScheduleItem) => {
+  if (isSharedItem(newItem)) {
+    // 🌍 共有データの場合：Firestoreの shared_schedules に直接保存
+    try {
+      // 既存のIDがあれば更新、なければ新規作成
+      const docRef = newItem.id ? doc(db, "shared_schedules", newItem.id) : doc(collection(db, "shared_schedules"));
+      await setDoc(docRef, {
+        ...newItem,
+        id: docRef.id,
+        date: selectedDate, // 検索しやすいように日付を持たせる
+        updatedAt: new Date().toISOString(),
+      });
+      Alert.alert("共有完了", "共有レイヤーに保存されました！");
+    } catch (e) {
+      console.error("共有保存エラー:", e);
+    }
+  } else {
+    // 🔐 プライベートデータの場合：従来の scheduleData（ローカル）に保存
+    // → これまで通りの setScheduleData を実行
+    // （バックグラウンド時に自動で暗号化バックアップされます）
+  }
+};
+
   useEffect(() => {
     signInAnonymously(auth).catch((err: any) =>
       console.error("Auth Error:", err),
@@ -370,13 +443,57 @@ export default function Index() {
     // 🌟 ポイント：依存配列から scheduleData を外してスッキリさせています
   }, [layerMaster, tagMaster, presets, activeTags]);
 
+
+  useEffect(() => {
+    // Firestoreの "shared_schedules" コレクションを常に監視する
+    const unsubscribe = onSnapshot(
+      collection(db, "shared_schedules"),
+      (snapshot) => {
+        console.log("🔄 共有データが更新されました！");
+        const newSharedData: { [key: string]: ScheduleItem[] } = {};
+        
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          const date = data.date; // Firestore側で日付(date)を持たせる設計
+          
+          if (date) {
+            if (!newSharedData[date]) newSharedData[date] = [];
+            // Firestoreのドキュメントをアプリ内のScheduleItem型に変換
+            newSharedData[date].push({ 
+              id: doc.id, 
+              ...data 
+            } as ScheduleItem);
+          }
+        });
+        
+        // 取得したデータをStateに流し込む（ここで画面が自動更新される）
+        setSharedScheduleData(newSharedData);
+      },
+      (error) => {
+        console.error("リアルタイム同期エラー:", error);
+      }
+    );
+
+    // アプリを閉じた時や画面が切り替わった時に監視を解除する（メモリリーク防止）
+    return () => unsubscribe();
+  }, []);
+
+
   const displayData = useMemo(() => {
     const combined = { ...scheduleData };
+    
+    // 1. 外部カレンダーを合流
     Object.keys(externalEvents).forEach(date => {
       combined[date] = [...(combined[date] || []), ...externalEvents[date]];
     });
+    
+    // 🌟 2. 追加：クラウドの「共有データ」も合流させる！
+    Object.keys(sharedScheduleData).forEach(date => {
+      combined[date] = [...(combined[date] || []), ...sharedScheduleData[date]];
+    });
+    
     return combined;
-  }, [scheduleData, externalEvents]);
+  }, [scheduleData, externalEvents, sharedScheduleData]); // 🌟 依存配列にも忘れずに追加
 
   // 🌟 ここを修正！（引数を scheduleData から displayData に変更）
   const { expandedScheduleData, currentMarkedDates } = useCalendarData(
@@ -399,6 +516,8 @@ export default function Index() {
         : "#F8F9FA",
     [activeTags, layerMaster],
   );
+
+
 
   const currentHeaderTitle = useMemo(() => {
     if (activeTags.length === 0) return "ALL_LAYERS";
@@ -657,13 +776,26 @@ export default function Index() {
               await cancelItemNotification(id);
             }
           }
-          // データから削除
-          const newData = { ...scheduleData };
-          for (const d of Object.keys(newData)) {
-            newData[d] = newData[d].filter((i: any) => i.id !== item.id);
+
+          // 🌟 ここから分岐！
+          if (isSharedItem(item)) {
+            // 🌍 共有データの場合：Firestoreから直接削除
+            try {
+              const { deleteDoc } = await import("firebase/firestore"); // 動的インポート
+              await deleteDoc(doc(db, "shared_schedules", item.id));
+              console.log("共有データを削除しました");
+            } catch (error) {
+              console.error("共有データの削除に失敗:", error);
+            }
+          } else {
+            // 🔐 プライベートデータの場合：ローカルデータから削除
+            const newData = { ...scheduleData };
+            for (const d of Object.keys(newData)) {
+              newData[d] = newData[d].filter((i: any) => i.id !== item.id);
+            }
+            setScheduleData(newData);
+            setHasUnsavedChanges(true);
           }
-          setScheduleData(newData);
-          setHasUnsavedChanges(true);
         },
       },
     ]);
@@ -792,10 +924,11 @@ export default function Index() {
       const sortedDates = Object.keys(expandedScheduleData).sort();
       sortedDates.forEach((date) => {
         if (date > selectedDate) {
-          scheduleData[date].forEach((task) => {
+          (scheduleData[date] || []).forEach((task) => {
             if (
               task.isTodo &&
               !task.isDone &&
+              !task.repeatType && // 🌟 追加：ルーティン（繰り返し）はUpcomingに表示しない
               !dayTaskIds.has(task.id) &&
               !addedUpcomingIds.has(task.id)
             ) {
@@ -1121,52 +1254,108 @@ export default function Index() {
                       )}
                     </View>
 
-                    {dayTasks.map((t) => (
-                      <TodoItem
-                        key={t.id}
-                        item={t}
-                        itemDate={selectedDate}
-                        selectedDate={selectedDate}
-                        tagMaster={tagMaster}
-                        layerMaster={layerMaster}
-                        formatEventTime={formatEventTime}
-                        openEditModal={openEditModal}
-                        toggleTodo={toggleTodo}
-                        toggleSubTodo={toggleSubTodo}
-                        setEditingSubTaskInfo={setEditingSubTaskInfo}
-                        setSubTaskModalVisible={setSubTaskModalVisible}
-                        onLongPress={(item) => {
-                          setQuickActionItem(item);
-                          setQuickActionVisible(true);
-                        }}
-                      />
-                    ))}
+                    {(() => {
+                      const routineTasks = dayTasks.filter(t => t.repeatType);
+                      const oneOffTasks = dayTasks.filter(t => !t.repeatType);
+
+                      return (
+                        <>
+                          {/* 🌟 2. ルーティン（習慣）セクション */}
+                          {routineTasks.length > 0 && (
+                            <View style={{ marginBottom: 16 }}>
+                              <Text style={styles.upcomingMiniTitle}>
+                                ROUTINE / 習慣
+                              </Text>
+                              {routineTasks.map((t) => {
+                                const streakCount = calculateStreak(t.completedDates);
+                                return (
+                                  <TodoItem
+                                    key={t.id}
+                                    item={t}
+                                    itemDate={selectedDate}
+                                    selectedDate={selectedDate}
+                                    tagMaster={tagMaster}
+                                    layerMaster={layerMaster}
+                                    formatEventTime={formatEventTime}
+                                    openEditModal={openEditModal}
+                                    toggleTodo={toggleTodo}
+                                    toggleSubTodo={toggleSubTodo}
+                                    setEditingSubTaskInfo={setEditingSubTaskInfo}
+                                    setSubTaskModalVisible={setSubTaskModalVisible}
+                                    streakCount={streakCount}
+                                    onLongPress={(item) => {
+                                      setQuickActionItem(item);
+                                      setQuickActionVisible(true);
+                                    }}
+                                  />
+                                )
+                              })}
+                            </View>
+                          )}
+
+                          {/* 🌟 3. 単発のToDoセクション */}
+                          {oneOffTasks.length > 0 && (
+                            <View style={{ marginBottom: 16 }}>
+                              <Text style={styles.upcomingMiniTitle}>
+                                TODO / 単発タスク
+                              </Text>
+                              {oneOffTasks.map((t) => (
+                                <TodoItem
+                                  key={t.id}
+                                  item={t}
+                                  itemDate={selectedDate}
+                                  selectedDate={selectedDate}
+                                  tagMaster={tagMaster}
+                                  layerMaster={layerMaster}
+                                  formatEventTime={formatEventTime}
+                                  openEditModal={openEditModal}
+                                  toggleTodo={toggleTodo}
+                                  toggleSubTodo={toggleSubTodo}
+                                  setEditingSubTaskInfo={setEditingSubTaskInfo}
+                                  setSubTaskModalVisible={setSubTaskModalVisible}
+                                  streakCount={0}
+                                  onLongPress={(item) => {
+                                    setQuickActionItem(item);
+                                    setQuickActionVisible(true);
+                                  }}
+                                />
+                              ))}
+                            </View>
+                          )}
+                        </>
+                      );
+                    })()}
 
                     {upcomingTasks.length > 0 && (
                       <View style={styles.upcomingSection}>
                         <Text style={styles.upcomingMiniTitle}>
                           今後の予定（未完了）
                         </Text>
-                        {upcomingTasks.map((t) => (
-                          <TodoItem
-                            key={t.id}
-                            item={t}
-                            itemDate={selectedDate}
-                            selectedDate={selectedDate}
-                            tagMaster={tagMaster}
-                            layerMaster={layerMaster}
-                            formatEventTime={formatEventTime}
-                            openEditModal={openEditModal}
-                            toggleTodo={toggleTodo}
-                            toggleSubTodo={toggleSubTodo}
-                            setEditingSubTaskInfo={setEditingSubTaskInfo}
-                            setSubTaskModalVisible={setSubTaskModalVisible}
-                            onLongPress={(item) => {
-                              setQuickActionItem(item);
-                              setQuickActionVisible(true);
-                            }}
-                          />
-                        ))}
+                        {/* 🌟 2. upcomingTasks の修正 */}
+                        {upcomingTasks.map((t) => {
+                          const streakCount = t.repeatType ? calculateStreak(t.completedDates) : 0;
+                          return (
+                            <TodoItem
+                              key={t.id}
+                              item={t}
+                              itemDate={selectedDate}
+                              selectedDate={selectedDate}
+                              tagMaster={tagMaster}
+                              layerMaster={layerMaster}
+                              formatEventTime={formatEventTime}
+                              openEditModal={openEditModal}
+                              toggleTodo={toggleTodo}
+                              toggleSubTodo={toggleSubTodo}
+                              setEditingSubTaskInfo={setEditingSubTaskInfo}
+                              setSubTaskModalVisible={setSubTaskModalVisible}
+                              streakCount={streakCount} // 🌟 これを追加！
+                              onLongPress={(item) => {
+                                setQuickActionItem(item);
+                                setQuickActionVisible(true);
+                              }}
+                            />
+                          )
+                        })}
                       </View>
                     )}
                   </View>

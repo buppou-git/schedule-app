@@ -3,8 +3,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import * as Calendar from 'expo-calendar'; // 🌟 追加
+import * as FileSystem from 'expo-file-system';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
+import * as Sharing from 'expo-sharing'; // 🌟 追加
 import { GoogleAuthProvider, linkWithCredential } from "firebase/auth";
 import React, { useEffect, useState } from "react";
 import {
@@ -24,6 +26,8 @@ import {
 } from "react-native";
 import { useNotificationManager } from "../../../hooks/useNotificationManager";
 import { auth } from "../firebaseConfig";
+
+
 
 interface ConfigModalProps {
   visible: boolean;
@@ -202,6 +206,66 @@ export default function ConfigModal({
     }
   };
 
+  const handleExportCSV = async () => {
+    try {
+      // 1. ローカルに保存されているスケジュールデータを取得
+      const dataStr = await AsyncStorage.getItem("myScheduleData");
+      if (!dataStr) {
+        Alert.alert("エラー", "出力するデータが見つかりません。");
+        return;
+      }
+      
+      const scheduleData = JSON.parse(dataStr);
+      
+      // 2. CSVのヘッダー（1行目）※先頭の \uFEFF はExcelでの文字化け防止用
+      let csvContent = "\uFEFF日付,タイトル,タイプ,金額(円),ステータス\n";
+
+      // 3. データをループしてCSV形式に変換
+      Object.keys(scheduleData).forEach(date => {
+        scheduleData[date].forEach((item: any) => {
+          // カンマが含まれているとCSVが壊れるので除去または置換
+          const title = item.title ? item.title.replace(/,/g, "，") : "名称未設定";
+          
+          let type = "その他";
+          if (item.isEvent) type = "予定";
+          if (item.isTodo) type = "ToDo";
+          if (item.amount) type = "家計簿"; // 家計簿データの場合
+
+          const amount = item.amount || 0;
+          const status = item.isDone ? "完了" : "未完了";
+
+          csvContent += `${date},${title},${type},${amount},${status}\n`;
+        });
+      });
+
+     // 4. 一時ファイルとしてスマホ内に保存
+      // 🌟 TSの型チェックを強制的に無視して実行させる
+      const FS: any = FileSystem; 
+      const fileUri = FS.documentDirectory + "UniCal_Data.csv";
+      
+      await FS.writeAsStringAsync(fileUri, csvContent, { 
+        encoding: FS.EncodingType.UTF8 
+      });
+
+      // 5. スマホのシェア画面（AirDrop, LINE, メール等）を呼び出す
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'text/csv',
+          dialogTitle: 'UniCalのデータをエクスポート',
+          UTI: 'public.comma-separated-values-text' // iOS用
+        });
+      } else {
+        Alert.alert("エラー", "この端末では共有機能がサポートされていません。");
+      }
+
+    } catch (error) {
+      console.error("CSV Export Error:", error);
+      Alert.alert("エラー", "CSVの作成に失敗しました。");
+    }
+  };
+  
+
   return (
     <Modal visible={visible} transparent={true} animationType="fade">
       <TouchableOpacity
@@ -378,6 +442,16 @@ export default function ConfigModal({
                     </Text>
                   </View>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.row, styles.borderTop]}
+                  onPress={handleExportCSV}
+                >
+                  <View style={styles.rowLeft}>
+                    <Ionicons name="document-text-outline" size={20} color="#1C1C1E" />
+                    <Text style={styles.rowText}>データをCSVで出力</Text>
+                  </View>
+                  <Ionicons name="share-outline" size={20} color="#C7C7CC" />
+                </TouchableOpacity>
               </View>
 
               <Text style={[styles.sectionLabel, { marginTop: 20 }]}>LEGAL</Text>
@@ -412,19 +486,41 @@ export default function ConfigModal({
 
       <Modal visible={isPinSetupVisible} transparent={true} animationType="fade">
         <View style={styles.overlay}>
-          <View style={[styles.content, { maxHeight: 300 }]}>
+        <View style={[styles.content, { maxHeight: 350 }]}> {/* 高さを少し調整 */}
             <Text style={styles.title}>PIN SETTING</Text>
-            <Text style={styles.subTitle}>4桁の暗証番号を入力してください</Text>
-
-            <TextInput
-              style={{ backgroundColor: "#E5E5EA", padding: 16, borderRadius: 12, fontSize: 24, letterSpacing: 15, textAlign: 'center', marginTop: 20, marginBottom: 20, fontWeight: "bold" }}
-              keyboardType="number-pad"
-              maxLength={4}
-              secureTextEntry
-              autoFocus
-              value={pinInput}
-              onChangeText={setPinInput}
-            />
+            <Text style={styles.subTitle}>新しい暗証番号を決めてください</Text>
+            
+            {/* 🌟 修正：スタイリッシュな丸枠デザインに変更 */}
+            <View style={styles.pinInputWrapper}>
+              {/* 実際の入力用（透明にして重ねる） */}
+              <TextInput
+                style={styles.hiddenTextInput}
+                keyboardType="number-pad"
+                maxLength={4}
+                secureTextEntry
+                autoFocus
+                value={pinInput}
+                onChangeText={setPinInput}
+              />
+              
+              {/* 見た目用（4つの丸枠を並べる） */}
+              <View style={styles.pinDisplayContainer}>
+                {[...Array(4)].map((_, i) => (
+                  <View 
+                    key={i} 
+                    style={[
+                      styles.pinBox, 
+                      // 現在入力中の枠を強調
+                      pinInput.length === i && styles.pinBoxFocused
+                    ]}
+                  >
+                    {pinInput.length > i && (
+                      <Text style={styles.pinDot}>●</Text> // 入力されたら●を表示
+                    )}
+                  </View>
+                ))}
+              </View>
+            </View>
 
             <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 16, marginBottom: 20 }}>
               <TouchableOpacity onPress={() => { setIsPinSetupVisible(false); setPinInput(""); setIsPinEnabled(false); }} style={{ padding: 10 }}>
@@ -459,4 +555,11 @@ const styles = StyleSheet.create({
   timeBtnAndroid: { backgroundColor: "#F2F2F7", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   timeBtnTextAndroid: { fontSize: 16, fontWeight: "600", color: "#1C1C1E" },
   copyright: { textAlign: "center", fontSize: 12, color: "#C7C7CC", marginTop: 32, fontWeight: "600" },
+
+  pinInputWrapper: { marginTop: 30, marginBottom: 30, justifyContent: 'center', alignItems: 'center' },
+  hiddenTextInput: { position: 'absolute', width: '100%', height: '100%', opacity: 0, zIndex: 1 },
+  pinDisplayContainer: { flexDirection: 'row', gap: 15 },
+  pinBox: { width: 55, height: 65, borderWidth: 1, borderRadius: 16, borderColor: '#C7C7CC', justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF' },
+  pinBoxFocused: { borderColor: '#1C1C1E', borderWidth: 2, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 5 },
+  pinDot: { fontSize: 36, color: '#1C1C1E' },
 });
