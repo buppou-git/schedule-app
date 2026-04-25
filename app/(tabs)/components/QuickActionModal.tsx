@@ -1,25 +1,30 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
 import {
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native";
 
 interface QuickActionModalProps {
   visible: boolean;
   onClose: () => void;
-  item: any; // 選択された予定データ
+  item: any;
   themeColor: string;
   onDelete: (item: any) => void;
-  onEditDetail: (item: any) => void; // メインのScheduleModalを開く用
-  onQuickSave: (item: any, newTitle: string) => void; // 名前だけサクッと変える用
+  onEditDetail: (item: any) => void;
+  onQuickSave: (item: any, newTitle: string) => void;
+  layerMaster: { [key: string]: string };
+  sharedRooms: { [layerName: string]: string }; // 🌟 定義
+  onMoveOrCopy: (item: any, targetLayer: string, isCopy: boolean) => void;
 }
 
 export default function QuickActionModal({
@@ -30,10 +35,12 @@ export default function QuickActionModal({
   onDelete,
   onEditDetail,
   onQuickSave,
+  layerMaster,
+  sharedRooms, // 🌟 修正1：ここで親から受け取るのを忘れていました！
+  onMoveOrCopy,
 }: QuickActionModalProps) {
   const [quickTitle, setQuickTitle] = useState("");
 
-  // モーダルが開くたびに、今のタイトルをセットする
   useEffect(() => {
     if (visible && item) {
       setQuickTitle(item.title || "");
@@ -55,11 +62,9 @@ export default function QuickActionModal({
         >
           <TouchableWithoutFeedback>
             <View style={styles.sheetContent}>
-              
-              {/* ドラッグできる風のバー（デザイン用） */}
+
               <View style={styles.dragHandle} />
 
-              {/* サクッと名前変更エリア */}
               <View style={styles.quickEditRow}>
                 <TextInput
                   style={[styles.quickInput, { color: themeColor }]}
@@ -81,13 +86,66 @@ export default function QuickActionModal({
                 </TouchableOpacity>
               </View>
 
-              {/* メニュー項目 */}
+              <View style={{ marginBottom: 15 }}>
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#AEAEB2', marginBottom: 10, paddingLeft: 5 }}>
+                  LAYER TRANSFER (長押しでコピー)
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 5 }}>
+                  {Object.keys(layerMaster).map(layer => {
+                    // 🌟 修正2：ここで共有レイヤーかどうかの判定（isShared）を定義する！
+                    const isShared = sharedRooms ? Object.keys(sharedRooms).includes(layer) : false;
+
+                    return (
+                      <TouchableOpacity
+                        key={layer}
+                        style={{
+                          backgroundColor: layerMaster[layer] + '15',
+                          paddingHorizontal: 16,
+                          paddingVertical: 10,
+                          borderRadius: 12,
+                          marginRight: 10,
+                          borderWidth: 1,
+                          borderColor: layerMaster[layer] + '30',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 6
+                        }}
+                        onPress={() => {
+                          Alert.alert(
+                            "レイヤー移動",
+                            `「${layer}」に移動しますか？\n(元の予定は消えます)`,
+                            [
+                              { text: "キャンセル", style: "cancel" },
+                              { text: "移動", onPress: () => onMoveOrCopy(item, layer, false) }
+                            ]
+                          );
+                        }}
+                        onLongPress={() => {
+                          Alert.alert(
+                            "レイヤーへコピー",
+                            `「${layer}」にコピーしますか？\n(元の予定も残ります)`,
+                            [
+                              { text: "キャンセル", style: "cancel" },
+                              { text: "コピー", onPress: () => onMoveOrCopy(item, layer, true) }
+                            ]
+                          );
+                        }}
+                      >
+                        {/* 🌟 共有レイヤーなら雲アイコンを表示 */}
+                        {isShared && <Ionicons name="cloud-outline" size={14} color={layerMaster[layer]} />}
+                        <Text style={{ color: layerMaster[layer], fontWeight: '800', fontSize: 14 }}>{layer}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+
               <View style={styles.menuContainer}>
                 <TouchableOpacity
                   style={styles.menuButton}
                   onPress={() => {
                     onClose();
-                    setTimeout(() => onEditDetail(item), 300); // アニメーション終了後にメインモーダルを開く
+                    setTimeout(() => onEditDetail(item), 300);
                   }}
                 >
                   <View style={[styles.iconCircle, { backgroundColor: themeColor + "15" }]}>
@@ -127,7 +185,7 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "flex-end", // 下に寄せる
+    justifyContent: "flex-end",
   },
   sheetContent: {
     backgroundColor: "#FFF",
@@ -198,6 +256,6 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: "#E5E5EA",
-    marginLeft: 60, // アイコンの右側から線を引くオシャレな処理
+    marginLeft: 60,
   },
 });

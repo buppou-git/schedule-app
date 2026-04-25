@@ -12,18 +12,14 @@ import { ScheduleItem } from "../(tabs)/types";
 import { useCalendarData } from "../../hooks/useCalendarData";
 import { useNotificationManager } from "../../hooks/useNotificationManager";
 
-
-//データベース関係
 import { signInAnonymously } from "firebase/auth";
-import { collection, doc, onSnapshot, setDoc } from "firebase/firestore"; // 🌟 追加
+import { collection, doc, onSnapshot, setDoc } from "firebase/firestore";
 import { AppState } from "react-native";
 import { auth, db } from "./firebaseConfig";
 
-//Todo
 import EventItem from "./components/EventItem";
 import TodoItem from "./components/TodoItem";
 
-//Store
 import { useAppStore } from "../(tabs)/store/useAppStore";
 
 import {
@@ -79,14 +75,12 @@ const getPastelColor = (hex: string) => {
 const getOrGenerateMasterKey = async () => {
   let key = await SecureStore.getItemAsync("myAppMasterKey");
   if (!key) {
-    // 鍵が存在しない場合は、ランダムな文字列を生成してSecureStoreに保存
     key = CryptoJS.lib.WordArray.random(32).toString();
     await SecureStore.setItemAsync("myAppMasterKey", key);
   }
   return key;
 };
 
-// 🌟 ここから追加：ハビットの連続達成日数（ストリーク）を計算する関数
 const calculateStreak = (completedDates: string[] | undefined) => {
   if (!completedDates || completedDates.length === 0) return 0;
 
@@ -103,9 +97,9 @@ const calculateStreak = (completedDates: string[] | undefined) => {
   const diffDays = diffTime / (1000 * 3600 * 24);
 
   if (diffDays > 1) {
-    return 0; // 一昨日以前なら途切れている
+    return 0;
   } else if (diffDays === 1) {
-    checkDate.setDate(checkDate.getDate() - 1); // 昨日からカウント開始
+    checkDate.setDate(checkDate.getDate() - 1);
   }
 
   for (const dateStr of sortedDates) {
@@ -125,8 +119,13 @@ const calculateStreak = (completedDates: string[] | undefined) => {
 };
 
 export default function Index() {
+
+  const [sharedRooms, setSharedRooms] = useState<{ [layerName: string]: string }>({});
+
+  const [roomSchedules, setRoomSchedules] = useState<{ [roomId: string]: { [date: string]: ScheduleItem[] } }>({});
+
   const [sharedScheduleData, setSharedScheduleData] = useState<{ [key: string]: ScheduleItem[] }>({});
-  
+
   const [selectedDate, setSelectedDate] = useState(getTodayString());
 
   const { scheduleData, setScheduleData, lastSyncedAt } = useScheduleManager();
@@ -142,11 +141,9 @@ export default function Index() {
     setActiveMode,
   } = useAppStore();
 
-  // 🌟 修正：scheduleItemNotification を追加！
   const { cancelItemNotification, scheduleItemNotification } =
     useNotificationManager();
 
-  // 🌟 追加：サブタスク編集モーダル用のState
   const [subTaskModalVisible, setSubTaskModalVisible] = useState(false);
   const [editingSubTaskInfo, setEditingSubTaskInfo] = useState<any>(null);
   const [quickActionVisible, setQuickActionVisible] = useState(false);
@@ -155,10 +152,8 @@ export default function Index() {
   const [presets, setPresets] = useState<{ [key: string]: string[] }>({});
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ScheduleItem | null>(null);
-  // 🌟 追加：家計簿画面の「日別詳細 / 予算管理」のモードを親(index)で管理する
   const [isMoneySummaryMode, setIsMoneySummaryMode] = useState(false);
 
-  //セキュリティ強化関連
   const [isAppLocked, setIsAppLocked] = useState(false);
   const [pinForUnlock, setPinForUnlock] = useState("");
 
@@ -166,13 +161,11 @@ export default function Index() {
     const useBio = await AsyncStorage.getItem("useBiometricLock");
     const usePin = await AsyncStorage.getItem("usePinLock");
 
-    // どちらも設定されていなければパス
     if (useBio !== "true" && usePin !== "true") {
       setIsAppLocked(false);
       return;
     }
 
-    // まず生体認証を試みる
     if (useBio === "true") {
       const result = await LocalAuthentication.authenticateAsync({
         promptMessage: "認証してUniCalを開く",
@@ -185,37 +178,34 @@ export default function Index() {
       }
     }
 
-    // 生体認証が失敗した、または設定されていないがPINは設定されている場合
     if (usePin === "true") {
-      setIsAppLocked(true); // 入力画面を表示し続ける
+      setIsAppLocked(true);
     } else {
       setIsAppLocked(false);
     }
   };
-
 
   const authenticatePin = async (pin: string) => {
     const savedPin = await SecureStore.getItemAsync("app_pin_code");
     if (pin === savedPin) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setIsAppLocked(false);
-      setPinForUnlock(""); // 🌟 解除成功時に入力をクリア
+      setPinForUnlock("");
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert("エラー", "暗証番号が違います");
-      setPinForUnlock(""); // 🌟 失敗時に入力をクリアしてUXを高める
+      setPinForUnlock("");
     }
   };
 
   useEffect(() => {
-    // 初回起動時と、アプリがバックグラウンドから復帰した時に認証を走らせる
     handleAuthenticate();
     const subscription = AppState.addEventListener("change", (nextAppState) => {
       if (nextAppState === "active") {
         handleAuthenticate();
       } else if (nextAppState === "background") {
         AsyncStorage.getItem("useBiometricLock").then(val => {
-          if (val === "true") setIsAppLocked(true); // 裏に回った瞬間にロック
+          if (val === "true") setIsAppLocked(true);
         });
       }
     });
@@ -291,10 +281,9 @@ export default function Index() {
     await AsyncStorage.setItem("filterPresets", JSON.stringify(newPresets));
 
     setHasUnsavedChanges(true);
-    setEditPresetModalVisible(false); // 🌟 モーダルを閉じる処理を追加
+    setEditPresetModalVisible(false);
   };
 
-  // 🌟 追加：プリセット長押し時の処理
   const handleLongPressPreset = (name: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setEditingPresetOriginalName(name);
@@ -302,7 +291,6 @@ export default function Index() {
     setEditPresetModalVisible(true);
   };
 
-  // 🌟 追加：編集したプリセット名の保存処理
   const saveEditedPreset = async () => {
     const trimmed = editingPresetName.trim();
     if (!trimmed || trimmed === editingPresetOriginalName) {
@@ -314,7 +302,6 @@ export default function Index() {
       Alert.alert("エラー", "既に同じ名前のプリセットが存在します");
       return;
     }
-    // 古い名前のデータを新しい名前に移し替えて、古い方を消す
     newPresets[trimmed] = newPresets[editingPresetOriginalName];
     delete newPresets[editingPresetOriginalName];
 
@@ -324,37 +311,91 @@ export default function Index() {
     setEditPresetModalVisible(false);
   };
 
-  //共有レイヤー
-  // 🌟 共有レイヤーかどうかを判定するヘルパー
-const isSharedItem = (item: ScheduleItem) => {
-  const itemTags = item.tags || (item.tag ? [item.tag] : []);
-  // ここではシンプルに「共有」という名前のレイヤー/タグが含まれているか判定
-  return itemTags.includes("共有");
-};
+  const isSharedItem = (item: ScheduleItem) => {
+    const itemTags = item.tags || (item.tag ? [item.tag] : []);
+    return itemTags.some(tag => Object.keys(sharedRooms).includes(tag));
+  };
 
-// 🌟 保存・更新時の交通整理（ScheduleModalなどで保存ボタンを押した時の処理に組み込む）
-const handleSaveItem = async (newItem: ScheduleItem) => {
-  if (isSharedItem(newItem)) {
-    // 🌍 共有データの場合：Firestoreの shared_schedules に直接保存
-    try {
-      // 既存のIDがあれば更新、なければ新規作成
-      const docRef = newItem.id ? doc(db, "shared_schedules", newItem.id) : doc(collection(db, "shared_schedules"));
-      await setDoc(docRef, {
-        ...newItem,
-        id: docRef.id,
-        date: selectedDate, // 検索しやすいように日付を持たせる
-        updatedAt: new Date().toISOString(),
-      });
-      Alert.alert("共有完了", "共有レイヤーに保存されました！");
-    } catch (e) {
-      console.error("共有保存エラー:", e);
+  const handleSaveItem = async (newItem: ScheduleItem) => {
+    if (isSharedItem(newItem)) {
+      try {
+        const docRef = newItem.id ? doc(db, "shared_schedules", newItem.id) : doc(collection(db, "shared_schedules"));
+        await setDoc(docRef, {
+          ...newItem,
+          id: docRef.id,
+          date: selectedDate,
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.error("共有保存エラー:", e);
+      }
+    } else {
+      // ローカル保存は scheduleManager 内で吸収させる（ここでは省略可能）
     }
-  } else {
-    // 🔐 プライベートデータの場合：従来の scheduleData（ローカル）に保存
-    // → これまで通りの setScheduleData を実行
-    // （バックグラウンド時に自動で暗号化バックアップされます）
-  }
-};
+  };
+
+  // 🌟 追加：コピー・移動の処理
+  const handleMoveOrCopy = async (item: ScheduleItem, targetLayer: string, isCopy: boolean) => {
+    const newItem = {
+      ...item,
+      id: isCopy ? Date.now().toString() : item.id,
+      tags: [targetLayer]
+    };
+
+    if (!isCopy) {
+      if (isSharedItem(item)) {
+        try {
+          const { deleteDoc } = await import("firebase/firestore");
+          await deleteDoc(doc(db, "shared_schedules", item.id));
+        } catch (e) { console.error(e); }
+      } else {
+        const newData = { ...scheduleData };
+        Object.keys(newData).forEach(d => {
+          newData[d] = newData[d].filter(i => i.id !== item.id);
+        });
+        setScheduleData(newData);
+      }
+    }
+
+    await handleSaveItem(newItem);
+    setQuickActionVisible(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const handleAddSharedRoom = async (layerName: string, roomId: string) => {
+    const newRooms = { ...sharedRooms, [layerName]: roomId };
+    setSharedRooms(newRooms);
+    await AsyncStorage.setItem("sharedRoomsData", JSON.stringify(newRooms));
+
+    // レイヤーマスターにも追加（ランダムな色を割り当て）
+    if (!layerMaster[layerName]) {
+      const PRESET_COLORS = ["#FF3B30", "#FF9500", "#FFCC00", "#34C759", "#007AFF", "#5856D6", "#AF52DE"];
+      const randomColor = PRESET_COLORS[Math.floor(Math.random() * PRESET_COLORS.length)];
+      const newLayerMaster = { ...layerMaster, [layerName]: randomColor };
+      setLayerMaster(newLayerMaster);
+      await AsyncStorage.setItem("layerMasterData", JSON.stringify(newLayerMaster));
+    }
+  };
+
+  // 🌟 追加：手動バックアップ機能
+  const handleManualBackup = async () => {
+    const user = auth.currentUser;
+    if (!user) {
+      Alert.alert("エラー", "ログイン状態が確認できません。");
+      return;
+    }
+    try {
+      const rawDataString = JSON.stringify({ scheduleData, layerMaster, tagMaster, presets, activeTags, sharedRooms });
+      const masterKey = await getOrGenerateMasterKey();
+      const encryptedData = CryptoJS.AES.encrypt(rawDataString, masterKey).toString();
+      await setDoc(doc(db, "users", user.uid), { secureData: encryptedData, lastSyncedAt: new Date().toISOString() });
+      Alert.alert("バックアップ完了", "クラウドにデータを手動保存しました！");
+      setConfigModalVisible(false);
+    } catch (error) {
+      console.error(error);
+      Alert.alert("エラー", "バックアップに失敗しました。");
+    }
+  };
 
   useEffect(() => {
     signInAnonymously(auth).catch((err: any) =>
@@ -369,9 +410,6 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
           if (!user) return;
 
           try {
-            console.log("Auto-save: クラウドへの保存を開始...");
-
-            // 🌟 変更：データを文字列化
             const rawDataString = JSON.stringify({
               scheduleData,
               layerMaster,
@@ -380,16 +418,13 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
               activeTags,
             });
 
-            // 🌟 変更：マスターキーを取得して暗号化（AES）
             const masterKey = await getOrGenerateMasterKey();
             const encryptedData = CryptoJS.AES.encrypt(rawDataString, masterKey).toString();
 
-            // 🌟 変更：Firebaseには暗号文と同期時刻だけを送る
             await setDoc(doc(db, "users", user.uid), {
               secureData: encryptedData,
               lastSyncedAt: new Date().toISOString()
             });
-            console.log("Auto-save: 暗号化バックアップ完了！🔒🚀");
           } catch (error) {
             console.error("Auto-save Error:", error);
           }
@@ -403,7 +438,6 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        // 🌟 scheduleData の読み込みは新しいファイルに任せるので、ここからは削除！
         const [layers, pre, tags] = await Promise.all([
           AsyncStorage.getItem("layerMasterData"),
           AsyncStorage.getItem("filterPresets"),
@@ -428,10 +462,7 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
   useEffect(() => {
     const syncToStorage = async () => {
       try {
-        await AsyncStorage.setItem(
-          "layerMasterData",
-          JSON.stringify(layerMaster),
-        );
+        await AsyncStorage.setItem("layerMasterData", JSON.stringify(layerMaster));
         await AsyncStorage.setItem("tagMasterData", JSON.stringify(tagMaster));
         await AsyncStorage.setItem("filterPresets", JSON.stringify(presets));
         await AsyncStorage.setItem("activeTags", JSON.stringify(activeTags));
@@ -440,62 +471,66 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
       }
     };
     syncToStorage();
-    // 🌟 ポイント：依存配列から scheduleData を外してスッキリさせています
   }, [layerMaster, tagMaster, presets, activeTags]);
 
-
+  // 🌟 変更：複数ルームのリアルタイム同期を並行管理
   useEffect(() => {
-    // Firestoreの "shared_schedules" コレクションを常に監視する
-    const unsubscribe = onSnapshot(
-      collection(db, "shared_schedules"),
-      (snapshot) => {
-        console.log("🔄 共有データが更新されました！");
-        const newSharedData: { [key: string]: ScheduleItem[] } = {};
-        
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          const date = data.date; // Firestore側で日付(date)を持たせる設計
-          
-          if (date) {
-            if (!newSharedData[date]) newSharedData[date] = [];
-            // Firestoreのドキュメントをアプリ内のScheduleItem型に変換
-            newSharedData[date].push({ 
-              id: doc.id, 
-              ...data 
-            } as ScheduleItem);
-          }
-        });
-        
-        // 取得したデータをStateに流し込む（ここで画面が自動更新される）
-        setSharedScheduleData(newSharedData);
-      },
-      (error) => {
-        console.error("リアルタイム同期エラー:", error);
-      }
-    );
+    const roomIds = Object.values(sharedRooms);
+    if (roomIds.length === 0) {
+      setRoomSchedules({});
+      return;
+    }
 
-    // アプリを閉じた時や画面が切り替わった時に監視を解除する（メモリリーク防止）
-    return () => unsubscribe();
-  }, []);
+    // 参加しているすべてのルームIDに対して監視(onSnapshot)を張る
+    const unsubscribes = roomIds.map((roomId) => {
+      return onSnapshot(
+        collection(db, "rooms", roomId, "schedules"),
+        (snapshot) => {
+          const itemsByDate: { [date: string]: ScheduleItem[] } = {};
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            if (data.date) {
+              if (!itemsByDate[data.date]) itemsByDate[data.date] = [];
+              itemsByDate[data.date].push({ id: docSnap.id, ...data } as ScheduleItem);
+            }
+          });
+          // ルームごとにデータを分けて保存
+          setRoomSchedules((prev) => ({ ...prev, [roomId]: itemsByDate }));
+        },
+        (error) => console.error(`Room ${roomId} sync error:`, error)
+      );
+    });
 
+    return () => unsubscribes.forEach((unsub) => unsub());
+  }, [sharedRooms]);
 
+  // 🌟 変更：複数ルームを統合するディスプレイデータの生成
   const displayData = useMemo(() => {
-    const combined = { ...scheduleData };
-    
-    // 1. 外部カレンダーを合流
-    Object.keys(externalEvents).forEach(date => {
-      combined[date] = [...(combined[date] || []), ...externalEvents[date]];
-    });
-    
-    // 🌟 2. 追加：クラウドの「共有データ」も合流させる！
-    Object.keys(sharedScheduleData).forEach(date => {
-      combined[date] = [...(combined[date] || []), ...sharedScheduleData[date]];
-    });
-    
-    return combined;
-  }, [scheduleData, externalEvents, sharedScheduleData]); // 🌟 依存配列にも忘れずに追加
+    const combined: { [key: string]: ScheduleItem[] } = {};
+    const allDates = new Set([...Object.keys(scheduleData), ...Object.keys(externalEvents)]);
 
-  // 🌟 ここを修正！（引数を scheduleData から displayData に変更）
+    // 全ての共有ルームから日付をかき集める
+    Object.values(roomSchedules).forEach(roomData => {
+      Object.keys(roomData).forEach(d => allDates.add(d));
+    });
+
+    allDates.forEach(date => {
+      const itemMap = new Map<string, ScheduleItem>();
+
+      (scheduleData[date] || []).forEach(item => itemMap.set(item.id, item));
+
+      // すべての共有ルームの予定を合流（同じIDなら上書きして重複を防ぐ）
+      Object.values(roomSchedules).forEach(roomData => {
+        (roomData[date] || []).forEach(item => itemMap.set(item.id, item));
+      });
+
+      (externalEvents[date] || []).forEach(item => itemMap.set(item.id, item));
+
+      combined[date] = Array.from(itemMap.values());
+    });
+    return combined;
+  }, [scheduleData, roomSchedules, externalEvents]);
+
   const { expandedScheduleData, currentMarkedDates } = useCalendarData(
     displayData,
     activeMode,
@@ -516,8 +551,6 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
         : "#F8F9FA",
     [activeTags, layerMaster],
   );
-
-
 
   const currentHeaderTitle = useMemo(() => {
     if (activeTags.length === 0) return "ALL_LAYERS";
@@ -545,7 +578,6 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const newData = { ...scheduleData };
 
-    // 対象のアイテム（元データ）を全探索
     let targetItem: ScheduleItem | null = null;
     let originalDate = "";
 
@@ -561,7 +593,6 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
     if (!targetItem) return;
 
     if (targetItem.repeatType) {
-      // 🌟 繰り返し予定の場合：配列を更新
       const completedDates = targetItem.completedDates || [];
       if (completedDates.includes(date)) {
         targetItem.completedDates = completedDates.filter((d) => d !== date);
@@ -569,7 +600,6 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
         targetItem.completedDates = [...completedDates, date];
       }
     } else {
-      // 通常の予定：単一のフラグを更新
       targetItem.isDone = !targetItem.isDone;
     }
 
@@ -588,7 +618,6 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
     let targetDate = date;
     let found = false;
 
-    // 仮想データも考慮して実体を探す
     if (
       newData[targetDate] &&
       newData[targetDate].some((i) => i.id === parentId)
@@ -605,13 +634,11 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
     }
     if (!found) return;
 
-    // 対象の親タスクとそのサブタスクを見つけて更新
     newData[targetDate] = newData[targetDate].map((item) => {
       if (item.id === parentId && item.subTasks) {
         const updatedSubTasks = item.subTasks.map((sub) => {
           if (sub.id === subTaskId) {
             const nextStatus = !sub.isDone;
-            // 💡 おもてなし：完了にした時、もし通知が予約されていたら自動キャンセル
             if (nextStatus && sub.notificationId) {
               cancelItemNotification(sub.notificationId);
             }
@@ -624,12 +651,10 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
           }
           return sub;
         });
-        // 🌟 追加：サブタスクが1つ以上あり、かつ「すべて完了」しているか判定
         const isAllSubTasksDone =
           updatedSubTasks.length > 0 &&
           updatedSubTasks.every((sub: any) => sub.isDone);
 
-        // 🌟 修正：親タスクの isDone も連動して上書きする
         return {
           ...item,
           subTasks: updatedSubTasks,
@@ -666,7 +691,6 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
     }
     if (!found) return;
 
-    // 💡 通知の再予約（古いものを消して、新しい時間でセット）
     if (updatedSub.notificationId) {
       await cancelItemNotification(updatedSub.notificationId);
       updatedSub.notificationId = undefined;
@@ -714,7 +738,6 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
     const { parentId, date } = editingSubTaskInfo;
     const newData = { ...scheduleData };
 
-    // 対象の日付を探す
     let targetDate = date;
     if (
       !(
@@ -732,7 +755,6 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
 
     newData[targetDate] = newData[targetDate].map((item) => {
       if (item.id === parentId && item.subTasks) {
-        // 🚨 削除するサブタスクの通知もキャンセル
         const targetSub = item.subTasks.find((s) => s.id === subTaskId);
         if (targetSub?.notificationId)
           cancelItemNotification(targetSub.notificationId);
@@ -762,7 +784,6 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
     setHasUnsavedChanges(true);
   };
 
-  // 🌟 追加：サクッと削除
   const handleQuickDelete = (item: any) => {
     Alert.alert("削除の確認", `「${item.title}」を削除しますか？`, [
       { text: "キャンセル", style: "cancel" },
@@ -770,25 +791,21 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
         text: "削除",
         style: "destructive",
         onPress: async () => {
-          // 通知がセットされていればキャンセル
           if (item.notificationIds) {
             for (const id of item.notificationIds) {
               await cancelItemNotification(id);
             }
           }
 
-          // 🌟 ここから分岐！
           if (isSharedItem(item)) {
-            // 🌍 共有データの場合：Firestoreから直接削除
             try {
-              const { deleteDoc } = await import("firebase/firestore"); // 動的インポート
+              const { deleteDoc } = await import("firebase/firestore");
               await deleteDoc(doc(db, "shared_schedules", item.id));
               console.log("共有データを削除しました");
             } catch (error) {
               console.error("共有データの削除に失敗:", error);
             }
           } else {
-            // 🔐 プライベートデータの場合：ローカルデータから削除
             const newData = { ...scheduleData };
             for (const d of Object.keys(newData)) {
               newData[d] = newData[d].filter((i: any) => i.id !== item.id);
@@ -820,17 +837,14 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
       if (docSnap.exists()) {
         const cloudData = docSnap.data();
 
-        // 🌟 変更：過去の未暗号化データとの互換性を保ちつつ復号する
         let parsedData;
         if (cloudData.secureData) {
-          // 暗号化されている場合
           const masterKey = await getOrGenerateMasterKey();
           const bytes = CryptoJS.AES.decrypt(cloudData.secureData, masterKey);
           const decryptedString = bytes.toString(CryptoJS.enc.Utf8);
           if (!decryptedString) throw new Error("復号失敗");
           parsedData = JSON.parse(decryptedString);
         } else {
-          // 過去の未暗号化データの場合（移行措置）
           parsedData = cloudData;
         }
 
@@ -924,11 +938,11 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
       const sortedDates = Object.keys(expandedScheduleData).sort();
       sortedDates.forEach((date) => {
         if (date > selectedDate) {
-          (scheduleData[date] || []).forEach((task) => {
+          (displayData[date] || []).forEach((task) => {
             if (
               task.isTodo &&
               !task.isDone &&
-              !task.repeatType && // 🌟 追加：ルーティン（繰り返し）はUpcomingに表示しない
+              !task.repeatType &&
               !dayTaskIds.has(task.id) &&
               !addedUpcomingIds.has(task.id)
             ) {
@@ -955,7 +969,7 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
     }
 
     return { dayTasks: dTasks, upcomingTasks: uTasks, dayEvents: dEvents };
-  }, [expandedScheduleData, selectedDate, activeTags, activeMode, tagMaster]);
+  }, [expandedScheduleData, selectedDate, activeTags, activeMode, tagMaster, displayData]);
 
   if (isAppLocked) {
     return (
@@ -966,35 +980,32 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
           <Text style={{ fontSize: 12, color: '#8E8E93', marginBottom: 25, marginTop: 5 }}>パスコードを入力してください</Text>
 
           <View style={styles.pinInputWrapper}>
-            {/* 実際の入力用（透明にして重ねる） */}
             <TextInput
               style={styles.hiddenTextInput}
               keyboardType="number-pad"
               maxLength={4}
               secureTextEntry
               autoFocus
-              value={pinForUnlock} // 🌟 Stateで値を管理
+              value={pinForUnlock}
               onChangeText={(text) => {
-                setPinForUnlock(text); // 🌟 入力値をStateに保存
+                setPinForUnlock(text);
                 if (text.length === 4) {
-                  authenticatePin(text); // 🌟 4桁になったら認証関数を呼ぶ
+                  authenticatePin(text);
                 }
               }}
             />
 
-            {/* 見た目用（4つの丸枠を並べる） */}
             <View style={styles.pinDisplayContainer}>
               {[...Array(4)].map((_, i) => (
                 <View
                   key={i}
                   style={[
                     styles.pinBox,
-                    // 現在入力中の枠を強調
                     pinForUnlock.length === i && styles.pinBoxFocused
                   ]}
                 >
                   {pinForUnlock.length > i && (
-                    <Text style={styles.pinDot}>●</Text> // 入力されたら●を表示
+                    <Text style={styles.pinDot}>●</Text>
                   )}
                 </View>
               ))}
@@ -1061,7 +1072,6 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
 
       <View style={styles.mainContent}>
         <View style={styles.calendarArea}>
-          {/* 🌟 修正版：カレンダーモードは月表示、それ以外は週表示 */}
           {activeMode === "calendar" ? (
             <CalendarList
               current={selectedDate}
@@ -1109,7 +1119,6 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
             />
           ) : (
             <>
-              {/* 家計簿モードの時だけタブを表示 */}
               {activeMode === "money" && (
                 <View
                   style={[
@@ -1152,7 +1161,6 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
                 </View>
               )}
 
-              {/* ToDoまたは家計簿詳細の時に「週カレンダー」を表示 */}
               {(activeMode === "todo" ||
                 (activeMode === "money" && !isMoneySummaryMode)) && (
                   <View style={styles.weekCalendarWrapper}>
@@ -1193,7 +1201,6 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
                 )}
             </>
           )}
-          {/* ここまでを差し替え。直後に <ScrollView style={styles.scheduleList} が続くようにします */}
 
           <ScrollView
             style={styles.scheduleList}
@@ -1260,7 +1267,6 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
 
                       return (
                         <>
-                          {/* 🌟 2. ルーティン（習慣）セクション */}
                           {routineTasks.length > 0 && (
                             <View style={{ marginBottom: 16 }}>
                               <Text style={styles.upcomingMiniTitle}>
@@ -1293,7 +1299,6 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
                             </View>
                           )}
 
-                          {/* 🌟 3. 単発のToDoセクション */}
                           {oneOffTasks.length > 0 && (
                             <View style={{ marginBottom: 16 }}>
                               <Text style={styles.upcomingMiniTitle}>
@@ -1331,7 +1336,6 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
                         <Text style={styles.upcomingMiniTitle}>
                           今後の予定（未完了）
                         </Text>
-                        {/* 🌟 2. upcomingTasks の修正 */}
                         {upcomingTasks.map((t) => {
                           const streakCount = t.repeatType ? calculateStreak(t.completedDates) : 0;
                           return (
@@ -1348,7 +1352,7 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
                               toggleSubTodo={toggleSubTodo}
                               setEditingSubTaskInfo={setEditingSubTaskInfo}
                               setSubTaskModalVisible={setSubTaskModalVisible}
-                              streakCount={streakCount} // 🌟 これを追加！
+                              streakCount={streakCount}
                               onLongPress={(item) => {
                                 setQuickActionItem(item);
                                 setQuickActionVisible(true);
@@ -1374,7 +1378,6 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
                       layerMaster={layerMaster}
                       formatEventTime={formatEventTime}
                       openEditModal={openEditModal}
-                      // 👇 🌟 ここに追加！
                       onLongPress={(item) => {
                         setQuickActionItem(item);
                         setQuickActionVisible(true);
@@ -1443,7 +1446,7 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
                           },
                         ]}
                         onPress={() => setTempActiveTags(presets[pName])}
-                        onLongPress={() => handleLongPressPreset(pName)} // 🌟 ここをスッキリ差し替え！
+                        onLongPress={() => handleLongPressPreset(pName)}
                       >
                         <Text
                           style={[
@@ -1500,38 +1503,30 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
                   </TouchableOpacity>
                   {Object.keys(layerMaster).map((layer) => {
                     const isSelected = tempActiveTags.includes(layer);
+                    const isShared = Object.keys(sharedRooms).includes(layer);
+
                     return (
                       <TouchableOpacity
                         key={layer}
-                        style={[
-                          styles.gridCard,
-                          isSelected
-                            ? {
-                              backgroundColor: layerMaster[layer],
-                              borderColor: layerMaster[layer],
-                            }
-                            : [
-                              styles.gridCardGhost,
-                              { borderColor: layerMaster[layer] + "40" },
-                            ],
-                        ]}
+                        style={[styles.gridCard, isSelected ? { backgroundColor: layerMaster[layer], borderColor: layerMaster[layer] } : [styles.gridCardGhost, { borderColor: layerMaster[layer] + "40" }]]}
                         onPress={() => toggleTempTag(layer)}
                       >
-                        <Ionicons
-                          name={
-                            isSelected ? "checkmark-circle" : "ellipse-outline"
-                          }
-                          size={18}
-                          color={isSelected ? "#FFF" : layerMaster[layer]}
-                        />
-                        <Text
-                          style={[
-                            styles.gridCardText,
-                            isSelected && { color: "#FFF" },
-                          ]}
-                        >
-                          {layer}
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Ionicons name={isSelected ? "checkmark-circle" : "ellipse-outline"} size={16} color={isSelected ? "#FFF" : layerMaster[layer]} />
+                          {/* 🌟 文字が長すぎてもカードが崩れないように numberOfLines を追加 */}
+                          <Text style={[styles.gridCardText, isSelected && { color: "#FFF" }]} numberOfLines={1}>{layer}</Text>
+                          {isShared && <Ionicons name="cloud-outline" size={14} color={isSelected ? "#FFF" : "#C7C7CC"} />}
+                        </View>
+
+                        {/* 🌟 追加：共有レイヤーの場合のみ、下に小さくIDを表示 */}
+                        {isShared && (
+                          <Text
+                            style={{ fontSize: 8, color: isSelected ? "#FFF" : "#8E8E93", marginTop: 4, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" }}
+                            numberOfLines={1}
+                          >
+                            ID: {sharedRooms[layer]}
+                          </Text>
+                        )}
                       </TouchableOpacity>
                     );
                   })}
@@ -1652,7 +1647,6 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
         </KeyboardAvoidingView>
       </Modal>
 
-
       <ScheduleModal
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
@@ -1681,6 +1675,9 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
         onClose={() => setConfigModalVisible(false)}
         lastSyncedAt={lastSyncedAt}
         onRestore={handleRestore}
+        onBackup={handleManualBackup} // 🌟 追加
+        sharedRooms={sharedRooms}     // 🌟 追加
+        onAddSharedRoom={handleAddSharedRoom} // 🌟 追加
       />
       <SubTaskEditModal
         visible={subTaskModalVisible}
@@ -1691,6 +1688,7 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
         themeColor={currentSolidColor}
       />
 
+      {/* 🌟 修正：Propsを追加 */}
       <QuickActionModal
         visible={quickActionVisible}
         onClose={() => setQuickActionVisible(false)}
@@ -1698,11 +1696,13 @@ const handleSaveItem = async (newItem: ScheduleItem) => {
         themeColor={currentSolidColor}
         onDelete={handleQuickDelete}
         onEditDetail={(item) => {
-          // 詳細モーダルを開く処理
           setSelectedItem(item);
           setModalVisible(true);
         }}
         onQuickSave={handleQuickSave}
+        sharedRooms={sharedRooms}
+        layerMaster={layerMaster}
+        onMoveOrCopy={handleMoveOrCopy}
       />
     </SafeAreaView>
   );
@@ -1754,7 +1754,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
 
-  // 🌟 追加：モード切り替えタブのスタイル
   toggleContainer: {
     flexDirection: "row",
     backgroundColor: "#F2F2F7",
@@ -1942,7 +1941,7 @@ const styles = StyleSheet.create({
   },
   filterModalContent: {
     width: "90%",
-    maxHeight: "80%",
+    height: "75%",
     backgroundColor: "#FFF",
     borderRadius: 28,
     padding: 24,
@@ -1968,6 +1967,7 @@ const styles = StyleSheet.create({
   },
   gridCard: {
     width: "48%",
+    height: 70,
     paddingVertical: 16,
     borderRadius: 18,
     justifyContent: "center",
@@ -2081,10 +2081,10 @@ const styles = StyleSheet.create({
   },
   namingConfirmText: { fontSize: 12, fontWeight: "700", color: "#FFF" },
   subTaskListContainer: {
-    marginLeft: 20, // ここでインデント（字下げ）を作ります！
+    marginLeft: 20,
     paddingLeft: 12,
     borderLeftWidth: 2,
-    borderLeftColor: "#E5E5EA", // 枝分かれの線
+    borderLeftColor: "#E5E5EA",
     marginTop: 6,
     gap: 6,
   },

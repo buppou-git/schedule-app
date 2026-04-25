@@ -1,21 +1,26 @@
+import 'react-native-get-random-values';
+
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
-import * as Calendar from 'expo-calendar'; // 🌟 追加
+import CryptoJS from 'crypto-js';
+import * as Calendar from 'expo-calendar';
 import * as FileSystem from 'expo-file-system';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
-import * as Sharing from 'expo-sharing'; // 🌟 追加
+import * as Sharing from 'expo-sharing';
 import { GoogleAuthProvider, linkWithCredential } from "firebase/auth";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Linking,
   Modal,
   Platform,
   ScrollView,
+  Share,
   StyleSheet,
   Switch,
   Text,
@@ -27,13 +32,14 @@ import {
 import { useNotificationManager } from "../../../hooks/useNotificationManager";
 import { auth } from "../firebaseConfig";
 
-
-
 interface ConfigModalProps {
   visible: boolean;
   onClose: () => void;
   lastSyncedAt: string | null;
   onRestore: () => void;
+  onBackup: () => void;
+  sharedRooms: { [layerName: string]: string };
+  onAddSharedRoom: (layerName: string, roomId: string) => void;
 }
 
 const WEB_CLIENT_ID = "633661996714-j5cb16hjn156oeqf51pi384e0hh7b158.apps.googleusercontent.com";
@@ -47,6 +53,9 @@ export default function ConfigModal({
   onClose,
   lastSyncedAt,
   onRestore,
+  onBackup,
+  sharedRooms,
+  onAddSharedRoom,
 }: ConfigModalProps) {
   const {
     isNotificationEnabled,
@@ -59,27 +68,34 @@ export default function ConfigModal({
   const [isLinking, setIsLinking] = useState(false);
   const [isAnonymous, setIsAnonymous] = useState(auth.currentUser?.isAnonymous ?? true);
 
-  // 🌟 追加：カレンダー同期のON/OFF状態
   const [isCalendarSyncEnabled, setIsCalendarSyncEnabled] = useState(false);
-
-  //生体認証のオンオフ
   const [isBiometricEnabled, setIsBiometricEnabled] = useState(false);
-  //パスワードのオンオフ
   const [isPinEnabled, setIsPinEnabled] = useState(false);
-
   const [isPinSetupVisible, setIsPinSetupVisible] = useState(false);
   const [pinInput, setPinInput] = useState("");
+
+  const [createRoomVisible, setCreateRoomVisible] = useState(false);
+  const [newRoomName, setNewRoomName] = useState("");
+  
+  const [joinRoomVisible, setJoinRoomVisible] = useState(false);
+  const [joinRoomId, setJoinRoomId] = useState("");
+  const [joinRoomName, setJoinRoomName] = useState("");
+
+  const [shareRoomListVisible, setShareRoomListVisible] = useState(false);
+
+  // 🌟 追加：作成完了後の情報を表示するためのステート
+  const [showCreatedRoomInfoVisible, setShowCreatedRoomInfoVisible] = useState(false);
+  const [createdRoomName, setCreatedRoomName] = useState("");
+  const [createdRoomId, setCreatedRoomId] = useState("");
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
       setIsAnonymous(user?.isAnonymous ?? true);
     });
 
-    // 🌟 追加：保存されているカレンダー同期設定を読み込む
     AsyncStorage.getItem("externalCalendarSync").then(val => {
       setIsCalendarSyncEnabled(val === "true");
     });
-
     AsyncStorage.getItem("useBiometricLock").then(val => {
       setIsBiometricEnabled(val === "true");
     });
@@ -135,10 +151,8 @@ export default function ConfigModal({
     }
   };
 
-  // 🌟 追加：カレンダー同期スイッチが押された時の処理
   const handleCalendarSyncToggle = async (value: boolean) => {
     if (value) {
-      // スイッチをONにした瞬間、OSの権限要求ポップアップを出す
       const { status } = await Calendar.requestCalendarPermissionsAsync();
       if (status === 'granted') {
         setIsCalendarSyncEnabled(true);
@@ -153,7 +167,6 @@ export default function ConfigModal({
       await AsyncStorage.setItem("externalCalendarSync", "false");
     }
   };
-
 
   const handleBiometricToggle = async (value: boolean) => {
     if (value) {
@@ -184,7 +197,7 @@ export default function ConfigModal({
 
   const handlePinToggle = async (value: boolean) => {
     if (value) {
-      setIsPinSetupVisible(true); // モーダルを開く
+      setIsPinSetupVisible(true);
     } else {
       setIsPinEnabled(false);
       await AsyncStorage.setItem("usePinLock", "false");
@@ -192,7 +205,6 @@ export default function ConfigModal({
     }
   };
 
-  // 🌟 追加：モーダルから呼ばれる保存処理
   const savePin = async () => {
     if (pinInput.length === 4 && /^\d+$/.test(pinInput)) {
       await SecureStore.setItemAsync("app_pin_code", pinInput);
@@ -208,28 +220,22 @@ export default function ConfigModal({
 
   const handleExportCSV = async () => {
     try {
-      // 1. ローカルに保存されているスケジュールデータを取得
       const dataStr = await AsyncStorage.getItem("myScheduleData");
       if (!dataStr) {
         Alert.alert("エラー", "出力するデータが見つかりません。");
         return;
       }
-      
+
       const scheduleData = JSON.parse(dataStr);
-      
-      // 2. CSVのヘッダー（1行目）※先頭の \uFEFF はExcelでの文字化け防止用
       let csvContent = "\uFEFF日付,タイトル,タイプ,金額(円),ステータス\n";
 
-      // 3. データをループしてCSV形式に変換
       Object.keys(scheduleData).forEach(date => {
         scheduleData[date].forEach((item: any) => {
-          // カンマが含まれているとCSVが壊れるので除去または置換
           const title = item.title ? item.title.replace(/,/g, "，") : "名称未設定";
-          
           let type = "その他";
           if (item.isEvent) type = "予定";
           if (item.isTodo) type = "ToDo";
-          if (item.amount) type = "家計簿"; // 家計簿データの場合
+          if (item.amount) type = "家計簿";
 
           const amount = item.amount || 0;
           const status = item.isDone ? "完了" : "未完了";
@@ -238,22 +244,19 @@ export default function ConfigModal({
         });
       });
 
-     // 4. 一時ファイルとしてスマホ内に保存
-      // 🌟 TSの型チェックを強制的に無視して実行させる
-      const FS: any = FileSystem; 
+      const FS: any = FileSystem;
       const fileUri = FS.documentDirectory + "UniCal_Data.csv";
-      
-      await FS.writeAsStringAsync(fileUri, csvContent, { 
-        encoding: FS.EncodingType.UTF8 
+
+      await FS.writeAsStringAsync(fileUri, csvContent, {
+        encoding: FS.EncodingType.UTF8
       });
 
-      // 5. スマホのシェア画面（AirDrop, LINE, メール等）を呼び出す
       const isAvailable = await Sharing.isAvailableAsync();
       if (isAvailable) {
         await Sharing.shareAsync(fileUri, {
           mimeType: 'text/csv',
           dialogTitle: 'UniCalのデータをエクスポート',
-          UTI: 'public.comma-separated-values-text' // iOS用
+          UTI: 'public.comma-separated-values-text'
         });
       } else {
         Alert.alert("エラー", "この端末では共有機能がサポートされていません。");
@@ -264,7 +267,53 @@ export default function ConfigModal({
       Alert.alert("エラー", "CSVの作成に失敗しました。");
     }
   };
-  
+
+  const handleShareRoom = async (roomName: string, roomId: string) => {
+    try {
+      await Share.share({
+        message: `【UniCal】「${roomName}」の共有カレンダーに参加しよう！\n\nアプリを開いて以下のIDかURLを入力してね。\nID: ${roomId}\nリンク: unical://join?room=${roomId}`,
+        title: "カレンダーの共有",
+      });
+      setShareRoomListVisible(false);
+    } catch (error) {
+      Alert.alert("エラー", "共有に失敗しました。");
+    }
+  };
+
+  const handleCreateRoom = () => {
+    if (!newRoomName.trim()) return;
+    
+    // IDの生成と登録
+    const generatedRoomId = "room_" + CryptoJS.lib.WordArray.random(8).toString();
+    onAddSharedRoom(newRoomName.trim(), generatedRoomId);
+    
+    // 🌟 変更：作成画面を閉じて、新しい「作成完了ポップアップ」を開く準備をする
+    setCreatedRoomName(newRoomName.trim());
+    setCreatedRoomId(generatedRoomId);
+    setNewRoomName("");
+    setCreateRoomVisible(false);
+    
+    // 少し遅延させてから完了画面を開く（モーダルの重なりエラーを防ぐため）
+    setTimeout(() => {
+      setShowCreatedRoomInfoVisible(true);
+    }, 400);
+  };
+
+  const handleJoinRoom = () => {
+    if (!joinRoomName.trim() || !joinRoomId.trim()) return;
+    
+    let extractedId = joinRoomId.trim();
+    
+    if (extractedId.includes("room=")) {
+      extractedId = extractedId.split("room=")[1].split("&")[0];
+    }
+    
+    onAddSharedRoom(joinRoomName.trim(), extractedId);
+    setJoinRoomVisible(false);
+    setJoinRoomId("");
+    setJoinRoomName("");
+    Alert.alert("参加完了", "共有カレンダーをレイヤーに追加しました！");
+  };
 
   return (
     <Modal visible={visible} transparent={true} animationType="fade">
@@ -287,8 +336,31 @@ export default function ConfigModal({
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
 
-              {/* 🌟 修正：追加された「カレンダー連携」セクション */}
-              <Text style={styles.sectionLabel}>INTEGRATION</Text>
+              <Text style={styles.sectionLabel}>SHARED CALENDAR</Text>
+              <View style={styles.card}>
+                <TouchableOpacity style={styles.row} onPress={() => setCreateRoomVisible(true)}>
+                  <View style={styles.rowLeft}>
+                    <Ionicons name="add-circle-outline" size={20} color="#007AFF" />
+                    <Text style={[styles.rowText, { color: "#007AFF", fontWeight: "bold" }]}>共有カレンダーを作成</Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.row, styles.borderTop]} onPress={() => setShareRoomListVisible(true)}>
+                  <View style={styles.rowLeft}>
+                    <Ionicons name="share-social-outline" size={20} color="#1C1C1E" />
+                    <Text style={styles.rowText}>招待リンクを送信</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color="#C7C7CC" />
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.row, styles.borderTop]} onPress={() => setJoinRoomVisible(true)}>
+                  <View style={styles.rowLeft}>
+                    <Ionicons name="enter-outline" size={20} color="#1C1C1E" />
+                    <Text style={styles.rowText}>共有カレンダーに参加</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color="#C7C7CC" />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={[styles.sectionLabel, { marginTop: 20 }]}>INTEGRATION</Text>
               <View style={styles.card}>
                 <View style={styles.row}>
                   <View style={styles.rowLeft}>
@@ -301,7 +373,6 @@ export default function ConfigModal({
                     trackColor={{ false: "#E5E5EA", true: "#34C759" }}
                   />
                 </View>
-
               </View>
 
               <Text style={[styles.sectionLabel, { marginTop: 20 }]}>ACCOUNT</Text>
@@ -335,8 +406,6 @@ export default function ConfigModal({
                 )}
               </View>
 
-
-
               <Text style={[styles.sectionLabel, { marginTop: 20 }]}>SECURITY</Text>
               <View style={styles.card}>
                 <View style={styles.row}>
@@ -362,7 +431,6 @@ export default function ConfigModal({
                   />
                 </View>
               </View>
-
 
               <Text style={[styles.sectionLabel, { marginTop: 20 }]}>NOTIFICATIONS</Text>
               <View style={styles.card}>
@@ -424,13 +492,26 @@ export default function ConfigModal({
               <View style={styles.card}>
                 <View style={styles.row}>
                   <View style={styles.rowLeft}>
-                    <Ionicons name="cloud-done-outline" size={20} color="#1C1C1E" />
+                    <Ionicons name="time-outline" size={20} color="#1C1C1E" />
                     <Text style={styles.rowText}>最終同期</Text>
                   </View>
                   <Text style={styles.timeText}>
                     {lastSyncedAt ? lastSyncedAt : "未同期"}
                   </Text>
                 </View>
+
+                <TouchableOpacity
+                  style={[styles.row, styles.borderTop]}
+                  onPress={onBackup}
+                >
+                  <View style={styles.rowLeft}>
+                    <Ionicons name="cloud-upload-outline" size={20} color="#007AFF" />
+                    <Text style={[styles.rowText, { color: "#007AFF", fontWeight: "bold" }]}>
+                      手動でバックアップ
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
                 <TouchableOpacity
                   style={[styles.row, styles.borderTop]}
                   onPress={onRestore}
@@ -484,15 +565,14 @@ export default function ConfigModal({
         </TouchableWithoutFeedback>
       </TouchableOpacity>
 
+      {/* PIN設定用モーダル */}
       <Modal visible={isPinSetupVisible} transparent={true} animationType="fade">
         <View style={styles.overlay}>
-        <View style={[styles.content, { maxHeight: 350 }]}> {/* 高さを少し調整 */}
+          <View style={[styles.content, { maxHeight: 350 }]}>
             <Text style={styles.title}>PIN SETTING</Text>
             <Text style={styles.subTitle}>新しい暗証番号を決めてください</Text>
-            
-            {/* 🌟 修正：スタイリッシュな丸枠デザインに変更 */}
+
             <View style={styles.pinInputWrapper}>
-              {/* 実際の入力用（透明にして重ねる） */}
               <TextInput
                 style={styles.hiddenTextInput}
                 keyboardType="number-pad"
@@ -502,20 +582,17 @@ export default function ConfigModal({
                 value={pinInput}
                 onChangeText={setPinInput}
               />
-              
-              {/* 見た目用（4つの丸枠を並べる） */}
               <View style={styles.pinDisplayContainer}>
                 {[...Array(4)].map((_, i) => (
-                  <View 
-                    key={i} 
+                  <View
+                    key={i}
                     style={[
-                      styles.pinBox, 
-                      // 現在入力中の枠を強調
+                      styles.pinBox,
                       pinInput.length === i && styles.pinBoxFocused
                     ]}
                   >
                     {pinInput.length > i && (
-                      <Text style={styles.pinDot}>●</Text> // 入力されたら●を表示
+                      <Text style={styles.pinDot}>●</Text>
                     )}
                   </View>
                 ))}
@@ -530,6 +607,124 @@ export default function ConfigModal({
                 <Text style={{ fontSize: 14, fontWeight: "700", color: "#FFF" }}>保存する</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 🌟 1. 共有カレンダー作成モーダル */}
+      <Modal visible={createRoomVisible} transparent animationType="fade">
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+          <View style={styles.overlay}>
+            <View style={styles.subModalContent}>
+              <Text style={styles.title}>NEW SHARED ROOM</Text>
+              <Text style={styles.subTitle}>新しい共有レイヤーの名前を決めてください</Text>
+              <TextInput 
+                style={styles.inputField} 
+                placeholder="例：ゼミ合宿、家族の予定" 
+                placeholderTextColor="#C7C7CC" 
+                autoFocus 
+                value={newRoomName} 
+                onChangeText={setNewRoomName} 
+              />
+              <View style={styles.modalActionRow}>
+                <TouchableOpacity onPress={() => setCreateRoomVisible(false)}><Text style={styles.cancelText}>キャンセル</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.saveBtn} onPress={handleCreateRoom}><Text style={styles.saveBtnText}>作成</Text></TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* 🌟 2. 共有カレンダー参加モーダル */}
+      <Modal visible={joinRoomVisible} transparent animationType="fade">
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+          <View style={styles.overlay}>
+            <View style={styles.subModalContent}>
+              <Text style={styles.title}>JOIN SHARED ROOM</Text>
+              <Text style={styles.subTitle}>送られたURLかIDを貼り付けてください</Text>
+              <TextInput 
+                style={styles.inputField} 
+                placeholder="URL または ID" 
+                placeholderTextColor="#C7C7CC" 
+                autoFocus 
+                value={joinRoomId} 
+                onChangeText={setJoinRoomId} 
+              />
+              <Text style={[styles.subTitle, {marginTop: 15}]}>自分のアプリでの表示名（レイヤー名）</Text>
+              <TextInput 
+                style={styles.inputField} 
+                placeholder="例：サークル用カレンダー" 
+                placeholderTextColor="#C7C7CC" 
+                value={joinRoomName} 
+                onChangeText={setJoinRoomName} 
+              />
+              <View style={styles.modalActionRow}>
+                <TouchableOpacity onPress={() => setJoinRoomVisible(false)}><Text style={styles.cancelText}>キャンセル</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.saveBtn} onPress={handleJoinRoom}><Text style={styles.saveBtnText}>参加</Text></TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* 🌟 3. リンク送信先選択モーダル */}
+      <Modal visible={shareRoomListVisible} transparent animationType="slide">
+        <View style={styles.overlay}>
+          <View style={[styles.subModalContent, { paddingBottom: 40 }]}>
+            <Text style={styles.title}>SHARE LINK</Text>
+            <Text style={styles.subTitle}>招待したいカレンダーを選んでください</Text>
+            <ScrollView style={{ marginTop: 20, maxHeight: 200 }}>
+              {Object.keys(sharedRooms).length === 0 && (
+                <Text style={{ textAlign: "center", color: "#8E8E93", marginVertical: 20 }}>共有カレンダーがありません</Text>
+              )}
+              {Object.entries(sharedRooms).map(([name, roomId]) => (
+                <TouchableOpacity key={roomId} style={styles.roomListItem} onPress={() => handleShareRoom(name, roomId)}>
+                  <Ionicons name="cloud-outline" size={20} color="#007AFF" />
+                  <Text style={styles.roomListText}>{name}</Text>
+                  <Ionicons name="share-outline" size={18} color="#C7C7CC" />
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <TouchableOpacity style={[styles.saveBtn, { marginTop: 20, width: "100%", alignItems: 'center' }]} onPress={() => setShareRoomListVisible(false)}>
+              <Text style={styles.saveBtnText}>閉じる</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 🌟 4. 新規追加：作成完了＆ID確認モーダル（URLが使えない人向け） */}
+      <Modal visible={showCreatedRoomInfoVisible} transparent animationType="fade">
+        <View style={styles.overlay}>
+          <View style={styles.subModalContent}>
+            
+            <View style={{ alignItems: "center", marginBottom: 20 }}>
+              <Ionicons name="checkmark-circle" size={50} color="#34C759" />
+              <Text style={[styles.title, { marginTop: 10 }]}>作成完了！</Text>
+              <Text style={[styles.subTitle, { textAlign: "center", marginTop: 5 }]}>
+                カレンダーを共有するには、以下の情報をメンバーに伝えてください。
+              </Text>
+            </View>
+
+            <Text style={{ fontSize: 12, color: "#8E8E93", fontWeight: "bold", marginBottom: 5 }}>カレンダー名</Text>
+            <Text style={{ fontSize: 18, fontWeight: "bold", color: "#1C1C1E", marginBottom: 20 }}>{createdRoomName}</Text>
+
+            <Text style={{ fontSize: 12, color: "#8E8E93", fontWeight: "bold", marginBottom: 5 }}>ルームID (長押しでコピー)</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#F2F2F7", padding: 15, borderRadius: 12 }}>
+              <Text 
+                style={{ flex: 1, fontSize: 16, fontWeight: "bold", color: "#1C1C1E", fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" }} 
+                selectable={true} 
+              >
+                {createdRoomId}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.saveBtn, { marginTop: 25, width: "100%", alignItems: "center" }]}
+              onPress={() => setShowCreatedRoomInfoVisible(false)}
+            >
+              <Text style={styles.saveBtnText}>閉じる</Text>
+            </TouchableOpacity>
+
           </View>
         </View>
       </Modal>
@@ -562,4 +757,13 @@ const styles = StyleSheet.create({
   pinBox: { width: 55, height: 65, borderWidth: 1, borderRadius: 16, borderColor: '#C7C7CC', justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF' },
   pinBoxFocused: { borderColor: '#1C1C1E', borderWidth: 2, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 5 },
   pinDot: { fontSize: 36, color: '#1C1C1E' },
+  
+  subModalContent: { backgroundColor: "#FFF", width: "90%", alignSelf: "center", borderRadius: 20, padding: 24, marginBottom: "50%", shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 10 },
+  inputField: { backgroundColor: "#F2F2F7", padding: 15, borderRadius: 12, marginTop: 15, fontSize: 16, fontWeight: "600", color: "#1C1C1E" },
+  modalActionRow: { flexDirection: "row", justifyContent: "flex-end", alignItems: "center", marginTop: 20, gap: 15 },
+  cancelText: { fontSize: 14, fontWeight: "700", color: "#8E8E93", padding: 10 },
+  saveBtn: { backgroundColor: "#1C1C1E", paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10 },
+  saveBtnText: { color: "#FFF", fontSize: 14, fontWeight: "700" },
+  roomListItem: { flexDirection: "row", alignItems: "center", paddingVertical: 15, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#E5E5EA", gap: 10 },
+  roomListText: { flex: 1, fontSize: 16, fontWeight: "600", color: "#1C1C1E" }
 });
