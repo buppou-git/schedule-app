@@ -784,9 +784,10 @@ export default function Index() {
           }
           return sub;
         });
+        const pureTodos = updatedSubTasks.filter((sub: any) => !sub.isExpense && !sub.isIncome);
         const isAllSubTasksDone =
-          updatedSubTasks.length > 0 &&
-          updatedSubTasks.every((sub: any) => sub.isDone);
+          pureTodos.length > 0 &&
+          pureTodos.every((sub: any) => sub.isDone);
 
         return {
           ...item,
@@ -1104,16 +1105,16 @@ export default function Index() {
       // 終日の予定は一番上に持ってくる
       if (a.isAllDay && !b.isAllDay) return -1;
       if (!a.isAllDay && b.isAllDay) return 1;
-      
+
       // 時間が設定されていない場合は一番下に
-      const timeA = a.startTime || "24:00"; 
+      const timeA = a.startTime || "24:00";
       const timeB = b.startTime || "24:00";
       return timeA.localeCompare(timeB);
     };
 
     dTasks.sort(sortByTime);
     dEvents.sort(sortByTime);
-    
+
     // 今後の予定（upcomingTasks）は、まず日付順にしてから時間順にする
     uTasks.sort((a, b) => {
       if (a.date !== b.date) return a.date.localeCompare(b.date);
@@ -1858,7 +1859,7 @@ export default function Index() {
         layerMaster={layerMaster}
         onMoveOrCopy={handleMoveOrCopy}
       />
-    {/*広告用 */}
+      {/*広告用 */}
 
       <OnboardingModal
         visible={onboardingVisible}
