@@ -26,7 +26,7 @@ import OnboardingModal from "./components/OnboardingModal";
 
 //広告関係
 import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
-import { BannerAd, BannerAdSize, MobileAds, TestIds } from 'react-native-google-mobile-ads';
+import { MobileAds } from 'react-native-google-mobile-ads';
 
 import {
   Alert,
@@ -1100,6 +1100,25 @@ export default function Index() {
         }
       });
     }
+    const sortByTime = (a: any, b: any) => {
+      // 終日の予定は一番上に持ってくる
+      if (a.isAllDay && !b.isAllDay) return -1;
+      if (!a.isAllDay && b.isAllDay) return 1;
+      
+      // 時間が設定されていない場合は一番下に
+      const timeA = a.startTime || "24:00"; 
+      const timeB = b.startTime || "24:00";
+      return timeA.localeCompare(timeB);
+    };
+
+    dTasks.sort(sortByTime);
+    dEvents.sort(sortByTime);
+    
+    // 今後の予定（upcomingTasks）は、まず日付順にしてから時間順にする
+    uTasks.sort((a, b) => {
+      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      return sortByTime(a, b);
+    });
 
     return { dayTasks: dTasks, upcomingTasks: uTasks, dayEvents: dEvents };
   }, [expandedScheduleData, selectedDate, activeTags, activeMode, tagMaster, displayData]);
@@ -1246,7 +1265,9 @@ export default function Index() {
               onDayPress={(day) => setSelectedDate(day.dateString)}
               theme={{
                 calendarBackground: "transparent",
-                todayTextColor: currentSolidColor,
+                todayTextColor: "#FFF",
+                todayBackgroundColor: currentSolidColor,
+                textDayFontWeight: "bold",
                 selectedDayBackgroundColor: currentSolidColor,
               }}
             />
@@ -1838,16 +1859,7 @@ export default function Index() {
         layerMaster={layerMaster}
         onMoveOrCopy={handleMoveOrCopy}
       />
-
-      <View style={styles.adContainer}>
-        <BannerAd
-          unitId={TestIds.BANNER} // テスト用ID。本番は ca-app-pub-xxx に変更
-          size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
-          requestOptions={{
-            requestNonPersonalizedAdsOnly: false,
-          }}
-        />
-      </View>
+    {/*広告用 */}
 
       <OnboardingModal
         visible={onboardingVisible}

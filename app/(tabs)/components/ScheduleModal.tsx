@@ -1167,7 +1167,7 @@ export default function ScheduleModal({
           <Text
             style={{ color: uiThemeColor, fontWeight: "bold", marginLeft: 8 }}
           >
-            {showSubTasks ? "サブタスク入力を閉じる" : "サブタスクを追加..."}
+            {showSubTasks ? "詳細入力を閉じる" : "追加項目..."}
           </Text>
         </TouchableOpacity>
 
