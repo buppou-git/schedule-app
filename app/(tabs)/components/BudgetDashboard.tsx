@@ -52,7 +52,7 @@ export default function BudgetDashboard({
   const [expandedLayers, setExpandedLayers] = useState<{ [key: string]: boolean }>({});
 
   const [payday, setPayday] = useState(25);
-  const [monthlyBudget, setMonthlyBudget] = useState(100000);
+  const [monthlyBudget, setMonthlyBudget] = useState(0);
   const [layerBudgets, setLayerBudgets] = useState<{ [key: string]: number }>({});
   const [subTagBudgets, setSubTagBudgets] = useState<{ [key: string]: number }>({});
   const [layerBudgetEnabled, setLayerBudgetEnabled] = useState<{ [key: string]: boolean }>({});
@@ -139,7 +139,7 @@ export default function BudgetDashboard({
         AsyncStorage.getItem("unallocatedSavingsData"),
       ]);
 
-      const loadedMonthlyBudget = b ? parseInt(b) : 100000;
+      const loadedMonthlyBudget = b ? parseInt(b) : 0;
       setMonthlyBudget(loadedMonthlyBudget);
       const loadedPayday = p ? parseInt(p) : 25;
       setPayday(loadedPayday);
@@ -583,7 +583,7 @@ export default function BudgetDashboard({
   }, [layerMaster, layerActuals, layerBudgets, activeTags, layerBudgetEnabled]);
 
   const activeLimit = currentActiveLayer ? (layerBudgets[currentActiveLayer] || 1) : baseIncome;
-  const progress = Math.min(stats.total / activeLimit, 1);
+  const progress = activeLimit > 0 ? Math.min(stats.total / activeLimit, 1) : 0;
   const statusColor = stats.total > activeLimit ? "#FF3B30" : themeColor;
 
   const expectedSavings = baseIncome - globalBudgetCalc.totalAllocated;
@@ -736,7 +736,9 @@ export default function BudgetDashboard({
               <View style={styles.progressSection}>
                 <View style={styles.progressLabelRow}>
                   <Text style={styles.progressLabel}>{currentActiveLayer ? `${currentActiveLayer}の進捗` : "全体の進捗"}</Text>
-                  <Text style={[styles.progressPercent, { color: statusColor }]}>{Math.round(progress * 100)}%</Text>
+                  <Text style={activeLimit > 0 ? [styles.progressPercent, { color: statusColor }] : styles.noSettingText}>
+                    {activeLimit > 0 ? `${Math.round(progress * 100)}%` : "設定なし"}
+                  </Text>
                 </View>
                 <View style={styles.progressBarBg}><View style={[styles.progressBarFill, { width: `${progress * 100}%`, backgroundColor: statusColor }]} /></View>
               </View>
@@ -1294,6 +1296,11 @@ const styles = StyleSheet.create({
   progressLabelRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5 },
   progressLabel: { fontSize: 11, color: "#999", fontWeight: "bold" },
   progressPercent: { fontSize: 24, fontWeight: "900" },
+  noSettingText: {
+    fontSize: 12,      // 文字を小さく
+    color: "#C7C7CC",  // 色を薄いグレーに
+    fontWeight: "normal", // 太字を解除して柔らかく
+  },
   progressBarBg: { height: 10, backgroundColor: "#F2F2F7", borderRadius: 5, overflow: "hidden" },
   progressBarFill: { height: "100%", borderRadius: 5 },
   chartToggleRow: { flexDirection: "row", backgroundColor: "#F2F2F7", borderRadius: 8, padding: 2, marginBottom: 10 },

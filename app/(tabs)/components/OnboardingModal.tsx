@@ -86,8 +86,8 @@ export default function OnboardingModal({ visible, onComplete }: OnboardingModal
     let finalPresets: { [key: string]: string[] } = {};
 
     if (selectedTemplateIds.length === 0) {
-      finalLayers = { "予定": "#007AFF", "ToDo": "#FF3B30", "家計簿": "#34C759" };
-      finalPresets = { "基本": ["予定", "ToDo", "家計簿"] };
+      finalLayers = {"デフォルト": "#8E8E93" };
+      finalPresets = { "すべて": ["デフォルト"]};
     } else {
       selectedTemplateIds.forEach(id => {
         const template = TEMPLATES.find(t => t.id === id);
@@ -105,8 +105,8 @@ export default function OnboardingModal({ visible, onComplete }: OnboardingModal
   // 🌟 追加：テンプレートを使わずにスキップする処理
   const handleSkip = () => {
     onComplete({ 
-      layers: { "予定": "#007AFF", "ToDo": "#FF3B30", "家計簿": "#34C759" }, 
-      presets: { "基本": ["予定", "ToDo", "家計簿"] } 
+      layers: {"デフォルト": "#8E8E93"}, 
+      presets: {"すべて": ["デフォルト"]} 
     });
   };
 

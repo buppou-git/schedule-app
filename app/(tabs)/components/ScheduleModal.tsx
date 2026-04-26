@@ -1621,7 +1621,7 @@ export default function ScheduleModal({
 
                         {(isAllDay
                           ? [
-                            { label: "当日の朝", value: "morning" },
+                            { label: "当日の朝(7:00)", value: "morning" },
                             { label: "前日", value: "dayBefore" },
                             { label: "2日前", value: "2daysBefore" },
                             { label: "カスタム", value: "custom" },
