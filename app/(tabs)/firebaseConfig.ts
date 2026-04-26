@@ -1,9 +1,7 @@
-// firebaseConfig.ts
+// firebaseConfig.ts の内容を全書き換え
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-// 🌟 変更: 古い getFirestore などを消し、新しい initializeFirestore とキャッシュ機能を使う
 import { initializeFirestore, persistentLocalCache } from "firebase/firestore";
-
 
 const firebaseConfig = {
   apiKey: "AIzaSyAJbSwzNt3LWBIL81oAhpZIV1sMcUPpOI0",
@@ -16,10 +14,7 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-
-// 🌟 変更: DBの初期化と同時にローカルキャッシュ（オフライン永続化）を強制オンにする！
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache()
 });
-
 export const auth = getAuth(app);
