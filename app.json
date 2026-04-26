@@ -41,7 +41,9 @@
         {
           "calendarPermission": "予定を標準カレンダーと同期するためにアクセスします。"
         }
-      ]
+      ],
+      "react-native-google-mobile-ads",
+      "expo-tracking-transparency"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -51,6 +53,16 @@
       "eas": {
         "projectId": "c5501d38-da79-4ec9-a57f-c84c899d155d"
       }
-    }
+    },
+
+    "plugins": [
+      [
+        "react-native-google-mobile-ads",
+        {
+          "adMobAppId": "ca-app-pub-3940256099942544~1458002511", // テスト用ID
+          "userTrackingUsageDescription": "あなたの好みに合わせた広告を表示するために使用します。"
+        }
+      ]
+    ]
   }
 }

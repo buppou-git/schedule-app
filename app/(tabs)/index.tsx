@@ -24,6 +24,10 @@ import { useAppStore } from "../(tabs)/store/useAppStore";
 
 import OnboardingModal from "./components/OnboardingModal";
 
+//広告関係
+import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
+import { BannerAd, BannerAdSize, MobileAds, TestIds } from 'react-native-google-mobile-ads';
+
 import {
   Alert,
   Keyboard,
@@ -121,6 +125,20 @@ const calculateStreak = (completedDates: string[] | undefined) => {
 };
 
 export default function Index() {
+
+  useEffect(() => {
+    const initAds = async () => {
+      try {
+        // 1. iOSのトラッキング許可を求める
+        const { status } = await requestTrackingPermissionsAsync();
+        // 2. 広告SDKを初期化
+        await MobileAds().initialize();
+      } catch (e) {
+        console.error("Ads initialization error:", e);
+      }
+    };
+    initAds();
+  }, []);
 
   const [onboardingVisible, setOnboardingVisible] = useState(false);
 
@@ -326,7 +344,7 @@ export default function Index() {
         // 1. このアイテムが属している「共有レイヤー名」を見つける
         const itemTags = newItem.tags || (newItem.tag ? [newItem.tag] : []);
         const sharedLayerName = itemTags.find(tag => Object.keys(sharedRooms).includes(tag));
-        
+
         if (!sharedLayerName) return;
 
         // 2. そのレイヤー名に紐づく「roomId」を取得する
@@ -430,66 +448,66 @@ export default function Index() {
   };
 
 
- // 🌟 アカウントとデータを完全に削除する機能
- const handleDeleteAccount = async () => {
-  Alert.alert(
-    "アカウントとデータの削除",
-    "本当にすべてのアカウント情報とスケジュールデータを削除しますか？この操作は取り消せません。",
-    [
-      { text: "キャンセル", style: "cancel" },
-      {
-        text: "削除する",
-        style: "destructive",
-        onPress: async () => {
-          const user = auth.currentUser;
-          if (user) {
-            try {
-              // 1. クラウド上のユーザーデータを削除
-              const { deleteDoc, doc } = await import("firebase/firestore");
-              await deleteDoc(doc(db, "users", user.uid));
+  // 🌟 アカウントとデータを完全に削除する機能
+  const handleDeleteAccount = async () => {
+    Alert.alert(
+      "アカウントとデータの削除",
+      "本当にすべてのアカウント情報とスケジュールデータを削除しますか？この操作は取り消せません。",
+      [
+        { text: "キャンセル", style: "cancel" },
+        {
+          text: "削除する",
+          style: "destructive",
+          onPress: async () => {
+            const user = auth.currentUser;
+            if (user) {
+              try {
+                // 1. クラウド上のユーザーデータを削除
+                const { deleteDoc, doc } = await import("firebase/firestore");
+                await deleteDoc(doc(db, "users", user.uid));
 
-              // 2. Firebase Auth からユーザーを削除
-              await user.delete();
+                // 2. Firebase Auth からユーザーを削除
+                await user.delete();
 
-              // 3. 端末内のローカルデータをすべて消去
-              await AsyncStorage.multiRemove([
-                "myScheduleData",
-                "layerMasterData",
-                "tagMasterData",
-                "filterPresets",
-                "activeTags",
-                "sharedRoomsData",
-                "hasCompletedOnboarding" // 🌟 追加：初回フラグも消去する！
-              ]);
+                // 3. 端末内のローカルデータをすべて消去
+                await AsyncStorage.multiRemove([
+                  "myScheduleData",
+                  "layerMasterData",
+                  "tagMasterData",
+                  "filterPresets",
+                  "activeTags",
+                  "sharedRoomsData",
+                  "hasCompletedOnboarding" // 🌟 追加：初回フラグも消去する！
+                ]);
 
-              // 4. メモリ上のステートを初期化
-              setScheduleData({});
-              setLayerMaster({}); // 🌟 オンボーディングで再設定されるので空にしてOK
-              setTagMaster({});
-              setPresets({});
-              setActiveTags([]);
-              setSharedRooms({});
+                // 4. メモリ上のステートを初期化
+                setScheduleData({});
+                setLayerMaster({}); // 🌟 オンボーディングで再設定されるので空にしてOK
+                setTagMaster({});
+                setPresets({});
+                setActiveTags([]);
+                setSharedRooms({});
 
-              // 🌟 追加：設定モーダルを閉じて、即座にマニュアルを表示！
-              setConfigModalVisible(false);
-              setTimeout(() => {
-                setOnboardingVisible(true);
-              }, 500); // モーダルが重ならないように0.5秒だけ遅らせて開く
+                // 🌟 追加：設定モーダルを閉じて、即座にマニュアルを表示！
+                setConfigModalVisible(false);
+                setTimeout(() => {
+                  setOnboardingVisible(true);
+                }, 500); // モーダルが重ならないように0.5秒だけ遅らせて開く
 
-            } catch (error: any) {
-              console.error("Account Deletion Error:", error);
-              if (error.code === 'auth/requires-recent-login') {
-                Alert.alert("エラー", "セキュリティのため、一度アプリを完全に終了して再起動してから、再度削除をお試しください。");
-              } else {
-                Alert.alert("エラー", "アカウントの削除に失敗しました。通信環境を確認してください。");
+              } catch (error: any) {
+                console.error("Account Deletion Error:", error);
+                if (error.code === 'auth/requires-recent-login') {
+                  Alert.alert("エラー", "セキュリティのため、一度アプリを完全に終了して再起動してから、再度削除をお試しください。");
+                } else {
+                  Alert.alert("エラー", "アカウントの削除に失敗しました。通信環境を確認してください。");
+                }
               }
             }
-          }
+          },
         },
-      },
-    ]
-  );
-};
+      ]
+    );
+  };
 
   useEffect(() => {
     signInAnonymously(auth).catch((err: any) =>
@@ -549,7 +567,7 @@ export default function Index() {
           if (!onboarded && scheduleExists) {
             await AsyncStorage.setItem("hasCompletedOnboarding", "true");
           }
-          
+
           if (layers) setLayerMaster(JSON.parse(layers));
           if (pre) setPresets(JSON.parse(pre));
           if (tags) setTagMaster(JSON.parse(tags));
@@ -622,7 +640,7 @@ export default function Index() {
       const map = getMapForDate(date);
       scheduleData[date].forEach(item => map.set(item.id, item));
     });
-    
+
     // 2. 共有データを上書きマージ（同IDなら上書きされて重複が消える）
     Object.values(roomSchedules).forEach(roomData => {
       Object.keys(roomData).forEach(date => {
@@ -630,7 +648,7 @@ export default function Index() {
         roomData[date].forEach(item => map.set(item.id, item));
       });
     });
-    
+
     // 3. 外部カレンダーをマージ
     Object.keys(externalEvents).forEach(date => {
       const map = getMapForDate(date);
@@ -1820,10 +1838,22 @@ export default function Index() {
         layerMaster={layerMaster}
         onMoveOrCopy={handleMoveOrCopy}
       />
+
+      <View style={styles.adContainer}>
+        <BannerAd
+          unitId={TestIds.BANNER} // テスト用ID。本番は ca-app-pub-xxx に変更
+          size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+          requestOptions={{
+            requestNonPersonalizedAdsOnly: false,
+          }}
+        />
+      </View>
+
       <OnboardingModal
         visible={onboardingVisible}
         onComplete={handleCompleteOnboarding}
       />
+
     </SafeAreaView>
   );
 }
@@ -2229,4 +2259,13 @@ const styles = StyleSheet.create({
   pinBox: { width: 55, height: 65, borderWidth: 1, borderRadius: 16, borderColor: '#C7C7CC', justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF' },
   pinBoxFocused: { borderColor: '#1C1C1E', borderWidth: 2, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 5 },
   pinDot: { fontSize: 36, color: '#1C1C1E' },
+
+  adContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E5E5EA',
+    paddingBottom: Platform.OS === 'ios' ? 0 : 5, // iPhoneのホームバー対策
+  },
 });
