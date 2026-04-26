@@ -5,12 +5,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import CryptoJS from 'crypto-js';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Calendar from 'expo-calendar';
 import * as FileSystem from 'expo-file-system';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
 import * as Sharing from 'expo-sharing';
-import { GoogleAuthProvider, linkWithCredential } from "firebase/auth";
+import { GoogleAuthProvider, linkWithCredential, OAuthProvider } from "firebase/auth";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -38,6 +39,7 @@ interface ConfigModalProps {
   lastSyncedAt: string | null;
   onRestore: () => void;
   onBackup: () => void;
+  onDeleteAccount: () => void;
   sharedRooms: { [layerName: string]: string };
   onAddSharedRoom: (layerName: string, roomId: string) => void;
 }
@@ -54,6 +56,7 @@ export default function ConfigModal({
   lastSyncedAt,
   onRestore,
   onBackup,
+  onDeleteAccount,
   sharedRooms,
   onAddSharedRoom,
 }: ConfigModalProps) {
@@ -128,6 +131,40 @@ export default function ConfigModal({
         Alert.alert("エラー", "このアカウントは既に別のデータと紐付いています。");
       } else {
         Alert.alert("エラー", "アカウント連携をキャンセル、または失敗しました。");
+      }
+    } finally {
+      setIsLinking(false);
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    setIsLinking(true);
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+
+      if (credential.identityToken) {
+        const provider = new OAuthProvider('apple.com');
+        const firebaseCredential = provider.credential({
+          idToken: credential.identityToken,
+        });
+
+        if (auth.currentUser) {
+          await linkWithCredential(auth.currentUser, firebaseCredential);
+          setIsAnonymous(false);
+          Alert.alert("連携完了", "Appleアカウントと紐付けられ、データが保護されました。");
+        }
+      }
+    } catch (e: any) {
+      if (e.code === 'ERR_REQUEST_CANCELED') {
+        // ユーザーがキャンセルした場合
+      } else {
+        console.error(e);
+        Alert.alert("エラー", "Appleでのログインに失敗しました。");
       }
     } finally {
       setIsLinking(false);
@@ -383,26 +420,33 @@ export default function ConfigModal({
                     <Text style={styles.rowText}>ステータス</Text>
                   </View>
                   <Text style={[styles.timeText, { color: isAnonymous ? "#8E8E93" : "#34C759", fontWeight: "bold" }]}>
-                    {isAnonymous ? "ゲスト (未連携)" : "Google 連携済"}
+                    {isAnonymous ? "ゲスト (未連携)" : "クラウド 連携済"}
                   </Text>
                 </View>
 
+                {/* 🌟 変更：匿名ユーザーの場合はAppleとGoogleの両方を表示 */}
                 {isAnonymous && (
-                  <TouchableOpacity
-                    style={[styles.row, styles.borderTop]}
-                    disabled={isLinking}
-                    onPress={handleGoogleSignIn}
-                  >
-                    <View style={styles.rowLeft}>
-                      <Ionicons name="logo-google" size={20} color="#1C1C1E" />
-                      <Text style={styles.rowText}>Googleでデータを保護</Text>
-                    </View>
-                    {isLinking ? (
-                      <ActivityIndicator size="small" color="#1C1C1E" />
-                    ) : (
-                      <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+                  <>
+                    {/* Apple サインインボタン */}
+                    {Platform.OS === 'ios' && (
+                      <TouchableOpacity style={[styles.row, styles.borderTop]} disabled={isLinking} onPress={handleAppleSignIn}>
+                        <View style={styles.rowLeft}>
+                          <Ionicons name="logo-apple" size={20} color="#1C1C1E" />
+                          <Text style={styles.rowText}>Appleでデータを保護</Text>
+                        </View>
+                        {isLinking ? <ActivityIndicator size="small" color="#1C1C1E" /> : <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />}
+                      </TouchableOpacity>
                     )}
-                  </TouchableOpacity>
+
+                    {/* Google サインインボタン */}
+                    <TouchableOpacity style={[styles.row, styles.borderTop]} disabled={isLinking} onPress={handleGoogleSignIn}>
+                      <View style={styles.rowLeft}>
+                        <Ionicons name="logo-google" size={20} color="#1C1C1E" />
+                        <Text style={styles.rowText}>Googleでデータを保護</Text>
+                      </View>
+                      {isLinking ? <ActivityIndicator size="small" color="#1C1C1E" /> : <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />}
+                    </TouchableOpacity>
+                  </>
                 )}
               </View>
 
@@ -532,6 +576,16 @@ export default function ConfigModal({
                     <Text style={styles.rowText}>データをCSVで出力</Text>
                   </View>
                   <Ionicons name="share-outline" size={20} color="#C7C7CC" />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={[styles.sectionLabel, { marginTop: 20, color: "#FF3B30" }]}>DANGER ZONE</Text>
+              <View style={[styles.card, { borderColor: "#FF3B30", borderWidth: 1 }]}>
+                <TouchableOpacity style={styles.row} onPress={onDeleteAccount}>
+                  <View style={styles.rowLeft}>
+                    <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+                    <Text style={[styles.rowText, { color: "#FF3B30", fontWeight: "bold" }]}>アカウントとデータを削除</Text>
+                  </View>
                 </TouchableOpacity>
               </View>
 

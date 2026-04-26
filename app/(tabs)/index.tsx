@@ -22,6 +22,8 @@ import TodoItem from "./components/TodoItem";
 
 import { useAppStore } from "../(tabs)/store/useAppStore";
 
+import OnboardingModal from "./components/OnboardingModal";
+
 import {
   Alert,
   Keyboard,
@@ -119,6 +121,8 @@ const calculateStreak = (completedDates: string[] | undefined) => {
 };
 
 export default function Index() {
+
+  const [onboardingVisible, setOnboardingVisible] = useState(false);
 
   const [sharedRooms, setSharedRooms] = useState<{ [layerName: string]: string }>({});
 
@@ -397,6 +401,83 @@ export default function Index() {
     }
   };
 
+  const handleCompleteOnboarding = async (setupData: { layers: any, presets: any }) => {
+    // ユーザーが選んだテンプレートのレイヤーとプリセットを適用
+    setLayerMaster(setupData.layers);
+    setPresets(setupData.presets);
+    setTagMaster({}); // タグは最初は空
+    setActiveTags([]); // 最初はすべて表示状態
+
+    // ローカルストレージに保存＆完了フラグを立てる
+    await AsyncStorage.setItem("layerMasterData", JSON.stringify(setupData.layers));
+    await AsyncStorage.setItem("filterPresets", JSON.stringify(setupData.presets));
+    await AsyncStorage.setItem("hasCompletedOnboarding", "true");
+
+    setOnboardingVisible(false);
+  };
+
+
+ // 🌟 アカウントとデータを完全に削除する機能
+ const handleDeleteAccount = async () => {
+  Alert.alert(
+    "アカウントとデータの削除",
+    "本当にすべてのアカウント情報とスケジュールデータを削除しますか？この操作は取り消せません。",
+    [
+      { text: "キャンセル", style: "cancel" },
+      {
+        text: "削除する",
+        style: "destructive",
+        onPress: async () => {
+          const user = auth.currentUser;
+          if (user) {
+            try {
+              // 1. クラウド上のユーザーデータを削除
+              const { deleteDoc, doc } = await import("firebase/firestore");
+              await deleteDoc(doc(db, "users", user.uid));
+
+              // 2. Firebase Auth からユーザーを削除
+              await user.delete();
+
+              // 3. 端末内のローカルデータをすべて消去
+              await AsyncStorage.multiRemove([
+                "myScheduleData",
+                "layerMasterData",
+                "tagMasterData",
+                "filterPresets",
+                "activeTags",
+                "sharedRoomsData",
+                "hasCompletedOnboarding" // 🌟 追加：初回フラグも消去する！
+              ]);
+
+              // 4. メモリ上のステートを初期化
+              setScheduleData({});
+              setLayerMaster({}); // 🌟 オンボーディングで再設定されるので空にしてOK
+              setTagMaster({});
+              setPresets({});
+              setActiveTags([]);
+              setSharedRooms({});
+
+              // 🌟 追加：設定モーダルを閉じて、即座にマニュアルを表示！
+              setConfigModalVisible(false);
+              setTimeout(() => {
+                setOnboardingVisible(true);
+              }, 500); // モーダルが重ならないように0.5秒だけ遅らせて開く
+
+            } catch (error: any) {
+              console.error("Account Deletion Error:", error);
+              if (error.code === 'auth/requires-recent-login') {
+                Alert.alert("エラー", "セキュリティのため、一度アプリを完全に終了して再起動してから、再度削除をお試しください。");
+              } else {
+                Alert.alert("エラー", "アカウントの削除に失敗しました。通信環境を確認してください。");
+              }
+            }
+          }
+        },
+      },
+    ]
+  );
+};
+
   useEffect(() => {
     signInAnonymously(auth).catch((err: any) =>
       console.error("Auth Error:", err),
@@ -438,20 +519,22 @@ export default function Index() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [layers, pre, tags] = await Promise.all([
+        const [layers, pre, tags, onboarded] = await Promise.all([
           AsyncStorage.getItem("layerMasterData"),
           AsyncStorage.getItem("filterPresets"),
           AsyncStorage.getItem("tagMasterData"),
+          AsyncStorage.getItem("hasCompletedOnboarding"), // 🌟 初回起動フラグを取得
         ]);
-        if (layers) setLayerMaster(JSON.parse(layers));
-        else
-          setLayerMaster({
-            ライブ: "#34C759",
-            大学: "#007AFF",
-            生活: "#FF9500",
-          });
-        if (pre) setPresets(JSON.parse(pre));
-        if (tags) setTagMaster(JSON.parse(tags));
+
+        if (!onboarded) {
+          // 🌟 初回起動ならオンボーディングを表示
+          setOnboardingVisible(true);
+        } else {
+          // 2回目以降なら保存されたデータをセット
+          if (layers) setLayerMaster(JSON.parse(layers));
+          if (pre) setPresets(JSON.parse(pre));
+          if (tags) setTagMaster(JSON.parse(tags));
+        }
       } catch (error) {
         console.error(error);
       }
@@ -1691,6 +1774,7 @@ export default function Index() {
         onBackup={handleManualBackup} // 🌟 追加
         sharedRooms={sharedRooms}     // 🌟 追加
         onAddSharedRoom={handleAddSharedRoom} // 🌟 追加
+        onDeleteAccount={handleDeleteAccount}
       />
       <SubTaskEditModal
         visible={subTaskModalVisible}
@@ -1716,6 +1800,10 @@ export default function Index() {
         sharedRooms={sharedRooms}
         layerMaster={layerMaster}
         onMoveOrCopy={handleMoveOrCopy}
+      />
+      <OnboardingModal
+        visible={onboardingVisible}
+        onComplete={handleCompleteOnboarding}
       />
     </SafeAreaView>
   );
