@@ -18,7 +18,6 @@ interface OnboardingModalProps {
   onComplete: (setupData: { layers: any, presets: any }) => void;
 }
 
-// 🌟 追加：TypeScriptエラーを防ぐための明確な「型」定義
 type TemplateData = {
   id: string;
   name: string;
@@ -29,7 +28,6 @@ type TemplateData = {
   presets: { [key: string]: string[] };
 };
 
-// 🌟 修正：明示的に TemplateData[] の型を指定
 const TEMPLATES: TemplateData[] = [
   {
     id: "oshi",
@@ -74,7 +72,7 @@ export default function OnboardingModal({ visible, onComplete }: OnboardingModal
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
 
   const handleNext = () => {
-    if (step < 3) setStep(step + 1);
+    if (step < 4) setStep(step + 1);
   };
 
   const toggleTemplate = (id: string) => {
@@ -104,6 +102,14 @@ export default function OnboardingModal({ visible, onComplete }: OnboardingModal
     onComplete({ layers: finalLayers, presets: finalPresets });
   };
 
+  // 🌟 追加：テンプレートを使わずにスキップする処理
+  const handleSkip = () => {
+    onComplete({ 
+      layers: { "予定": "#007AFF", "ToDo": "#FF3B30", "家計簿": "#34C759" }, 
+      presets: { "基本": ["予定", "ToDo", "家計簿"] } 
+    });
+  };
+
   return (
     <Modal visible={visible} animationType="slide" transparent={false}>
       <View style={styles.container}>
@@ -120,7 +126,7 @@ export default function OnboardingModal({ visible, onComplete }: OnboardingModal
               <Ionicons name="layers-outline" size={24} color="#007AFF" />
               <View style={styles.featureText}>
                 <Text style={styles.featureTitle}>すべてが重なるカレンダー</Text>
-                <Text style={styles.featureDesc}>日々のスケジュールも、毎日の習慣（スクワットなど）も、出費も、同じカレンダーの上で管理できます。</Text>
+                <Text style={styles.featureDesc}>日々のスケジュールも、毎日の習慣も、出費も、アプリを分けずに同じカレンダーの上で直感的に管理できます。</Text>
               </View>
             </View>
 
@@ -131,6 +137,48 @@ export default function OnboardingModal({ visible, onComplete }: OnboardingModal
         )}
 
         {step === 2 && (
+          <View style={styles.slide}>
+            <Text style={styles.title}>3つのコア機能</Text>
+            <Text style={styles.subTitle}>生活のすべてを、ここで一元管理。</Text>
+            
+            <ScrollView style={{ width: '100%', marginTop: 10 }} showsVerticalScrollIndicator={false}>
+              <View style={[styles.featureBox, { marginBottom: 15 }]}>
+                <Ionicons name="calendar-outline" size={28} color="#007AFF" />
+                <View style={styles.featureText}>
+                  <Text style={styles.featureTitle}>予定 (Schedule)</Text>
+                  <Text style={styles.featureDesc}>情報科学の講義やゼミ、アルバイトなど、時間が決まっているスケジュールを管理します。</Text>
+                </View>
+              </View>
+
+              <View style={[styles.featureBox, { marginBottom: 15 }]}>
+                <Ionicons name="checkbox-outline" size={28} color="#FF3B30" />
+                <View style={styles.featureText}>
+                  <Text style={styles.featureTitle}>ToDo・習慣 (Tasks)</Text>
+                  <Text style={styles.featureDesc}>TOEIC900点に向けた学習タスクや、「スクワット100回・腕立て60回」のような毎日の筋トレルーティンも進捗管理できます。</Text>
+                </View>
+              </View>
+
+              <View style={[styles.featureBox, { marginBottom: 15 }]}>
+                <Ionicons name="wallet-outline" size={28} color="#34C759" />
+                <View style={styles.featureText}>
+                  <Text style={styles.featureTitle}>家計簿 (Money)</Text>
+                  <Text style={styles.featureDesc}>参考書の購入代や交際費など、日々の出費をカレンダーに直接記録し、予算を把握できます。</Text>
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={{ flexDirection: 'row', gap: 15, width: '100%', marginTop: 20 }}>
+              <TouchableOpacity style={[styles.nextBtn, { flex: 1, backgroundColor: '#E5E5EA' }]} onPress={() => setStep(1)}>
+                <Text style={[styles.nextBtnText, { color: '#1C1C1E' }]}>戻る</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.nextBtn, { flex: 2 }]} onPress={handleNext}>
+                <Text style={styles.nextBtnText}>次へ</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {step === 3 && (
           <View style={styles.slide}>
             <View style={[styles.iconCircle, { backgroundColor: "#007AFF15" }]}>
               <Ionicons name="cloud-outline" size={60} color="#007AFF" />
@@ -147,7 +195,7 @@ export default function OnboardingModal({ visible, onComplete }: OnboardingModal
             </View>
 
             <View style={{ flexDirection: 'row', gap: 15, width: '100%' }}>
-              <TouchableOpacity style={[styles.nextBtn, { flex: 1, backgroundColor: '#E5E5EA' }]} onPress={() => setStep(1)}>
+              <TouchableOpacity style={[styles.nextBtn, { flex: 1, backgroundColor: '#E5E5EA' }]} onPress={() => setStep(2)}>
                 <Text style={[styles.nextBtnText, { color: '#1C1C1E' }]}>戻る</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.nextBtn, { flex: 2 }]} onPress={handleNext}>
@@ -157,7 +205,7 @@ export default function OnboardingModal({ visible, onComplete }: OnboardingModal
           </View>
         )}
 
-        {step === 3 && (
+        {step === 4 && (
           <View style={styles.slide}>
             <Text style={styles.title}>あなたに合わせた設定を</Text>
             <Text style={styles.subTitle}>UniCalをどのような用途で使いますか？</Text>
@@ -194,7 +242,7 @@ export default function OnboardingModal({ visible, onComplete }: OnboardingModal
             </ScrollView>
 
             <View style={{ flexDirection: 'row', gap: 15, width: '100%', marginTop: 20 }}>
-              <TouchableOpacity style={[styles.nextBtn, { flex: 1, backgroundColor: '#E5E5EA' }]} onPress={() => setStep(2)}>
+              <TouchableOpacity style={[styles.nextBtn, { flex: 1, backgroundColor: '#E5E5EA' }]} onPress={() => setStep(3)}>
                 <Text style={[styles.nextBtnText, { color: '#1C1C1E' }]}>戻る</Text>
               </TouchableOpacity>
               <TouchableOpacity 
@@ -205,6 +253,12 @@ export default function OnboardingModal({ visible, onComplete }: OnboardingModal
                 <Text style={styles.nextBtnText}>UniCal をはじめる</Text>
               </TouchableOpacity>
             </View>
+
+            {/* 🌟 追加：スキップして自分で設定するボタン */}
+            <TouchableOpacity style={styles.skipBtn} onPress={handleSkip}>
+              <Text style={styles.skipBtnText}>テンプレートを使わずに自分で設定する</Text>
+            </TouchableOpacity>
+
           </View>
         )}
 
@@ -220,7 +274,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: "900", color: "#1C1C1E", marginBottom: 10, textAlign: "center" },
   subTitle: { fontSize: 16, color: "#8E8E93", fontWeight: "600", marginBottom: 20, textAlign: "center" },
   
-  featureBox: { flexDirection: "row", backgroundColor: "#F8F8FA", padding: 20, borderRadius: 16, width: "100%", marginBottom: 40, alignItems: "center", gap: 15 },
+  featureBox: { flexDirection: "row", backgroundColor: "#F8F8FA", padding: 20, borderRadius: 16, width: "100%", alignItems: "center", gap: 15 },
   featureText: { flex: 1 },
   featureTitle: { fontSize: 16, fontWeight: "bold", color: "#1C1C1E", marginBottom: 5 },
   featureDesc: { fontSize: 13, color: "#8E8E93", lineHeight: 20 },
@@ -232,6 +286,9 @@ const styles = StyleSheet.create({
   templateName: { fontSize: 16, fontWeight: "bold", color: "#1C1C1E", marginBottom: 4 },
   templateDesc: { fontSize: 12, color: "#8E8E93", lineHeight: 18 },
 
-  nextBtn: { backgroundColor: "#1C1C1E", width: "100%", paddingVertical: 18, borderRadius: 16, alignItems: "center", marginTop: 'auto', marginBottom: Platform.OS === 'ios' ? 20 : 10 },
+  nextBtn: { backgroundColor: "#1C1C1E", width: "100%", paddingVertical: 18, borderRadius: 16, alignItems: "center", marginTop: 'auto' },
   nextBtnText: { color: "#FFF", fontSize: 16, fontWeight: "bold" },
+
+  skipBtn: { marginTop: 15, paddingVertical: 10, paddingHorizontal: 10, marginBottom: Platform.OS === 'ios' ? 20 : 10 },
+  skipBtnText: { color: "#8E8E93", fontSize: 13, fontWeight: "bold", textAlign: "center", textDecorationLine: "underline" }
 });

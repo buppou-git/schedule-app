@@ -323,7 +323,20 @@ export default function Index() {
   const handleSaveItem = async (newItem: ScheduleItem) => {
     if (isSharedItem(newItem)) {
       try {
-        const docRef = newItem.id ? doc(db, "shared_schedules", newItem.id) : doc(collection(db, "shared_schedules"));
+        // 1. このアイテムが属している「共有レイヤー名」を見つける
+        const itemTags = newItem.tags || (newItem.tag ? [newItem.tag] : []);
+        const sharedLayerName = itemTags.find(tag => Object.keys(sharedRooms).includes(tag));
+        
+        if (!sharedLayerName) return;
+
+        // 2. そのレイヤー名に紐づく「roomId」を取得する
+        const targetRoomId = sharedRooms[sharedLayerName];
+
+        // 3. 正しい場所 (rooms/{roomId}/schedules) に保存する！
+        const { doc, collection, setDoc } = await import("firebase/firestore");
+        const schedulesRef = collection(db, "rooms", targetRoomId, "schedules");
+        const docRef = newItem.id ? doc(schedulesRef, newItem.id) : doc(schedulesRef);
+
         await setDoc(docRef, {
           ...newItem,
           id: docRef.id,
@@ -334,7 +347,7 @@ export default function Index() {
         console.error("共有保存エラー:", e);
       }
     } else {
-      // ローカル保存は scheduleManager 内で吸収させる（ここでは省略可能）
+      // ローカル保存は scheduleManager 内で吸収させる
     }
   };
 
@@ -519,18 +532,24 @@ export default function Index() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [layers, pre, tags, onboarded] = await Promise.all([
+        // 過去のスケジュールデータ（myScheduleData）があるかどうかも確認する
+        const [layers, pre, tags, onboarded, scheduleExists] = await Promise.all([
           AsyncStorage.getItem("layerMasterData"),
           AsyncStorage.getItem("filterPresets"),
           AsyncStorage.getItem("tagMasterData"),
-          AsyncStorage.getItem("hasCompletedOnboarding"), // 🌟 初回起動フラグを取得
+          AsyncStorage.getItem("hasCompletedOnboarding"),
+          AsyncStorage.getItem("myScheduleData"), // 🌟 追加：過去データの有無
         ]);
 
-        if (!onboarded) {
-          // 🌟 初回起動ならオンボーディングを表示
+        // 🌟 修正：初回フラグがなく、かつ過去のデータも一切ない「完全な新規」だけマニュアルを出す
+        if (!onboarded && !scheduleExists) {
           setOnboardingVisible(true);
         } else {
-          // 2回目以降なら保存されたデータをセット
+          // 既存ユーザーの保護：フラグがなくてもデータがあるなら、暗黙的にフラグを立てる
+          if (!onboarded && scheduleExists) {
+            await AsyncStorage.setItem("hasCompletedOnboarding", "true");
+          }
+          
           if (layers) setLayerMaster(JSON.parse(layers));
           if (pre) setPresets(JSON.parse(pre));
           if (tags) setTagMaster(JSON.parse(tags));
