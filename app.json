@@ -4,7 +4,7 @@
     "slug": "multi-calendar",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon2.png",
+    "icon": "./assets/icon3.png",
     "scheme": "com.buppou.multicalendar",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true, 
@@ -14,7 +14,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon2.png",
+        "foregroundImage": "./assets/icon3.png",
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.buppou.multicalendar"
@@ -24,7 +24,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/icon2.png",
+          "image": "./assets/icon3.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"

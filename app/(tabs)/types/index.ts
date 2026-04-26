@@ -14,6 +14,7 @@ export interface SubTask {
   reminderOption?: string;
   notificationId?: string;
   isDone?: boolean;
+  deadlineDate?: Date;
 }
 
 // 🌟 メインの予定・タスク・支出の型定義

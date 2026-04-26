@@ -1266,8 +1266,7 @@ export default function Index() {
               theme={{
                 calendarBackground: "transparent",
                 todayTextColor: "#FFF",
-                todayBackgroundColor: currentSolidColor,
-                textDayFontWeight: "bold",
+                todayBackgroundColor: currentSolidColor + "33",
                 selectedDayBackgroundColor: currentSolidColor,
               }}
             />
