@@ -81,12 +81,13 @@ const getPastelColor = (hex: string) => {
 };
 
 const getOrGenerateMasterKey = async () => {
-  let key = await SecureStore.getItemAsync("myAppMasterKey");
-  if (!key) {
-    key = CryptoJS.lib.WordArray.random(32).toString();
-    await SecureStore.setItemAsync("myAppMasterKey", key);
-  }
-  return key;
+  const user = auth.currentUser;
+  
+  // 念のためのフォールバック（通常は発生しません）
+  if (!user) return "default_fallback_key_12345";
+  
+  // 🌟 ユーザー固有のUIDをベースにした固定の鍵（機種変更しても同じ鍵になる）
+  return user.uid + "_unical_secure_key_2026";
 };
 
 const calculateStreak = (completedDates: string[] | undefined) => {
@@ -168,15 +169,15 @@ export default function Index() {
   const { cancelItemNotification, scheduleItemNotification } =
     useNotificationManager();
 
-    const [subTaskModalVisible, setSubTaskModalVisible] = useState(false);
-    const [editingSubTaskInfo, setEditingSubTaskInfo] = useState<{
-      parentId: string;
-      parentTitle: string;
-      date: string;
-      subTask: SubTask;
-    } | null>(null);
-    const [quickActionVisible, setQuickActionVisible] = useState(false);
-    const [quickActionItem, setQuickActionItem] = useState<ScheduleItem | null>(null); 
+  const [subTaskModalVisible, setSubTaskModalVisible] = useState(false);
+  const [editingSubTaskInfo, setEditingSubTaskInfo] = useState<{
+    parentId: string;
+    parentTitle: string;
+    date: string;
+    subTask: SubTask;
+  } | null>(null);
+  const [quickActionVisible, setQuickActionVisible] = useState(false);
+  const [quickActionItem, setQuickActionItem] = useState<ScheduleItem | null>(null);
 
   const [presets, setPresets] = useState<{ [key: string]: string[] }>({});
   const [modalVisible, setModalVisible] = useState(false);
@@ -791,21 +792,23 @@ export default function Index() {
           }
           return sub;
         });
-        // 🌟 修正1：支出(isExpense)以外はすべてチェック対象にする（収入タスクも含む）
-        const pureTodos = updatedSubTasks.filter((sub: SubTask) => !sub.isExpense);
-        
-        // 全て完了しているか判定
+
+        // 1. お金の記録以外を完了判定の対象にする
+        const pureTodos = updatedSubTasks.filter((sub: SubTask) => !sub.isExpense && !sub.isIncome);
+
+        // 2. 全て完了しているか計算（純粋なタスクがない場合は元の状態を維持）
         const isAllSubTasksDone = pureTodos.length > 0
           ? pureTodos.every((sub: SubTask) => sub.isDone)
           : (item.isDone || false);
 
-        // 🌟 修正2：ルーチン予定（習慣）の場合は completedDates も更新する
+        // 🌟 3. 習慣(ルーチン)予定の場合の特別処理
         let updatedCompletedDates = item.completedDates || [];
         if (item.repeatType) {
-          if (isAllSubTasksDone && !updatedCompletedDates.includes(targetDate)) {
-            updatedCompletedDates = [...updatedCompletedDates, targetDate]; // 完了リストに追加
-          } else if (!isAllSubTasksDone && updatedCompletedDates.includes(targetDate)) {
-            updatedCompletedDates = updatedCompletedDates.filter(d => d !== targetDate); // 未完了に戻す
+          // ⚠️ targetDate ではなく date を使うように修正！
+          if (isAllSubTasksDone && !updatedCompletedDates.includes(date)) {
+            updatedCompletedDates = [...updatedCompletedDates, date]; // 完了日に今日を追加
+          } else if (!isAllSubTasksDone && updatedCompletedDates.includes(date)) {
+            updatedCompletedDates = updatedCompletedDates.filter((d: string) => d !== date); // 完了から外す
           }
         }
 
@@ -813,8 +816,10 @@ export default function Index() {
           ...item,
           subTasks: updatedSubTasks,
           isDone: isAllSubTasksDone,
-          completedDates: updatedCompletedDates,
+          completedDates: updatedCompletedDates, // 🌟 これを追加
         };
+
+
       }
       return item;
     });
@@ -963,7 +968,7 @@ export default function Index() {
           } else {
             const newData = { ...scheduleData };
             for (const d of Object.keys(newData)) {
-              newData[d] = newData[d].filter((i:ScheduleItem) => i.id !== item.id);
+              newData[d] = newData[d].filter((i: ScheduleItem) => i.id !== item.id);
             }
             setScheduleData(newData);
             setHasUnsavedChanges(true);

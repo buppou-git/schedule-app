@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
+import React, { useState } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -48,6 +48,9 @@ export default function TodoItem({
   onLongPress,
   streakCount = 0,
 }: TodoItemProps) {
+
+  const [isExpanded, setIsExpanded] = useState(false);
+
   const itemTags =
     item.tags && item.tags.length > 0 ? item.tags : item.tag ? [item.tag] : [];
 
@@ -184,47 +187,86 @@ export default function TodoItem({
         )}
       </TouchableOpacity>
 
-      {/* サブタスクのUI */}
+
+      {/* 🌟 サブタスクの表示 */}
       {item.subTasks && item.subTasks.length > 0 && (
-        <View style={styles.subTaskListContainer}>
-          {item.subTasks.map((sub: any) => (
-            <TouchableOpacity
-              key={sub.id}
-              style={[styles.subTaskMiniCard, sub.isDone && { opacity: 0.5 }]}
-              onPress={() => {
-                setEditingSubTaskInfo({
-                  parentId: item.id,
-                  parentTitle: item.title,
-                  date: itemDate,
-                  subTask: sub,
-                });
-                setSubTaskModalVisible(true);
-              }}
-              activeOpacity={0.6}
-            >
-              {/* 🌟 支出（お金の記録）じゃない時だけチェックボタンを出す */}
-              {!sub.isExpense && (
+        <View>
+          {/* 🌟 展開用トグルボタン */}
+          <TouchableOpacity
+            style={{ flexDirection: "row", alignItems: "center", marginTop: 8, marginLeft: 20, paddingVertical: 4 }}
+            onPress={() => setIsExpanded(!isExpanded)}
+            activeOpacity={0.6}
+          >
+            <Ionicons
+              name={isExpanded ? "chevron-down" : "chevron-forward"}
+              size={16}
+              color="#8E8E93"
+            />
+            <Text style={{ fontSize: 12, color: "#8E8E93", marginLeft: 6, fontWeight: "600" }}>
+              サブタスク ({item.subTasks.filter((s: SubTask) => s.isDone).length}/{item.subTasks.length})
+            </Text>
+          </TouchableOpacity>
+
+          {/* 🌟 開いている時だけ中身を表示 */}
+          {isExpanded && (
+            <View style={styles.subTaskListContainer}>
+              {item.subTasks.map((sub: SubTask) => (
                 <TouchableOpacity
-                  style={{ padding: 4, marginRight: 6 }}
+                  key={sub.id}
+                  style={styles.subTaskMiniCard}
                   onPress={() => toggleSubTodo(itemDate, item.id, sub.id)}
                 >
-                  <Ionicons
-                    name={sub.isDone ? "checkmark-circle" : "ellipse-outline"}
-                    size={20}
-                    color={sub.isDone ? "#34C759" : "#AEAEB2"}
-                  />
+                  {/* 🌟 支出（お金の記録）以外の場合のみチェックボックスを表示 */}
+                  {!sub.isExpense && (
+                    <Ionicons
+                      name={sub.isDone ? "checkbox" : "square-outline"}
+                      size={16}
+                      color={sub.isDone ? "#8E8E93" : "#C7C7CC"}
+                      style={{ marginRight: 8 }}
+                    />
+                  )}
+                  <Text style={[styles.subTaskMiniTitle, sub.isDone && { color: "#8E8E93", textDecorationLine: "line-through" }]}>
+                    {sub.title}
+                  </Text>
+
+                  {/* サブタスクの時間 */}
+                  {sub.hasDateTime && sub.endTime && (
+                    <View style={{ flexDirection: "row", alignItems: "center", marginRight: 8 }}>
+                      <Ionicons name="time-outline" size={12} color="#AEAEB2" style={{ marginRight: 4 }} />
+                      <Text style={{ fontSize: 10, color: "#8E8E93" }}>
+                        {/* 🌟 データの型が何であっても、確実に文字の時刻にして表示する */}
+                        {sub.endTime instanceof Date
+                          ? `${("0" + sub.endTime.getHours()).slice(-2)}:${("0" + sub.endTime.getMinutes()).slice(-2)}`
+                          : String(sub.endTime)}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* お金の表示 */}
+                  {(sub.isExpense || sub.isIncome) && (
+                    <Text style={{ fontSize: 12, fontWeight: "bold", color: sub.isExpense ? "#FF3B30" : "#34C759", marginRight: 8 }}>
+                      {sub.isExpense ? "-" : "+"}¥{sub.amount?.toLocaleString()}
+                    </Text>
+                  )}
+
+                  <TouchableOpacity
+                    style={{ padding: 4 }}
+                    onPress={() => {
+                      setEditingSubTaskInfo({
+                        parentId: item.id,
+                        parentTitle: item.title,
+                        date: itemDate,
+                        subTask: sub,
+                      });
+                      setSubTaskModalVisible(true);
+                    }}
+                  >
+                    <Ionicons name="ellipsis-horizontal" size={16} color="#C7C7CC" />
+                  </TouchableOpacity>
                 </TouchableOpacity>
-              )}
-              <Text
-                style={[
-                  styles.subTaskMiniTitle,
-                  sub.isDone && styles.todoTitleDone,
-                ]}
-              >
-                {sub.title}
-              </Text>
-            </TouchableOpacity>
-          ))}
+              ))}
+            </View>
+          )}
         </View>
       )}
     </View>

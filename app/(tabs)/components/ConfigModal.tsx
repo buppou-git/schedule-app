@@ -11,7 +11,7 @@ import * as FileSystem from 'expo-file-system';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
 import * as Sharing from 'expo-sharing';
-import { GoogleAuthProvider, linkWithCredential, OAuthProvider } from "firebase/auth";
+import { GoogleAuthProvider, linkWithCredential, OAuthProvider, signInWithCredential } from "firebase/auth";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -117,21 +117,39 @@ export default function ConfigModal({
       const anyResponse = response as any;
       const id_token = anyResponse.data?.idToken || anyResponse.idToken;
 
-      if (id_token) {
+      if (id_token && auth.currentUser) {
         const credential = GoogleAuthProvider.credential(id_token);
-        if (auth.currentUser) {
+        try {
+          // 1. まずは新しいデータとの「連携」を試みる
           await linkWithCredential(auth.currentUser, credential);
           setIsAnonymous(false);
           Alert.alert("連携完了", "アカウントと紐付けられ、データが保護されました。");
+        } catch (linkError: any) {
+          // 🌟 2. 既に連携済み（＝機種変更してきたユーザー）の場合、引き継ぎ処理へ
+          if (linkError.code === "auth/credential-already-in-use") {
+            Alert.alert(
+              "データ引き継ぎ",
+              "このアカウントには過去のデータがあります。この端末に引き継ぎますか？",
+              [
+                { text: "キャンセル", style: "cancel" },
+                {
+                  text: "引き継ぐ",
+                  onPress: async () => {
+                    await signInWithCredential(auth, credential);
+                    setIsAnonymous(false);
+                    Alert.alert("完了", "引き継ぎました！「クラウドからデータを復元」を押してください。");
+                  }
+                }
+              ]
+            );
+          } else {
+            throw linkError; // その他のエラーは外のcatchへ
+          }
         }
       }
     } catch (error: any) {
       console.error("Google Sign-In Error:", error);
-      if (error.code === "auth/credential-already-in-use") {
-        Alert.alert("エラー", "このアカウントは既に別のデータと紐付いています。");
-      } else {
-        Alert.alert("エラー", "アカウント連携をキャンセル、または失敗しました。");
-      }
+      Alert.alert("エラー", "アカウント連携をキャンセル、または失敗しました。");
     } finally {
       setIsLinking(false);
     }
@@ -147,22 +165,41 @@ export default function ConfigModal({
         ],
       });
 
-      if (credential.identityToken) {
+      if (credential.identityToken && auth.currentUser) {
         const provider = new OAuthProvider('apple.com');
         const firebaseCredential = provider.credential({
           idToken: credential.identityToken,
         });
 
-        if (auth.currentUser) {
+        try {
           await linkWithCredential(auth.currentUser, firebaseCredential);
           setIsAnonymous(false);
           Alert.alert("連携完了", "Appleアカウントと紐付けられ、データが保護されました。");
+        } catch (linkError: any) {
+          // 🌟 機種変更ユーザーの場合
+          if (linkError.code === "auth/credential-already-in-use") {
+            Alert.alert(
+              "データ引き継ぎ",
+              "このAppleアカウントには過去のデータがあります。引き継ぎますか？",
+              [
+                { text: "キャンセル", style: "cancel" },
+                {
+                  text: "引き継ぐ",
+                  onPress: async () => {
+                    await signInWithCredential(auth, firebaseCredential);
+                    setIsAnonymous(false);
+                    Alert.alert("完了", "引き継ぎました！「クラウドからデータを復元」を押してください。");
+                  }
+                }
+              ]
+            );
+          } else {
+            throw linkError;
+          }
         }
       }
     } catch (e: any) {
-      if (e.code === 'ERR_REQUEST_CANCELED') {
-        // ユーザーがキャンセルした場合
-      } else {
+      if (e.code !== 'ERR_REQUEST_CANCELED') {
         console.error(e);
         Alert.alert("エラー", "Appleでのログインに失敗しました。");
       }
