@@ -82,10 +82,10 @@ const getPastelColor = (hex: string) => {
 
 const getOrGenerateMasterKey = async () => {
   const user = auth.currentUser;
-  
+
   // 念のためのフォールバック（通常は発生しません）
   if (!user) return "default_fallback_key_12345";
-  
+
   // 🌟 ユーザー固有のUIDをベースにした固定の鍵（機種変更しても同じ鍵になる）
   return user.uid + "_unical_secure_key_2026";
 };
@@ -720,14 +720,22 @@ export default function Index() {
     const newData = { ...scheduleData };
 
     let targetItem: ScheduleItem | null = null;
-    let originalDate = "";
+    let originalDate = date;
 
-    for (const d of Object.keys(newData)) {
-      const found = newData[d].find((i) => i.id === id);
-      if (found) {
-        targetItem = found;
-        originalDate = d;
-        break;
+    // 🌟 1. まず指定された日付の中をピンポイントで探す（O(1)の爆速処理）
+    if (newData[date]) {
+      targetItem = newData[date].find((i) => i.id === id) || null;
+    }
+
+    // 2. 万が一見つからなかった場合のみ、全体を検索する
+    if (!targetItem) {
+      for (const d of Object.keys(newData)) {
+        const found = newData[d].find((i) => i.id === id);
+        if (found) {
+          targetItem = found;
+          originalDate = d;
+          break; // 見つけたらすぐやめる
+        }
       }
     }
 
@@ -935,10 +943,20 @@ export default function Index() {
   const handleQuickSave = (item: ScheduleItem, newTitle: string) => {
     if (!newTitle.trim()) return;
     const newData = { ...scheduleData };
-    for (const d of Object.keys(newData)) {
-      newData[d] = newData[d].map((i: ScheduleItem) =>
-        i.id === item.id ? { ...i, title: newTitle } : i,
-      );
+
+    // 🌟 ターゲットの日付を特定（今後の予定ならitem.date、それ以外なら選択中の日）
+    const targetDate = (item as any).date || selectedDate;
+
+    if (newData[targetDate] && newData[targetDate].some(i => i.id === item.id)) {
+      newData[targetDate] = newData[targetDate].map(i => i.id === item.id ? { ...i, title: newTitle } : i);
+    } else {
+      // フォールバック
+      for (const d of Object.keys(newData)) {
+        if (newData[d].some((i) => i.id === item.id)) {
+          newData[d] = newData[d].map((i) => i.id === item.id ? { ...i, title: newTitle } : i);
+          break; // 見つけたら即終了
+        }
+      }
     }
     setScheduleData(newData);
     setHasUnsavedChanges(true);
@@ -967,8 +985,17 @@ export default function Index() {
             }
           } else {
             const newData = { ...scheduleData };
-            for (const d of Object.keys(newData)) {
-              newData[d] = newData[d].filter((i: ScheduleItem) => i.id !== item.id);
+            const targetDate = (item as any).date || selectedDate;
+
+            if (newData[targetDate] && newData[targetDate].some(i => i.id === item.id)) {
+              newData[targetDate] = newData[targetDate].filter((i) => i.id !== item.id);
+            } else {
+              for (const d of Object.keys(newData)) {
+                if (newData[d].some((i) => i.id === item.id)) {
+                  newData[d] = newData[d].filter((i) => i.id !== item.id);
+                  break; // 見つけたら即終了
+                }
+              }
             }
             setScheduleData(newData);
             setHasUnsavedChanges(true);
@@ -1522,7 +1549,7 @@ export default function Index() {
                             <TodoItem
                               key={t.id}
                               item={t}
-                              itemDate={selectedDate}
+                              itemDate={t.date}
                               selectedDate={selectedDate}
                               tagMaster={tagMaster}
                               layerMaster={layerMaster}
