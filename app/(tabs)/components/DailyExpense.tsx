@@ -117,10 +117,11 @@ export default function DailyExpense({
     ]);
   };
 
-  // 🌟 修正：右側のカード幅をエリアの幅にピタリと合わせる
   const screenWidth = Dimensions.get("window").width;
-  const rightAreaWidth = screenWidth * 0.62; // 左(35%) + 隙間(3%) の残り62%が右エリア
-  const exactCardWidth = rightAreaWidth - 10; // marginRightの10pxを引くことで1枚ピッタリに
+  const containerPadding = 30; // 🌟 親画面の左右の余白合計（15 + 15）
+  const availableWidth = screenWidth - containerPadding; // 実際に使える幅
+  const rightAreaWidth = availableWidth * 0.62; // 左(35%) + 隙間(3%) の残り62%
+  const exactCardWidth = rightAreaWidth - 10; // marginRightの10pxを引く
 
   const displayLayers = useMemo(
     () =>

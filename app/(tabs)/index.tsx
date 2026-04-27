@@ -287,7 +287,7 @@ export default function Index() {
     setFilterModalVisible(false);
     setTimeout(() => {
       setPresetModalVisible(true);
-    }, 400);
+    }, 300);
   };
 
   const confirmSavePreset = async () => {
@@ -1615,7 +1615,7 @@ export default function Index() {
                   style={styles.enhancedSettingsBtn}
                   onPress={() => {
                     setFilterModalVisible(false);
-                    setTimeout(() => setLayerModalVisible(true), 400);
+                    setTimeout(() => setLayerModalVisible(true), 300);
                   }}
                 >
                   <Ionicons name="settings-sharp" size={16} color="#1C1C1E" />
