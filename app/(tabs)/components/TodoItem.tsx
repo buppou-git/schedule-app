@@ -7,16 +7,15 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { LayerMaster, ScheduleItem, SubTask, TagMaster } from "../types";
+import { useAppStore } from "../store/useAppStore";
+import { ScheduleItem, SubTask } from "../types";
 
 interface TodoItemProps {
-  item: ScheduleItem; // 🌟
+  item: ScheduleItem; 
   itemDate: string;
   selectedDate: string;
-  tagMaster: TagMaster; // 🌟
-  layerMaster: LayerMaster; // 🌟
-  formatEventTime: (item: ScheduleItem) => string; // 🌟
-  openEditModal: (item: ScheduleItem) => void; // 🌟
+  formatEventTime: (item: ScheduleItem) => string; 
+  openEditModal: (item: ScheduleItem) => void; 
   toggleTodo: (date: string, id: string) => void;
   toggleSubTodo: (date: string, parentId: string, subTaskId: number) => void;
 
@@ -30,15 +29,13 @@ interface TodoItemProps {
 
   setSubTaskModalVisible: (visible: boolean) => void;
   onLongPress: (item: ScheduleItem) => void; // 🌟
-  streakCount?: number;
+  streakCount: number;
 }
 
 export default function TodoItem({
   item,
   itemDate,
   selectedDate,
-  tagMaster,
-  layerMaster,
   formatEventTime,
   openEditModal,
   toggleTodo,
@@ -46,10 +43,10 @@ export default function TodoItem({
   setEditingSubTaskInfo,
   setSubTaskModalVisible,
   onLongPress,
-  streakCount = 0,
+  streakCount,
 }: TodoItemProps) {
-
   const [isExpanded, setIsExpanded] = useState(false);
+  const { tagMaster, layerMaster } = useAppStore();
 
   const itemTags =
     item.tags && item.tags.length > 0 ? item.tags : item.tag ? [item.tag] : [];

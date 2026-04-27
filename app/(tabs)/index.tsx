@@ -1487,8 +1487,6 @@ export default function Index() {
                                     item={t}
                                     itemDate={selectedDate}
                                     selectedDate={selectedDate}
-                                    tagMaster={tagMaster}
-                                    layerMaster={layerMaster}
                                     formatEventTime={formatEventTime}
                                     openEditModal={openEditModal}
                                     toggleTodo={toggleTodo}
@@ -1517,8 +1515,6 @@ export default function Index() {
                                   item={t}
                                   itemDate={selectedDate}
                                   selectedDate={selectedDate}
-                                  tagMaster={tagMaster}
-                                  layerMaster={layerMaster}
                                   formatEventTime={formatEventTime}
                                   openEditModal={openEditModal}
                                   toggleTodo={toggleTodo}
@@ -1551,8 +1547,6 @@ export default function Index() {
                               item={t}
                               itemDate={t.date}
                               selectedDate={selectedDate}
-                              tagMaster={tagMaster}
-                              layerMaster={layerMaster}
                               formatEventTime={formatEventTime}
                               openEditModal={openEditModal}
                               toggleTodo={toggleTodo}
