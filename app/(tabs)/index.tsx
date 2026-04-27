@@ -784,15 +784,29 @@ export default function Index() {
           }
           return sub;
         });
-        const pureTodos = updatedSubTasks.filter((sub: any) => !sub.isExpense && !sub.isIncome);
-        const isAllSubTasksDone =
-          pureTodos.length > 0 &&
-          pureTodos.every((sub: any) => sub.isDone);
+        // 🌟 修正1：支出(isExpense)以外はすべてチェック対象にする（収入タスクも含む）
+        const pureTodos = updatedSubTasks.filter((sub: any) => !sub.isExpense);
+        
+        // 全て完了しているか判定
+        const isAllSubTasksDone = pureTodos.length > 0
+          ? pureTodos.every((sub: any) => sub.isDone)
+          : (item.isDone || false);
+
+        // 🌟 修正2：ルーチン予定（習慣）の場合は completedDates も更新する
+        let updatedCompletedDates = item.completedDates || [];
+        if (item.repeatType) {
+          if (isAllSubTasksDone && !updatedCompletedDates.includes(targetDate)) {
+            updatedCompletedDates = [...updatedCompletedDates, targetDate]; // 完了リストに追加
+          } else if (!isAllSubTasksDone && updatedCompletedDates.includes(targetDate)) {
+            updatedCompletedDates = updatedCompletedDates.filter(d => d !== targetDate); // 未完了に戻す
+          }
+        }
 
         return {
           ...item,
           subTasks: updatedSubTasks,
           isDone: isAllSubTasksDone,
+          completedDates: updatedCompletedDates,
         };
       }
       return item;

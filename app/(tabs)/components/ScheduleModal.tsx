@@ -324,11 +324,10 @@ export default function ScheduleModal({
         setTagInput(selectedItem.tag || "");
         setTagColor(selectedItem.color || "#007AFF");
 
-        const savedLayer = tagMaster?.[selectedItem.tag || ""]?.layer
-          || (layerMaster[selectedItem.tag || ""] ? selectedItem.tag : def);
+        const savedLayer = tagMaster?.[selectedItem.tag || ""]?.layer 
+                          || (layerMaster[selectedItem.tag || ""] ? selectedItem.tag : def);
         setSelectedLayer(savedLayer || def);
 
-        setSelectedLayer(tagMaster?.[selectedItem.tag || ""]?.layer || def);
         setSelectedCategory(selectedItem.category || "食費");
         setIsAllDay(selectedItem.isAllDay ?? true);
         setStartDate(new Date(selectedItem.startDate || selectedDate));
@@ -372,13 +371,12 @@ export default function ScheduleModal({
 
         const snapshot = JSON.stringify({
           title: selectedItem.title || "",
-          amount: selectedItem.amount || 0,
+          amount: parseInt(selectedItem.amount?.toString() || "0"),
           isTodo: selectedItem.isTodo ?? false,
-          subTasks: savedSubTasks.map(t => `${t.title}_${t.isDone}`).join(",")
+          subTasksData: savedSubTasks.map(t => `${t.title}_${t.isDone}`).join(",")
         });
         setInitialSnapshot(snapshot);
 
-        setInitialSnapshot(snapshot);
       } else {
         setInputText("");
         setTagInput("");
@@ -504,7 +502,6 @@ export default function ScheduleModal({
 
     const finalTag = tagInput.trim() || selectedLayer;
 
-    // 🌟 修正ポイント：すでに存在する属性なら元の色を保持。新規なら指定された色を使う。
     let finalColor = uiThemeColor;
     if (tagInput.trim()) {
       const existingTag = tagMaster[tagInput.trim()];
@@ -609,8 +606,9 @@ export default function ScheduleModal({
       }),
     );
 
-    const onlyTodos = updatedSubTasks.filter(t => !t.isExpense);
-    const allDone = onlyTodos.length > 0 && onlyTodos.every(t => t.isDone);
+    // 🌟 自動完了の判定ロジック（お金の記録を除外）
+    const pureTodos = updatedSubTasks.filter(t => !t.isExpense && !t.isIncome);
+    const allDone = pureTodos.length > 0 && pureTodos.every(t => t.isDone);
 
     const newData = { ...scheduleData };
     const sStr = startDate.toISOString().split("T")[0];
@@ -622,6 +620,7 @@ export default function ScheduleModal({
       isEvent,
       isTodo,
       isExpense,
+      isDone: allDone ? true : (selectedItem ? selectedItem.isDone : false), // 🌟 完了状態をここで確定
       color: finalColor,
       category: isExpense ? selectedCategory : undefined,
       repeatType: repeatType !== "none" ? repeatType : undefined,
@@ -638,35 +637,23 @@ export default function ScheduleModal({
       subTasks: updatedSubTasks,
     };
 
-
-    // 🌟 1. 共有レイヤーかどうかの判定
     const isShared = selectedLayer === "共有" || finalTag === "共有";
 
     if (isShared) {
-      // 🌍 2. 共有レイヤーの場合：Firestoreに直接保存！
       try {
         const docId = selectedItem ? selectedItem.id : Date.now().toString();
         const docRef = doc(db, "shared_schedules", docId);
         await setDoc(docRef, {
           ...itemData,
           id: docId,
-          date: sStr, // Firestoreで検索しやすいように日付を持たせる
+          date: sStr,
           updatedAt: new Date().toISOString(),
         });
-        console.log("🌍 共有データとしてFirestoreに保存しました！");
       } catch (e) {
         console.error("共有保存エラー:", e);
         Alert.alert("エラー", "共有データの保存に失敗しました。");
       }
-
-      // 💡 おもてなし：元々プライベートだった予定を「共有」に変更したなら、ローカルからは消す
-      if (selectedItem && !(selectedItem.tags?.includes("共有") || selectedItem.tag === "共有")) {
-        Object.keys(newData).forEach((d) => {
-          newData[d] = newData[d].filter((i: any) => i.id !== selectedItem.id);
-        });
-      }
     } else {
-      // 🔐 3. プライベートデータの場合：今まで通りローカル(newData)に保存
       if (selectedItem) {
         if (mode === "single") {
           Object.keys(newData).forEach((d) => {
@@ -697,51 +684,13 @@ export default function ScheduleModal({
           newData[sStr].push({ ...selectedItem, ...itemData });
         }
       } else {
+        // 🌟 新規保存：isDone: false を削除（itemDataに入っているためエラーを回避）
         if (!newData[sStr]) newData[sStr] = [];
         newData[sStr].push({
           id: Date.now().toString(),
-          isDone: false,
           ...itemData,
         });
       }
-    }
-
-    if (selectedItem) {
-      if (mode === "single") {
-        Object.keys(newData).forEach((d) => {
-          newData[d] = newData[d].map((i: any) => {
-            if (i.id === selectedItem.id) {
-              return {
-                ...i,
-                exceptionDates: [...(i.exceptionDates || []), selectedDate],
-              };
-            }
-            return i;
-          });
-        });
-        const newItem = {
-          ...selectedItem,
-          ...itemData,
-          id: Date.now().toString(),
-          repeatType: undefined,
-          linkedMasterId: selectedItem.id,
-        };
-        if (!newData[sStr]) newData[sStr] = [];
-        newData[sStr].push(newItem);
-      } else {
-        Object.keys(newData).forEach((d) => {
-          newData[d] = newData[d].filter((i: any) => i.id !== selectedItem.id);
-        });
-        if (!newData[sStr]) newData[sStr] = [];
-        newData[sStr].push({ ...selectedItem, ...itemData });
-      }
-    } else {
-      if (!newData[sStr]) newData[sStr] = [];
-      newData[sStr].push({
-        id: Date.now().toString(),
-        isDone: false,
-        ...itemData,
-      });
     }
 
     const startForExport = isAllDay
@@ -751,7 +700,6 @@ export default function ScheduleModal({
       ? endDate
       : new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), endTime.getHours(), endTime.getMinutes());
 
-    // await を付けずに実行することで、保存完了を待たせずに非同期で処理します
     exportToStandardCalendar(inputText, startForExport, endForExport, isAllDay);
 
     onClose();
@@ -801,17 +749,14 @@ export default function ScheduleModal({
         }
       }
 
-      // 🌟 ここから分岐：共有データならFirestoreから削除
       const isShared = selectedItem.tags?.includes("共有") || selectedItem.tag === "共有";
       if (isShared) {
         try {
           await deleteDoc(doc(db, "shared_schedules", selectedItem.id));
-          console.log("🌍 共有データをFirestoreから削除しました！");
         } catch (e) {
           console.error("共有データ削除エラー:", e);
         }
       } else {
-        // 🔐 プライベートデータならローカルから削除
         Object.keys(newData).forEach((d) => {
           newData[d] = newData[d].filter((i: any) => i.id !== selectedItem.id);
         });

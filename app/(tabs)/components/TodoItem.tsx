@@ -121,7 +121,7 @@ export default function TodoItem({
             </ScrollView>
           </View>
           <View style={styles.todoSubRow}>
-          {streakCount > 0 && (
+            {streakCount > 0 && (
               <View style={styles.streakBadge}>
                 <Ionicons name="flame" size={10} color="#FF9500" style={{ marginRight: 2 }} />
                 <Text style={styles.streakText}>{streakCount} Days</Text>
@@ -202,16 +202,19 @@ export default function TodoItem({
               }}
               activeOpacity={0.6}
             >
-              <TouchableOpacity
-                style={{ padding: 4, marginRight: 6 }}
-                onPress={() => toggleSubTodo(itemDate, item.id, sub.id)}
-              >
-                <Ionicons
-                  name={sub.isDone ? "checkmark-circle" : "ellipse-outline"}
-                  size={20}
-                  color={sub.isDone ? "#34C759" : "#AEAEB2"}
-                />
-              </TouchableOpacity>
+              {/* 🌟 支出（お金の記録）じゃない時だけチェックボタンを出す */}
+              {!sub.isExpense && (
+                <TouchableOpacity
+                  style={{ padding: 4, marginRight: 6 }}
+                  onPress={() => toggleSubTodo(itemDate, item.id, sub.id)}
+                >
+                  <Ionicons
+                    name={sub.isDone ? "checkmark-circle" : "ellipse-outline"}
+                    size={20}
+                    color={sub.isDone ? "#34C759" : "#AEAEB2"}
+                  />
+                </TouchableOpacity>
+              )}
               <Text
                 style={[
                   styles.subTaskMiniTitle,
