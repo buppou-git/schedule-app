@@ -7,7 +7,7 @@ import { StatusBar } from "expo-status-bar";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useScheduleManager } from "../../hooks/useScheduleManager";
 
-import { ScheduleItem } from "../(tabs)/types";
+import { ScheduleItem, SubTask } from "../(tabs)/types";
 
 import { useCalendarData } from "../../hooks/useCalendarData";
 import { useNotificationManager } from "../../hooks/useNotificationManager";
@@ -23,6 +23,8 @@ import TodoItem from "./components/TodoItem";
 import { useAppStore } from "../(tabs)/store/useAppStore";
 
 import OnboardingModal from "./components/OnboardingModal";
+
+import PresetSaveModal from "./components/PresetSaveModal";
 
 //広告関係
 import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
@@ -166,10 +168,15 @@ export default function Index() {
   const { cancelItemNotification, scheduleItemNotification } =
     useNotificationManager();
 
-  const [subTaskModalVisible, setSubTaskModalVisible] = useState(false);
-  const [editingSubTaskInfo, setEditingSubTaskInfo] = useState<any>(null);
-  const [quickActionVisible, setQuickActionVisible] = useState(false);
-  const [quickActionItem, setQuickActionItem] = useState<any>(null);
+    const [subTaskModalVisible, setSubTaskModalVisible] = useState(false);
+    const [editingSubTaskInfo, setEditingSubTaskInfo] = useState<{
+      parentId: string;
+      parentTitle: string;
+      date: string;
+      subTask: SubTask;
+    } | null>(null);
+    const [quickActionVisible, setQuickActionVisible] = useState(false);
+    const [quickActionItem, setQuickActionItem] = useState<ScheduleItem | null>(null); 
 
   const [presets, setPresets] = useState<{ [key: string]: string[] }>({});
   const [modalVisible, setModalVisible] = useState(false);
@@ -432,7 +439,7 @@ export default function Index() {
     }
   };
 
-  const handleCompleteOnboarding = async (setupData: { layers: any, presets: any }) => {
+  const handleCompleteOnboarding = async (setupData: { layers: { [key: string]: string }, presets: { [key: string]: string[] } }) => {
     // ユーザーが選んだテンプレートのレイヤーとプリセットを適用
     setLayerMaster(setupData.layers);
     setPresets(setupData.presets);
@@ -785,11 +792,11 @@ export default function Index() {
           return sub;
         });
         // 🌟 修正1：支出(isExpense)以外はすべてチェック対象にする（収入タスクも含む）
-        const pureTodos = updatedSubTasks.filter((sub: any) => !sub.isExpense);
+        const pureTodos = updatedSubTasks.filter((sub: SubTask) => !sub.isExpense);
         
         // 全て完了しているか判定
         const isAllSubTasksDone = pureTodos.length > 0
-          ? pureTodos.every((sub: any) => sub.isDone)
+          ? pureTodos.every((sub: SubTask) => sub.isDone)
           : (item.isDone || false);
 
         // 🌟 修正2：ルーチン予定（習慣）の場合は completedDates も更新する
@@ -816,7 +823,7 @@ export default function Index() {
     setHasUnsavedChanges(true);
   };
 
-  const handleSubTaskSave = async (updatedSub: any) => {
+  const handleSubTaskSave = async (updatedSub: SubTask) => {
     if (!editingSubTaskInfo) return;
     const { parentId, parentTitle, date } = editingSubTaskInfo;
     const newData = { ...scheduleData };
@@ -920,11 +927,11 @@ export default function Index() {
     setSubTaskModalVisible(false);
   };
 
-  const handleQuickSave = (item: any, newTitle: string) => {
+  const handleQuickSave = (item: ScheduleItem, newTitle: string) => {
     if (!newTitle.trim()) return;
     const newData = { ...scheduleData };
     for (const d of Object.keys(newData)) {
-      newData[d] = newData[d].map((i: any) =>
+      newData[d] = newData[d].map((i: ScheduleItem) =>
         i.id === item.id ? { ...i, title: newTitle } : i,
       );
     }
@@ -932,7 +939,7 @@ export default function Index() {
     setHasUnsavedChanges(true);
   };
 
-  const handleQuickDelete = (item: any) => {
+  const handleQuickDelete = (item: ScheduleItem) => {
     Alert.alert("削除の確認", `「${item.title}」を削除しますか？`, [
       { text: "キャンセル", style: "cancel" },
       {
@@ -956,7 +963,7 @@ export default function Index() {
           } else {
             const newData = { ...scheduleData };
             for (const d of Object.keys(newData)) {
-              newData[d] = newData[d].filter((i: any) => i.id !== item.id);
+              newData[d] = newData[d].filter((i:ScheduleItem) => i.id !== item.id);
             }
             setScheduleData(newData);
             setHasUnsavedChanges(true);
@@ -1056,10 +1063,10 @@ export default function Index() {
     const isAllLayers = activeTags.length === 0;
     const activeTagsSet = new Set(activeTags);
 
-    const dTasks: any[] = [];
-    const dEvents: any[] = [];
+    const dTasks: ScheduleItem[] = [];
+    const dEvents: ScheduleItem[] = [];
 
-    items.forEach((item: any) => {
+    items.forEach((item: ScheduleItem) => {
       const itemTags =
         item.tags && item.tags.length > 0
           ? item.tags
@@ -1068,7 +1075,7 @@ export default function Index() {
             : [];
       const matchLayer =
         isAllLayers ||
-        itemTags.some((tag: any) => {
+        itemTags.some((tag: string) => {
           const parentLayer = tagMaster[tag]?.layer || tag;
           return activeTagsSet.has(parentLayer);
         });
@@ -1078,7 +1085,7 @@ export default function Index() {
       }
     });
 
-    const uTasks: any[] = [];
+    const uTasks: (ScheduleItem & { date: string })[] = [];
     const dayTaskIds = new Set(dTasks.map((t) => t.id));
     const addedUpcomingIds = new Set<string>();
 
@@ -1115,7 +1122,7 @@ export default function Index() {
         }
       });
     }
-    const sortByTime = (a: any, b: any) => {
+    const sortByTime = (a: ScheduleItem, b: ScheduleItem) => {
       // 終日の予定は一番上に持ってくる
       if (a.isAllDay && !b.isAllDay) return -1;
       if (!a.isAllDay && b.isAllDay) return 1;
@@ -1714,59 +1721,16 @@ export default function Index() {
         </TouchableOpacity>
       </Modal>
 
-      <Modal
+      <PresetSaveModal
         visible={presetModalVisible}
-        transparent={true}
-        animationType="fade"
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={{ flex: 1 }}
-        >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View style={styles.namingOverlay}>
-              <TouchableWithoutFeedback>
-                <View style={styles.namingContent}>
-                  <Text style={styles.namingLabel}>SAVE_PRESET</Text>
-                  <Text style={styles.namingTitle}>プリセット名の入力</Text>
-
-                  <TextInput
-                    style={styles.namingInput}
-                    placeholder="PRESET_NAME..."
-                    placeholderTextColor="#AEAEB2"
-                    autoFocus={true}
-                    value={tempPresetName}
-                    onChangeText={setTempPresetName}
-                  />
-
-                  <View style={styles.namingActionRow}>
-                    <TouchableOpacity
-                      style={styles.namingCancelBtn}
-                      onPress={() => {
-                        setPresetModalVisible(false);
-                        setTempPresetName("");
-                        Keyboard.dismiss();
-                      }}
-                    >
-                      <Text style={styles.namingCancelText}>CANCEL</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.namingConfirmBtn}
-                      onPress={() => {
-                        confirmSavePreset();
-                        Keyboard.dismiss();
-                      }}
-                    >
-                      <Text style={styles.namingConfirmText}>SAVE</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </TouchableWithoutFeedback>
-            </View>
-          </TouchableWithoutFeedback>
-        </KeyboardAvoidingView>
-      </Modal>
+        presetName={tempPresetName}
+        setPresetName={setTempPresetName}
+        onClose={() => {
+          setPresetModalVisible(false);
+          setTempPresetName("");
+        }}
+        onSave={confirmSavePreset}
+      />
 
       <Modal visible={editPresetModalVisible} transparent={true} animationType="fade">
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
