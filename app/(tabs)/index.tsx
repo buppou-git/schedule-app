@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import { StatusBar } from "expo-status-bar";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useScheduleManager } from "../../hooks/useScheduleManager";
 
 import { ScheduleItem, SubTask } from "../(tabs)/types";
@@ -346,19 +346,14 @@ export default function Index() {
     return itemTags.some(tag => Object.keys(sharedRooms).includes(tag));
   };
 
-  const handleSaveItem = async (newItem: ScheduleItem) => {
+  const handleSaveItem = async (newItem: ScheduleItem, targetDate?: string) => {
     if (isSharedItem(newItem)) {
       try {
-        // 1. このアイテムが属している「共有レイヤー名」を見つける
         const itemTags = newItem.tags || (newItem.tag ? [newItem.tag] : []);
         const sharedLayerName = itemTags.find(tag => Object.keys(sharedRooms).includes(tag));
-
         if (!sharedLayerName) return;
 
-        // 2. そのレイヤー名に紐づく「roomId」を取得する
         const targetRoomId = sharedRooms[sharedLayerName];
-
-        // 3. 正しい場所 (rooms/{roomId}/schedules) に保存する！
         const { doc, collection, setDoc } = await import("firebase/firestore");
         const schedulesRef = collection(db, "rooms", targetRoomId, "schedules");
         const docRef = newItem.id ? doc(schedulesRef, newItem.id) : doc(schedulesRef);
@@ -366,15 +361,28 @@ export default function Index() {
         await setDoc(docRef, {
           ...newItem,
           id: docRef.id,
-          date: selectedDate,
+          date: targetDate || selectedDate, // 🌟 どの日付でも対応できるように進化！
           updatedAt: new Date().toISOString(),
         });
       } catch (e) {
         console.error("共有保存エラー:", e);
       }
-    } else {
-      // ローカル保存は scheduleManager 内で吸収させる
     }
+  };
+
+  // 🌟 追加：通信を節約する「デバウンス（遅延）同期」関数
+  const syncTimeoutRef = useRef<{ [key: string]: ReturnType<typeof setTimeout> }>({});
+  const debouncedSyncSharedItem = (item: ScheduleItem, date: string) => {
+    if (!isSharedItem(item)) return; // 共有アイテムじゃなければ何もしない
+
+    if (syncTimeoutRef.current[item.id]) {
+      clearTimeout(syncTimeoutRef.current[item.id]); // 前のタイマーをキャンセル
+    }
+    // 1秒間操作がなければクラウドに送信する
+    syncTimeoutRef.current[item.id] = setTimeout(() => {
+      handleSaveItem(item, date);
+      delete syncTimeoutRef.current[item.id];
+    }, 1000);
   };
 
   // 🌟 追加：コピー・移動の処理
@@ -751,6 +759,7 @@ export default function Index() {
     } else {
       targetItem.isDone = !targetItem.isDone;
     }
+    debouncedSyncSharedItem(targetItem, originalDate);
 
     setScheduleData(newData);
     setHasUnsavedChanges(true);
@@ -820,14 +829,18 @@ export default function Index() {
           }
         }
 
-        return {
+        // 🌟 変数に一旦入れてから返すように修正
+        const updatedParentItem = {
           ...item,
           subTasks: updatedSubTasks,
           isDone: isAllSubTasksDone,
-          completedDates: updatedCompletedDates, // 🌟 これを追加
+          completedDates: updatedCompletedDates,
         };
 
+        // 🌟 追加：共有タスクなら裏で同期！
+        debouncedSyncSharedItem(updatedParentItem, targetDate);
 
+        return updatedParentItem;
       }
       return item;
     });
@@ -940,66 +953,95 @@ export default function Index() {
     setSubTaskModalVisible(false);
   };
 
-  const handleQuickSave = (item: ScheduleItem, newTitle: string) => {
+  const handleQuickSave = (item: ScheduleItem & { date?: string }, newTitle: string) => {
     if (!newTitle.trim()) return;
     const newData = { ...scheduleData };
 
     // 🌟 ターゲットの日付を特定（今後の予定ならitem.date、それ以外なら選択中の日）
-    const targetDate = (item as any).date || selectedDate;
+    const targetDate = item.date || selectedDate;
+    let updatedItem: ScheduleItem | null = null;
 
     if (newData[targetDate] && newData[targetDate].some(i => i.id === item.id)) {
-      newData[targetDate] = newData[targetDate].map(i => i.id === item.id ? { ...i, title: newTitle } : i);
+      newData[targetDate] = newData[targetDate].map(i => {
+        if (i.id === item.id) {
+          updatedItem = { ...i, title: newTitle }; // 🌟 ここで newTitle を使用
+          return updatedItem;
+        }
+        return i;
+      });
     } else {
-      // フォールバック
+      // フォールバック（全検索）
       for (const d of Object.keys(newData)) {
         if (newData[d].some((i) => i.id === item.id)) {
-          newData[d] = newData[d].map((i) => i.id === item.id ? { ...i, title: newTitle } : i);
-          break; // 見つけたら即終了
+          newData[d] = newData[d].map((i) => {
+            if (i.id === item.id) {
+              updatedItem = { ...i, title: newTitle };
+              return updatedItem;
+            }
+            return i;
+          });
+          break;
         }
       }
     }
+
+    // 共有タスクなら裏で同期
+    if (updatedItem) {
+      debouncedSyncSharedItem(updatedItem, targetDate);
+    }
+
     setScheduleData(newData);
     setHasUnsavedChanges(true);
   };
 
-  const handleQuickDelete = (item: ScheduleItem) => {
+  const handleQuickDelete = (item: ScheduleItem & { date?: string }) => {
     Alert.alert("削除の確認", `「${item.title}」を削除しますか？`, [
       { text: "キャンセル", style: "cancel" },
       {
         text: "削除",
         style: "destructive",
         onPress: async () => {
+          // 1. 通知のキャンセル
           if (item.notificationIds) {
             for (const id of item.notificationIds) {
               await cancelItemNotification(id);
             }
           }
 
+          // 2. 共有タスクの場合、クラウド(Firestore)からも削除
           if (isSharedItem(item)) {
             try {
-              const { deleteDoc } = await import("firebase/firestore");
-              await deleteDoc(doc(db, "shared_schedules", item.id));
-              console.log("共有データを削除しました");
+              const itemTags = item.tags || (item.tag ? [item.tag] : []);
+              const sharedLayerName = itemTags.find(tag => Object.keys(sharedRooms).includes(tag));
+              if (sharedLayerName) {
+                const targetRoomId = sharedRooms[sharedLayerName];
+                const { deleteDoc, doc } = await import("firebase/firestore");
+                // 正しいルームパスで削除を実行
+                await deleteDoc(doc(db, "rooms", targetRoomId, "schedules", item.id));
+              }
             } catch (error) {
               console.error("共有データの削除に失敗:", error);
             }
-          } else {
-            const newData = { ...scheduleData };
-            const targetDate = (item as any).date || selectedDate;
+          }
 
-            if (newData[targetDate] && newData[targetDate].some(i => i.id === item.id)) {
-              newData[targetDate] = newData[targetDate].filter((i) => i.id !== item.id);
-            } else {
-              for (const d of Object.keys(newData)) {
-                if (newData[d].some((i) => i.id === item.id)) {
-                  newData[d] = newData[d].filter((i) => i.id !== item.id);
-                  break; // 見つけたら即終了
-                }
+          // 3. ローカルデータの削除（filterを使うので newTitle は不要です！）
+          const newData = { ...scheduleData };
+          const targetDate = item.date || selectedDate;
+
+          if (newData[targetDate] && newData[targetDate].some(i => i.id === item.id)) {
+            newData[targetDate] = newData[targetDate].filter(i => i.id !== item.id);
+          } else {
+            // フォールバック（全検索して削除）
+            for (const d of Object.keys(newData)) {
+              if (newData[d].some((i) => i.id === item.id)) {
+                newData[d] = newData[d].filter((i) => i.id !== item.id);
+                break;
               }
             }
-            setScheduleData(newData);
-            setHasUnsavedChanges(true);
           }
+
+          setScheduleData(newData);
+          setHasUnsavedChanges(true);
         },
       },
     ]);
