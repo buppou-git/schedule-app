@@ -2228,10 +2228,12 @@ export default function Index() {
         onClose={() => setSearchModalVisible(false)}
         scheduleData={scheduleData}
         themeColor={currentSolidColor}
+        layerMaster={layerMaster} // 🌟 これ
+        tagMaster={tagMaster} // 🌟 これ
         onItemPress={(item, date) => {
-          setSelectedDate(date); // その日にジャンプ！
-          setSelectedItem(item); // 編集モーダルにデータを渡す
-          setModalVisible(true); // 詳細（編集）モーダルを開く
+          setSelectedDate(date);
+          setSelectedItem(item);
+          setModalVisible(true);
         }}
       />
 
