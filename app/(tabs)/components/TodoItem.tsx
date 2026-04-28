@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useState } from "react";
+import React, { useState, memo } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -8,7 +8,7 @@ import {
   View,
 } from "react-native";
 import { ScheduleItem, SubTask } from "../../../types";
-import { useAppStore } from "../store/useAppStore";
+import { useAppStore } from "../../../store/useAppStore";
 
 interface TodoItemProps {
   item: ScheduleItem; 
@@ -32,7 +32,7 @@ interface TodoItemProps {
   streakCount: number;
 }
 
-export default function TodoItem({
+const TodoItem = memo(function TodoItem({
   item,
   itemDate,
   selectedDate,
@@ -393,3 +393,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 });
+
+
+export default TodoItem;

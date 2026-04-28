@@ -66,6 +66,12 @@ import TabBar from "./components/TabBar";
 
 import { useExternalCalendar } from "../../hooks/useExternalCalendar";
 
+function useStableCallback<T extends (...args: any[]) => any>(callback: T) {
+  const ref = useRef(callback);
+  useEffect(() => { ref.current = callback; }, [callback]);
+  return useCallback((...args: Parameters<T>) => ref.current(...args), []) as T;
+}
+
 const getTodayString = () => {
   const date = new Date();
   return `${date.getFullYear()}-${("0" + (date.getMonth() + 1)).slice(-2)}-${("0" + date.getDate()).slice(-2)}`;
@@ -1219,6 +1225,15 @@ export default function Index() {
     return { dayTasks: dTasks, upcomingTasks: uTasks, dayEvents: dEvents };
   }, [expandedScheduleData, selectedDate, activeTags, activeMode, tagMaster, displayData]);
 
+  const stableToggleTodo = useStableCallback(toggleTodo);
+  const stableToggleSubTodo = useStableCallback(toggleSubTodo);
+  const stableOpenEditModal = useStableCallback(openEditModal);
+  const stableFormatEventTime = useStableCallback(formatEventTime);
+  const stableLongPress = useStableCallback((item: ScheduleItem) => {
+    setQuickActionItem(item);
+    setQuickActionVisible(true);
+  });
+
   if (isAppLocked) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#F2F2F7' }]}>
@@ -1529,17 +1544,14 @@ export default function Index() {
                                     item={t}
                                     itemDate={selectedDate}
                                     selectedDate={selectedDate}
-                                    formatEventTime={formatEventTime}
-                                    openEditModal={openEditModal}
-                                    toggleTodo={toggleTodo}
-                                    toggleSubTodo={toggleSubTodo}
+                                    formatEventTime={stableFormatEventTime}
+                                    openEditModal={stableOpenEditModal}
+                                    toggleTodo={stableToggleTodo}
+                                    toggleSubTodo={stableToggleSubTodo}
                                     setEditingSubTaskInfo={setEditingSubTaskInfo}
                                     setSubTaskModalVisible={setSubTaskModalVisible}
                                     streakCount={streakCount}
-                                    onLongPress={(item) => {
-                                      setQuickActionItem(item);
-                                      setQuickActionVisible(true);
-                                    }}
+                                    onLongPress={stableLongPress}
                                   />
                                 )
                               })}
@@ -1553,22 +1565,19 @@ export default function Index() {
                               </Text>
                               {oneOffTasks.map((t) => (
                                 <TodoItem
-                                  key={t.id}
-                                  item={t}
-                                  itemDate={selectedDate}
-                                  selectedDate={selectedDate}
-                                  formatEventTime={formatEventTime}
-                                  openEditModal={openEditModal}
-                                  toggleTodo={toggleTodo}
-                                  toggleSubTodo={toggleSubTodo}
-                                  setEditingSubTaskInfo={setEditingSubTaskInfo}
-                                  setSubTaskModalVisible={setSubTaskModalVisible}
-                                  streakCount={0}
-                                  onLongPress={(item) => {
-                                    setQuickActionItem(item);
-                                    setQuickActionVisible(true);
-                                  }}
-                                />
+                                key={t.id}
+                                item={t}
+                                itemDate={selectedDate}
+                                selectedDate={selectedDate}
+                                formatEventTime={stableFormatEventTime}
+                                openEditModal={stableOpenEditModal}
+                                toggleTodo={stableToggleTodo}
+                                toggleSubTodo={stableToggleSubTodo}
+                                setEditingSubTaskInfo={setEditingSubTaskInfo}
+                                setSubTaskModalVisible={setSubTaskModalVisible}
+                                streakCount={0}
+                                onLongPress={stableLongPress}
+                              />
                               ))}
                             </View>
                           )}
@@ -1589,17 +1598,14 @@ export default function Index() {
                               item={t}
                               itemDate={t.date}
                               selectedDate={selectedDate}
-                              formatEventTime={formatEventTime}
-                              openEditModal={openEditModal}
-                              toggleTodo={toggleTodo}
-                              toggleSubTodo={toggleSubTodo}
+                              formatEventTime={stableFormatEventTime}
+                              openEditModal={stableOpenEditModal}
+                              toggleTodo={stableToggleTodo}
+                              toggleSubTodo={stableToggleSubTodo}
                               setEditingSubTaskInfo={setEditingSubTaskInfo}
                               setSubTaskModalVisible={setSubTaskModalVisible}
                               streakCount={streakCount}
-                              onLongPress={(item) => {
-                                setQuickActionItem(item);
-                                setQuickActionVisible(true);
-                              }}
+                              onLongPress={stableLongPress}
                             />
                           )
                         })}
