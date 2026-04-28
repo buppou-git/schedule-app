@@ -34,8 +34,8 @@ export default function SearchModal({
   onItemPress,
 }: SearchModalProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedFilters, setSelectedFilters] = useState<string[]>([]); // 🌟 複数選択に対応
-  const [isFilterSheetVisible, setIsFilterSheetVisible] = useState(false); // 🌟 絞り込み画面の開閉
+  const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
+  const [isFilterSheetVisible, setIsFilterSheetVisible] = useState(false);
 
   const toHiragana = (str: string) => {
     return str.replace(/[\u30a1-\u30f6]/g, (match) =>
@@ -74,6 +74,8 @@ export default function SearchModal({
 
           const matchFilter = selectedFilters.some((filter) => {
             if (filter === "money") return isMoney;
+            if (filter === "todo") return item.isTodo; // 🌟 追加：TODOの判定
+            if (filter === "event") return item.isEvent; // 🌟 追加：予定の判定
             return itemTags.some(
               (tag) => tag === filter || tagMaster[tag]?.layer === filter,
             );
@@ -138,7 +140,6 @@ export default function SearchModal({
               />
             </View>
 
-            {/* 🌟 絞り込みボタン */}
             <TouchableOpacity
               style={[
                 styles.filterToggleBtn,
@@ -207,6 +208,49 @@ export default function SearchModal({
               </View>
 
               <ScrollView contentContainerStyle={styles.chipGrid}>
+                {/* 🌟 追加：予定フィルター */}
+                <TouchableOpacity
+                  style={[
+                    styles.chip,
+                    selectedFilters.includes("event") && {
+                      backgroundColor: "#007AFF",
+                      borderColor: "#007AFF",
+                    },
+                  ]}
+                  onPress={() => toggleFilter("event")}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      selectedFilters.includes("event") && { color: "#FFF" },
+                    ]}
+                  >
+                    📅 予定
+                  </Text>
+                </TouchableOpacity>
+
+                {/* 🌟 追加：TODOフィルター */}
+                <TouchableOpacity
+                  style={[
+                    styles.chip,
+                    selectedFilters.includes("todo") && {
+                      backgroundColor: "#FF9500",
+                      borderColor: "#FF9500",
+                    },
+                  ]}
+                  onPress={() => toggleFilter("todo")}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      selectedFilters.includes("todo") && { color: "#FFF" },
+                    ]}
+                  >
+                    ✅ TODO
+                  </Text>
+                </TouchableOpacity>
+
+                {/* 家計簿フィルター */}
                 <TouchableOpacity
                   style={[
                     styles.chip,
@@ -227,6 +271,7 @@ export default function SearchModal({
                   </Text>
                 </TouchableOpacity>
 
+                {/* レイヤーフィルター */}
                 {Object.keys(layerMaster).map((layer) => (
                   <TouchableOpacity
                     key={layer}
