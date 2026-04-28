@@ -1,10 +1,16 @@
-import 'react-native-get-random-values';
+import "react-native-get-random-values";
 
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import { StatusBar } from "expo-status-bar";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useScheduleManager } from "../../hooks/useScheduleManager";
 
 import { ScheduleItem, SubTask } from "../../types";
@@ -27,8 +33,8 @@ import OnboardingModal from "./components/OnboardingModal";
 import PresetSaveModal from "./components/PresetSaveModal";
 
 //広告関係
-import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
-import { MobileAds } from 'react-native-google-mobile-ads';
+import { requestTrackingPermissionsAsync } from "expo-tracking-transparency";
+import { MobileAds } from "react-native-google-mobile-ads";
 
 import {
   Alert,
@@ -46,9 +52,9 @@ import {
   View,
 } from "react-native";
 
-import CryptoJS from 'crypto-js';
-import * as LocalAuthentication from 'expo-local-authentication';
-import * as SecureStore from 'expo-secure-store';
+import CryptoJS from "crypto-js";
+import * as LocalAuthentication from "expo-local-authentication";
+import * as SecureStore from "expo-secure-store";
 
 import {
   CalendarList,
@@ -68,7 +74,9 @@ import { useExternalCalendar } from "../../hooks/useExternalCalendar";
 
 function useStableCallback<T extends (...args: any[]) => any>(callback: T) {
   const ref = useRef(callback);
-  useEffect(() => { ref.current = callback; }, [callback]);
+  useEffect(() => {
+    ref.current = callback;
+  }, [callback]);
   return useCallback((...args: Parameters<T>) => ref.current(...args), []) as T;
 }
 
@@ -134,7 +142,6 @@ const calculateStreak = (completedDates: string[] | undefined) => {
 };
 
 export default function Index() {
-
   useEffect(() => {
     const initAds = async () => {
       try {
@@ -151,11 +158,17 @@ export default function Index() {
 
   const [onboardingVisible, setOnboardingVisible] = useState(false);
 
-  const [sharedRooms, setSharedRooms] = useState<{ [layerName: string]: string }>({});
+  const [sharedRooms, setSharedRooms] = useState<{
+    [layerName: string]: string;
+  }>({});
 
-  const [roomSchedules, setRoomSchedules] = useState<{ [roomId: string]: { [date: string]: ScheduleItem[] } }>({});
+  const [roomSchedules, setRoomSchedules] = useState<{
+    [roomId: string]: { [date: string]: ScheduleItem[] };
+  }>({});
 
-  const [sharedScheduleData, setSharedScheduleData] = useState<{ [key: string]: ScheduleItem[] }>({});
+  const [sharedScheduleData, setSharedScheduleData] = useState<{
+    [key: string]: ScheduleItem[];
+  }>({});
 
   const [selectedDate, setSelectedDate] = useState(getTodayString());
 
@@ -183,7 +196,9 @@ export default function Index() {
     subTask: SubTask;
   } | null>(null);
   const [quickActionVisible, setQuickActionVisible] = useState(false);
-  const [quickActionItem, setQuickActionItem] = useState<ScheduleItem | null>(null);
+  const [quickActionItem, setQuickActionItem] = useState<ScheduleItem | null>(
+    null,
+  );
 
   const [presets, setPresets] = useState<{ [key: string]: string[] }>({});
   const [modalVisible, setModalVisible] = useState(false);
@@ -240,7 +255,7 @@ export default function Index() {
       if (nextAppState === "active") {
         handleAuthenticate();
       } else if (nextAppState === "background") {
-        AsyncStorage.getItem("useBiometricLock").then(val => {
+        AsyncStorage.getItem("useBiometricLock").then((val) => {
           if (val === "true") setIsAppLocked(true);
         });
       }
@@ -257,7 +272,8 @@ export default function Index() {
   const [tempActiveTags, setTempActiveTags] = useState<string[]>([]);
 
   const [editPresetModalVisible, setEditPresetModalVisible] = useState(false);
-  const [editingPresetOriginalName, setEditingPresetOriginalName] = useState("");
+  const [editingPresetOriginalName, setEditingPresetOriginalName] =
+    useState("");
   const [editingPresetName, setEditingPresetName] = useState("");
 
   const calendarKey = useMemo(() => activeMode, [activeMode]);
@@ -349,20 +365,24 @@ export default function Index() {
 
   const isSharedItem = (item: ScheduleItem) => {
     const itemTags = item.tags || (item.tag ? [item.tag] : []);
-    return itemTags.some(tag => Object.keys(sharedRooms).includes(tag));
+    return itemTags.some((tag) => Object.keys(sharedRooms).includes(tag));
   };
 
   const handleSaveItem = async (newItem: ScheduleItem, targetDate?: string) => {
     if (isSharedItem(newItem)) {
       try {
         const itemTags = newItem.tags || (newItem.tag ? [newItem.tag] : []);
-        const sharedLayerName = itemTags.find(tag => Object.keys(sharedRooms).includes(tag));
+        const sharedLayerName = itemTags.find((tag) =>
+          Object.keys(sharedRooms).includes(tag),
+        );
         if (!sharedLayerName) return;
 
         const targetRoomId = sharedRooms[sharedLayerName];
         const { doc, collection, setDoc } = await import("firebase/firestore");
         const schedulesRef = collection(db, "rooms", targetRoomId, "schedules");
-        const docRef = newItem.id ? doc(schedulesRef, newItem.id) : doc(schedulesRef);
+        const docRef = newItem.id
+          ? doc(schedulesRef, newItem.id)
+          : doc(schedulesRef);
 
         await setDoc(docRef, {
           ...newItem,
@@ -377,7 +397,9 @@ export default function Index() {
   };
 
   // 🌟 追加：通信を節約する「デバウンス（遅延）同期」関数
-  const syncTimeoutRef = useRef<{ [key: string]: ReturnType<typeof setTimeout> }>({});
+  const syncTimeoutRef = useRef<{
+    [key: string]: ReturnType<typeof setTimeout>;
+  }>({});
   const debouncedSyncSharedItem = (item: ScheduleItem, date: string) => {
     if (!isSharedItem(item)) return; // 共有アイテムじゃなければ何もしない
 
@@ -391,34 +413,100 @@ export default function Index() {
     }, 1000);
   };
 
-  // 🌟 追加：コピー・移動の処理
-  const handleMoveOrCopy = async (item: ScheduleItem, targetLayer: string, isCopy: boolean) => {
+  // 🌟 追加・修正：通信を1回にまとめる「安全な移動・コピー」
+  const handleMoveOrCopy = async (
+    item: ScheduleItem & { date?: string },
+    targetLayer: string,
+    isCopy: boolean,
+  ) => {
     const newItem = {
       ...item,
       id: isCopy ? Date.now().toString() : item.id,
-      tags: [targetLayer]
+      tags: [targetLayer],
     };
 
-    if (!isCopy) {
-      if (isSharedItem(item)) {
-        try {
-          const { deleteDoc } = await import("firebase/firestore");
-          await deleteDoc(doc(db, "shared_schedules", item.id));
-        } catch (e) { console.error(e); }
-      } else {
-        const newData = { ...scheduleData };
-        Object.keys(newData).forEach(d => {
-          newData[d] = newData[d].filter(i => i.id !== item.id);
-        });
-        setScheduleData(newData);
+    const targetDate = item.date || selectedDate;
+
+    try {
+      // 🌟 魔法の封筒（バッチ処理）を用意する
+      const { writeBatch, doc } = await import("firebase/firestore");
+      const batch = writeBatch(db);
+      let hasCloudAction = false;
+
+      // ① 古い共有データを消す（コピーではなく移動の時）
+      if (!isCopy && isSharedItem(item)) {
+        const itemTags = item.tags || (item.tag ? [item.tag] : []);
+        const oldSharedLayer = itemTags.find((tag) =>
+          Object.keys(sharedRooms).includes(tag),
+        );
+        if (oldSharedLayer) {
+          const oldRoomId = sharedRooms[oldSharedLayer];
+          // 💡 ついでに間違っていた削除パスのバグも修正！
+          const oldDocRef = doc(db, "rooms", oldRoomId, "schedules", item.id);
+          batch.delete(oldDocRef); // 封筒に「削除」を入れる
+          hasCloudAction = true;
+        }
       }
+
+      // ② 新しい共有先に保存する
+      if (Object.keys(sharedRooms).includes(targetLayer)) {
+        const targetRoomId = sharedRooms[targetLayer];
+        const newDocRef = doc(
+          db,
+          "rooms",
+          targetRoomId,
+          "schedules",
+          newItem.id,
+        );
+        batch.set(newDocRef, {
+          ...newItem,
+          date: targetDate,
+          updatedAt: new Date().toISOString(),
+        }); // 封筒に「保存」を入れる
+        hasCloudAction = true;
+      }
+
+      // 🌟 ③ 封筒の中身を【1回の通信】で一気に実行！（電波が切れても安全）
+      if (hasCloudAction) {
+        await batch.commit();
+      }
+
+      // ④ 自分の端末内（ローカル）の画面を更新
+      const newData = { ...scheduleData };
+
+      if (!isCopy && !isSharedItem(item)) {
+        Object.keys(newData).forEach((d) => {
+          newData[d] = newData[d].filter((i) => i.id !== item.id);
+        });
+      }
+
+      if (!Object.keys(sharedRooms).includes(targetLayer)) {
+        if (!newData[targetDate]) newData[targetDate] = [];
+        const existingIdx = newData[targetDate].findIndex(
+          (i) => i.id === newItem.id,
+        );
+        if (existingIdx >= 0) {
+          newData[targetDate][existingIdx] = newItem;
+        } else {
+          newData[targetDate].push(newItem);
+        }
+      }
+
+      setScheduleData(newData);
+      setHasUnsavedChanges(true);
+    } catch (e) {
+      console.error("Move/Copy Error:", e);
+      Alert.alert(
+        "エラー",
+        "データの移動に失敗しました。電波の良いところで再度お試しください。",
+      );
     }
 
-    await handleSaveItem(newItem);
     setQuickActionVisible(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
+  // 🌟 消えてしまった関数を復活！
   const handleAddSharedRoom = async (layerName: string, roomId: string) => {
     const newRooms = { ...sharedRooms, [layerName]: roomId };
     setSharedRooms(newRooms);
@@ -426,11 +514,23 @@ export default function Index() {
 
     // レイヤーマスターにも追加（ランダムな色を割り当て）
     if (!layerMaster[layerName]) {
-      const PRESET_COLORS = ["#FF3B30", "#FF9500", "#FFCC00", "#34C759", "#007AFF", "#5856D6", "#AF52DE"];
-      const randomColor = PRESET_COLORS[Math.floor(Math.random() * PRESET_COLORS.length)];
+      const PRESET_COLORS = [
+        "#FF3B30",
+        "#FF9500",
+        "#FFCC00",
+        "#34C759",
+        "#007AFF",
+        "#5856D6",
+        "#AF52DE",
+      ];
+      const randomColor =
+        PRESET_COLORS[Math.floor(Math.random() * PRESET_COLORS.length)];
       const newLayerMaster = { ...layerMaster, [layerName]: randomColor };
       setLayerMaster(newLayerMaster);
-      await AsyncStorage.setItem("layerMasterData", JSON.stringify(newLayerMaster));
+      await AsyncStorage.setItem(
+        "layerMasterData",
+        JSON.stringify(newLayerMaster),
+      );
     }
   };
 
@@ -442,10 +542,23 @@ export default function Index() {
       return;
     }
     try {
-      const rawDataString = JSON.stringify({ scheduleData, layerMaster, tagMaster, presets, activeTags, sharedRooms });
+      const rawDataString = JSON.stringify({
+        scheduleData,
+        layerMaster,
+        tagMaster,
+        presets,
+        activeTags,
+        sharedRooms,
+      });
       const masterKey = await getOrGenerateMasterKey();
-      const encryptedData = CryptoJS.AES.encrypt(rawDataString, masterKey).toString();
-      await setDoc(doc(db, "users", user.uid), { secureData: encryptedData, lastSyncedAt: new Date().toISOString() });
+      const encryptedData = CryptoJS.AES.encrypt(
+        rawDataString,
+        masterKey,
+      ).toString();
+      await setDoc(doc(db, "users", user.uid), {
+        secureData: encryptedData,
+        lastSyncedAt: new Date().toISOString(),
+      });
       Alert.alert("バックアップ完了", "クラウドにデータを手動保存しました！");
       setConfigModalVisible(false);
     } catch (error) {
@@ -454,7 +567,10 @@ export default function Index() {
     }
   };
 
-  const handleCompleteOnboarding = async (setupData: { layers: { [key: string]: string }, presets: { [key: string]: string[] } }) => {
+  const handleCompleteOnboarding = async (setupData: {
+    layers: { [key: string]: string };
+    presets: { [key: string]: string[] };
+  }) => {
     // ユーザーが選んだテンプレートのレイヤーとプリセットを適用
     setLayerMaster(setupData.layers);
     setPresets(setupData.presets);
@@ -462,13 +578,18 @@ export default function Index() {
     setActiveTags([]); // 最初はすべて表示状態
 
     // ローカルストレージに保存＆完了フラグを立てる
-    await AsyncStorage.setItem("layerMasterData", JSON.stringify(setupData.layers));
-    await AsyncStorage.setItem("filterPresets", JSON.stringify(setupData.presets));
+    await AsyncStorage.setItem(
+      "layerMasterData",
+      JSON.stringify(setupData.layers),
+    );
+    await AsyncStorage.setItem(
+      "filterPresets",
+      JSON.stringify(setupData.presets),
+    );
     await AsyncStorage.setItem("hasCompletedOnboarding", "true");
 
     setOnboardingVisible(false);
   };
-
 
   // 🌟 アカウントとデータを完全に削除する機能
   const handleDeleteAccount = async () => {
@@ -499,7 +620,7 @@ export default function Index() {
                   "filterPresets",
                   "activeTags",
                   "sharedRoomsData",
-                  "hasCompletedOnboarding" // 🌟 追加：初回フラグも消去する！
+                  "hasCompletedOnboarding", // 🌟 追加：初回フラグも消去する！
                 ]);
 
                 // 4. メモリ上のステートを初期化
@@ -515,19 +636,24 @@ export default function Index() {
                 setTimeout(() => {
                   setOnboardingVisible(true);
                 }, 500); // モーダルが重ならないように0.5秒だけ遅らせて開く
-
               } catch (error: any) {
                 console.error("Account Deletion Error:", error);
-                if (error.code === 'auth/requires-recent-login') {
-                  Alert.alert("エラー", "セキュリティのため、一度アプリを完全に終了して再起動してから、再度削除をお試しください。");
+                if (error.code === "auth/requires-recent-login") {
+                  Alert.alert(
+                    "エラー",
+                    "セキュリティのため、一度アプリを完全に終了して再起動してから、再度削除をお試しください。",
+                  );
                 } else {
-                  Alert.alert("エラー", "アカウントの削除に失敗しました。通信環境を確認してください。");
+                  Alert.alert(
+                    "エラー",
+                    "アカウントの削除に失敗しました。通信環境を確認してください。",
+                  );
                 }
               }
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -553,11 +679,14 @@ export default function Index() {
             });
 
             const masterKey = await getOrGenerateMasterKey();
-            const encryptedData = CryptoJS.AES.encrypt(rawDataString, masterKey).toString();
+            const encryptedData = CryptoJS.AES.encrypt(
+              rawDataString,
+              masterKey,
+            ).toString();
 
             await setDoc(doc(db, "users", user.uid), {
               secureData: encryptedData,
-              lastSyncedAt: new Date().toISOString()
+              lastSyncedAt: new Date().toISOString(),
             });
           } catch (error) {
             console.error("Auto-save Error:", error);
@@ -573,13 +702,14 @@ export default function Index() {
     const loadData = async () => {
       try {
         // 過去のスケジュールデータ（myScheduleData）があるかどうかも確認する
-        const [layers, pre, tags, onboarded, scheduleExists] = await Promise.all([
-          AsyncStorage.getItem("layerMasterData"),
-          AsyncStorage.getItem("filterPresets"),
-          AsyncStorage.getItem("tagMasterData"),
-          AsyncStorage.getItem("hasCompletedOnboarding"),
-          AsyncStorage.getItem("myScheduleData"), // 🌟 追加：過去データの有無
-        ]);
+        const [layers, pre, tags, onboarded, scheduleExists] =
+          await Promise.all([
+            AsyncStorage.getItem("layerMasterData"),
+            AsyncStorage.getItem("filterPresets"),
+            AsyncStorage.getItem("tagMasterData"),
+            AsyncStorage.getItem("hasCompletedOnboarding"),
+            AsyncStorage.getItem("myScheduleData"), // 🌟 追加：過去データの有無
+          ]);
 
         // 🌟 修正：初回フラグがなく、かつ過去のデータも一切ない「完全な新規」だけマニュアルを出す
         if (!onboarded && !scheduleExists) {
@@ -604,7 +734,10 @@ export default function Index() {
   useEffect(() => {
     const syncToStorage = async () => {
       try {
-        await AsyncStorage.setItem("layerMasterData", JSON.stringify(layerMaster));
+        await AsyncStorage.setItem(
+          "layerMasterData",
+          JSON.stringify(layerMaster),
+        );
         await AsyncStorage.setItem("tagMasterData", JSON.stringify(tagMaster));
         await AsyncStorage.setItem("filterPresets", JSON.stringify(presets));
         await AsyncStorage.setItem("activeTags", JSON.stringify(activeTags));
@@ -633,13 +766,16 @@ export default function Index() {
             const data = docSnap.data();
             if (data.date) {
               if (!itemsByDate[data.date]) itemsByDate[data.date] = [];
-              itemsByDate[data.date].push({ id: docSnap.id, ...data } as ScheduleItem);
+              itemsByDate[data.date].push({
+                id: docSnap.id,
+                ...data,
+              } as ScheduleItem);
             }
           });
           // ルームごとにデータを分けて保存
           setRoomSchedules((prev) => ({ ...prev, [roomId]: itemsByDate }));
         },
-        (error) => console.error(`Room ${roomId} sync error:`, error)
+        (error) => console.error(`Room ${roomId} sync error:`, error),
       );
     });
 
@@ -658,28 +794,28 @@ export default function Index() {
     };
 
     // 1. ローカルデータをベースにする
-    Object.keys(scheduleData).forEach(date => {
+    Object.keys(scheduleData).forEach((date) => {
       const map = getMapForDate(date);
-      scheduleData[date].forEach(item => map.set(item.id, item));
+      scheduleData[date].forEach((item) => map.set(item.id, item));
     });
 
     // 2. 共有データを上書きマージ（同IDなら上書きされて重複が消える）
-    Object.values(roomSchedules).forEach(roomData => {
-      Object.keys(roomData).forEach(date => {
+    Object.values(roomSchedules).forEach((roomData) => {
+      Object.keys(roomData).forEach((date) => {
         const map = getMapForDate(date);
-        roomData[date].forEach(item => map.set(item.id, item));
+        roomData[date].forEach((item) => map.set(item.id, item));
       });
     });
 
     // 3. 外部カレンダーをマージ
-    Object.keys(externalEvents).forEach(date => {
+    Object.keys(externalEvents).forEach((date) => {
       const map = getMapForDate(date);
-      externalEvents[date].forEach(item => map.set(item.id, item));
+      externalEvents[date].forEach((item) => map.set(item.id, item));
     });
 
     // 最後に Map から Array に変換して返す
     const result: { [date: string]: ScheduleItem[] } = {};
-    Object.keys(combinedMap).forEach(date => {
+    Object.keys(combinedMap).forEach((date) => {
       result[date] = Array.from(combinedMap[date].values());
     });
 
@@ -817,12 +953,15 @@ export default function Index() {
         });
 
         // 1. お金の記録以外を完了判定の対象にする
-        const pureTodos = updatedSubTasks.filter((sub: SubTask) => !sub.isExpense && !sub.isIncome);
+        const pureTodos = updatedSubTasks.filter(
+          (sub: SubTask) => !sub.isExpense && !sub.isIncome,
+        );
 
         // 2. 全て完了しているか計算（純粋なタスクがない場合は元の状態を維持）
-        const isAllSubTasksDone = pureTodos.length > 0
-          ? pureTodos.every((sub: SubTask) => sub.isDone)
-          : (item.isDone || false);
+        const isAllSubTasksDone =
+          pureTodos.length > 0
+            ? pureTodos.every((sub: SubTask) => sub.isDone)
+            : item.isDone || false;
 
         // 🌟 3. 習慣(ルーチン)予定の場合の特別処理
         let updatedCompletedDates = item.completedDates || [];
@@ -830,8 +969,13 @@ export default function Index() {
           // ⚠️ targetDate ではなく date を使うように修正！
           if (isAllSubTasksDone && !updatedCompletedDates.includes(date)) {
             updatedCompletedDates = [...updatedCompletedDates, date]; // 完了日に今日を追加
-          } else if (!isAllSubTasksDone && updatedCompletedDates.includes(date)) {
-            updatedCompletedDates = updatedCompletedDates.filter((d: string) => d !== date); // 完了から外す
+          } else if (
+            !isAllSubTasksDone &&
+            updatedCompletedDates.includes(date)
+          ) {
+            updatedCompletedDates = updatedCompletedDates.filter(
+              (d: string) => d !== date,
+            ); // 完了から外す
           }
         }
 
@@ -959,7 +1103,10 @@ export default function Index() {
     setSubTaskModalVisible(false);
   };
 
-  const handleQuickSave = (item: ScheduleItem & { date?: string }, newTitle: string) => {
+  const handleQuickSave = (
+    item: ScheduleItem & { date?: string },
+    newTitle: string,
+  ) => {
     if (!newTitle.trim()) return;
     const newData = { ...scheduleData };
 
@@ -967,8 +1114,11 @@ export default function Index() {
     const targetDate = item.date || selectedDate;
     let updatedItem: ScheduleItem | null = null;
 
-    if (newData[targetDate] && newData[targetDate].some(i => i.id === item.id)) {
-      newData[targetDate] = newData[targetDate].map(i => {
+    if (
+      newData[targetDate] &&
+      newData[targetDate].some((i) => i.id === item.id)
+    ) {
+      newData[targetDate] = newData[targetDate].map((i) => {
         if (i.id === item.id) {
           updatedItem = { ...i, title: newTitle }; // 🌟 ここで newTitle を使用
           return updatedItem;
@@ -1018,12 +1168,16 @@ export default function Index() {
           if (isSharedItem(item)) {
             try {
               const itemTags = item.tags || (item.tag ? [item.tag] : []);
-              const sharedLayerName = itemTags.find(tag => Object.keys(sharedRooms).includes(tag));
+              const sharedLayerName = itemTags.find((tag) =>
+                Object.keys(sharedRooms).includes(tag),
+              );
               if (sharedLayerName) {
                 const targetRoomId = sharedRooms[sharedLayerName];
                 const { deleteDoc, doc } = await import("firebase/firestore");
                 // 正しいルームパスで削除を実行
-                await deleteDoc(doc(db, "rooms", targetRoomId, "schedules", item.id));
+                await deleteDoc(
+                  doc(db, "rooms", targetRoomId, "schedules", item.id),
+                );
               }
             } catch (error) {
               console.error("共有データの削除に失敗:", error);
@@ -1034,8 +1188,13 @@ export default function Index() {
           const newData = { ...scheduleData };
           const targetDate = item.date || selectedDate;
 
-          if (newData[targetDate] && newData[targetDate].some(i => i.id === item.id)) {
-            newData[targetDate] = newData[targetDate].filter(i => i.id !== item.id);
+          if (
+            newData[targetDate] &&
+            newData[targetDate].some((i) => i.id === item.id)
+          ) {
+            newData[targetDate] = newData[targetDate].filter(
+              (i) => i.id !== item.id,
+            );
           } else {
             // フォールバック（全検索して削除）
             for (const d of Object.keys(newData)) {
@@ -1084,11 +1243,26 @@ export default function Index() {
         }
 
         await Promise.all([
-          AsyncStorage.setItem("myScheduleData", JSON.stringify(parsedData.scheduleData || {})),
-          AsyncStorage.setItem("layerMasterData", JSON.stringify(parsedData.layerMaster || {})),
-          AsyncStorage.setItem("tagMasterData", JSON.stringify(parsedData.tagMaster || {})),
-          AsyncStorage.setItem("filterPresets", JSON.stringify(parsedData.presets || {})),
-          AsyncStorage.setItem("activeTags", JSON.stringify(parsedData.activeTags || [])),
+          AsyncStorage.setItem(
+            "myScheduleData",
+            JSON.stringify(parsedData.scheduleData || {}),
+          ),
+          AsyncStorage.setItem(
+            "layerMasterData",
+            JSON.stringify(parsedData.layerMaster || {}),
+          ),
+          AsyncStorage.setItem(
+            "tagMasterData",
+            JSON.stringify(parsedData.tagMaster || {}),
+          ),
+          AsyncStorage.setItem(
+            "filterPresets",
+            JSON.stringify(parsedData.presets || {}),
+          ),
+          AsyncStorage.setItem(
+            "activeTags",
+            JSON.stringify(parsedData.activeTags || []),
+          ),
         ]);
 
         setScheduleData(parsedData.scheduleData || {});
@@ -1097,10 +1271,7 @@ export default function Index() {
         setPresets(parsedData.presets || {});
         setActiveTags(parsedData.activeTags || []);
 
-        Alert.alert(
-          "復元完了",
-          "クラウドデータを正常に復元しました！🔓🚀",
-        );
+        Alert.alert("復元完了", "クラウドデータを正常に復元しました！🔓🚀");
         setConfigModalVisible(false);
       } else {
         Alert.alert(
@@ -1223,7 +1394,14 @@ export default function Index() {
     });
 
     return { dayTasks: dTasks, upcomingTasks: uTasks, dayEvents: dEvents };
-  }, [expandedScheduleData, selectedDate, activeTags, activeMode, tagMaster, displayData]);
+  }, [
+    expandedScheduleData,
+    selectedDate,
+    activeTags,
+    activeMode,
+    tagMaster,
+    displayData,
+  ]);
 
   const stableToggleTodo = useStableCallback(toggleTodo);
   const stableToggleSubTodo = useStableCallback(toggleSubTodo);
@@ -1236,11 +1414,49 @@ export default function Index() {
 
   if (isAppLocked) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#F2F2F7' }]}>
-        <View style={{ backgroundColor: '#FFF', padding: 30, borderRadius: 30, alignItems: 'center', width: '80%', shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 10 }}>
+      <View
+        style={[
+          styles.container,
+          {
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: "#F2F2F7",
+          },
+        ]}
+      >
+        <View
+          style={{
+            backgroundColor: "#FFF",
+            padding: 30,
+            borderRadius: 30,
+            alignItems: "center",
+            width: "80%",
+            shadowColor: "#000",
+            shadowOpacity: 0.05,
+            shadowRadius: 10,
+          }}
+        >
           <Ionicons name="lock-closed" size={50} color={currentSolidColor} />
-          <Text style={{ marginTop: 15, fontSize: 18, fontWeight: '800', color: '#1C1C1E' }}>UniCal Locked</Text>
-          <Text style={{ fontSize: 12, color: '#8E8E93', marginBottom: 25, marginTop: 5 }}>パスコードを入力してください</Text>
+          <Text
+            style={{
+              marginTop: 15,
+              fontSize: 18,
+              fontWeight: "800",
+              color: "#1C1C1E",
+            }}
+          >
+            UniCal Locked
+          </Text>
+          <Text
+            style={{
+              fontSize: 12,
+              color: "#8E8E93",
+              marginBottom: 25,
+              marginTop: 5,
+            }}
+          >
+            パスコードを入力してください
+          </Text>
 
           <View style={styles.pinInputWrapper}>
             <TextInput
@@ -1264,7 +1480,7 @@ export default function Index() {
                   key={i}
                   style={[
                     styles.pinBox,
-                    pinForUnlock.length === i && styles.pinBoxFocused
+                    pinForUnlock.length === i && styles.pinBoxFocused,
                   ]}
                 >
                   {pinForUnlock.length > i && (
@@ -1279,7 +1495,15 @@ export default function Index() {
             style={{ marginTop: 25, padding: 10 }}
             onPress={handleAuthenticate}
           >
-            <Text style={{ color: currentSolidColor, fontWeight: '700', fontSize: 14 }}>生体認証を使用する</Text>
+            <Text
+              style={{
+                color: currentSolidColor,
+                fontWeight: "700",
+                fontSize: 14,
+              }}
+            >
+              生体認証を使用する
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1427,42 +1651,42 @@ export default function Index() {
 
               {(activeMode === "todo" ||
                 (activeMode === "money" && !isMoneySummaryMode)) && (
-                  <View style={styles.weekCalendarWrapper}>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        paddingRight: 20,
-                      }}
-                    >
-                      <Text style={styles.monthLabel}>
-                        {parseInt(selectedDate.split("-")[1])}月
-                      </Text>
-                      <TouchableOpacity onPress={handleOpenNewModal}>
-                        <Ionicons
-                          name="add-circle"
-                          size={30}
-                          color={currentSolidColor}
-                        />
-                      </TouchableOpacity>
-                    </View>
-                    <CalendarProvider
-                      date={selectedDate}
-                      onDateChanged={setSelectedDate}
-                    >
-                      <WeekCalendar
-                        firstDay={1}
-                        markedDates={currentMarkedDates}
-                        theme={{
-                          calendarBackground: "transparent",
-                          todayTextColor: currentSolidColor,
-                          selectedDayBackgroundColor: currentSolidColor,
-                        }}
+                <View style={styles.weekCalendarWrapper}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      paddingRight: 20,
+                    }}
+                  >
+                    <Text style={styles.monthLabel}>
+                      {parseInt(selectedDate.split("-")[1])}月
+                    </Text>
+                    <TouchableOpacity onPress={handleOpenNewModal}>
+                      <Ionicons
+                        name="add-circle"
+                        size={30}
+                        color={currentSolidColor}
                       />
-                    </CalendarProvider>
+                    </TouchableOpacity>
                   </View>
-                )}
+                  <CalendarProvider
+                    date={selectedDate}
+                    onDateChanged={setSelectedDate}
+                  >
+                    <WeekCalendar
+                      firstDay={1}
+                      markedDates={currentMarkedDates}
+                      theme={{
+                        calendarBackground: "transparent",
+                        todayTextColor: currentSolidColor,
+                        selectedDayBackgroundColor: currentSolidColor,
+                      }}
+                    />
+                  </CalendarProvider>
+                </View>
+              )}
             </>
           )}
 
@@ -1526,8 +1750,8 @@ export default function Index() {
                     </View>
 
                     {(() => {
-                      const routineTasks = dayTasks.filter(t => t.repeatType);
-                      const oneOffTasks = dayTasks.filter(t => !t.repeatType);
+                      const routineTasks = dayTasks.filter((t) => t.repeatType);
+                      const oneOffTasks = dayTasks.filter((t) => !t.repeatType);
 
                       return (
                         <>
@@ -1537,7 +1761,9 @@ export default function Index() {
                                 ROUTINE / 習慣
                               </Text>
                               {routineTasks.map((t) => {
-                                const streakCount = calculateStreak(t.completedDates);
+                                const streakCount = calculateStreak(
+                                  t.completedDates,
+                                );
                                 return (
                                   <TodoItem
                                     key={t.id}
@@ -1548,12 +1774,16 @@ export default function Index() {
                                     openEditModal={stableOpenEditModal}
                                     toggleTodo={stableToggleTodo}
                                     toggleSubTodo={stableToggleSubTodo}
-                                    setEditingSubTaskInfo={setEditingSubTaskInfo}
-                                    setSubTaskModalVisible={setSubTaskModalVisible}
+                                    setEditingSubTaskInfo={
+                                      setEditingSubTaskInfo
+                                    }
+                                    setSubTaskModalVisible={
+                                      setSubTaskModalVisible
+                                    }
                                     streakCount={streakCount}
                                     onLongPress={stableLongPress}
                                   />
-                                )
+                                );
                               })}
                             </View>
                           )}
@@ -1565,19 +1795,21 @@ export default function Index() {
                               </Text>
                               {oneOffTasks.map((t) => (
                                 <TodoItem
-                                key={t.id}
-                                item={t}
-                                itemDate={selectedDate}
-                                selectedDate={selectedDate}
-                                formatEventTime={stableFormatEventTime}
-                                openEditModal={stableOpenEditModal}
-                                toggleTodo={stableToggleTodo}
-                                toggleSubTodo={stableToggleSubTodo}
-                                setEditingSubTaskInfo={setEditingSubTaskInfo}
-                                setSubTaskModalVisible={setSubTaskModalVisible}
-                                streakCount={0}
-                                onLongPress={stableLongPress}
-                              />
+                                  key={t.id}
+                                  item={t}
+                                  itemDate={selectedDate}
+                                  selectedDate={selectedDate}
+                                  formatEventTime={stableFormatEventTime}
+                                  openEditModal={stableOpenEditModal}
+                                  toggleTodo={stableToggleTodo}
+                                  toggleSubTodo={stableToggleSubTodo}
+                                  setEditingSubTaskInfo={setEditingSubTaskInfo}
+                                  setSubTaskModalVisible={
+                                    setSubTaskModalVisible
+                                  }
+                                  streakCount={0}
+                                  onLongPress={stableLongPress}
+                                />
                               ))}
                             </View>
                           )}
@@ -1591,7 +1823,9 @@ export default function Index() {
                           今後の予定（未完了）
                         </Text>
                         {upcomingTasks.map((t) => {
-                          const streakCount = t.repeatType ? calculateStreak(t.completedDates) : 0;
+                          const streakCount = t.repeatType
+                            ? calculateStreak(t.completedDates)
+                            : 0;
                           return (
                             <TodoItem
                               key={t.id}
@@ -1607,7 +1841,7 @@ export default function Index() {
                               streakCount={streakCount}
                               onLongPress={stableLongPress}
                             />
-                          )
+                          );
                         })}
                       </View>
                     )}
@@ -1757,20 +1991,65 @@ export default function Index() {
                     return (
                       <TouchableOpacity
                         key={layer}
-                        style={[styles.gridCard, isSelected ? { backgroundColor: layerMaster[layer], borderColor: layerMaster[layer] } : [styles.gridCardGhost, { borderColor: layerMaster[layer] + "40" }]]}
+                        style={[
+                          styles.gridCard,
+                          isSelected
+                            ? {
+                                backgroundColor: layerMaster[layer],
+                                borderColor: layerMaster[layer],
+                              }
+                            : [
+                                styles.gridCardGhost,
+                                { borderColor: layerMaster[layer] + "40" },
+                              ],
+                        ]}
                         onPress={() => toggleTempTag(layer)}
                       >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                          <Ionicons name={isSelected ? "checkmark-circle" : "ellipse-outline"} size={16} color={isSelected ? "#FFF" : layerMaster[layer]} />
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 4,
+                          }}
+                        >
+                          <Ionicons
+                            name={
+                              isSelected
+                                ? "checkmark-circle"
+                                : "ellipse-outline"
+                            }
+                            size={16}
+                            color={isSelected ? "#FFF" : layerMaster[layer]}
+                          />
                           {/* 🌟 文字が長すぎてもカードが崩れないように numberOfLines を追加 */}
-                          <Text style={[styles.gridCardText, isSelected && { color: "#FFF" }]} numberOfLines={1}>{layer}</Text>
-                          {isShared && <Ionicons name="cloud-outline" size={14} color={isSelected ? "#FFF" : "#C7C7CC"} />}
+                          <Text
+                            style={[
+                              styles.gridCardText,
+                              isSelected && { color: "#FFF" },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {layer}
+                          </Text>
+                          {isShared && (
+                            <Ionicons
+                              name="cloud-outline"
+                              size={14}
+                              color={isSelected ? "#FFF" : "#C7C7CC"}
+                            />
+                          )}
                         </View>
 
                         {/* 🌟 追加：共有レイヤーの場合のみ、下に小さくIDを表示 */}
                         {isShared && (
                           <Text
-                            style={{ fontSize: 8, color: isSelected ? "#FFF" : "#8E8E93", marginTop: 4, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" }}
+                            style={{
+                              fontSize: 8,
+                              color: isSelected ? "#FFF" : "#8E8E93",
+                              marginTop: 4,
+                              fontFamily:
+                                Platform.OS === "ios" ? "Menlo" : "monospace",
+                            }}
                             numberOfLines={1}
                           >
                             ID: {sharedRooms[layer]}
@@ -1806,8 +2085,15 @@ export default function Index() {
         onSave={confirmSavePreset}
       />
 
-      <Modal visible={editPresetModalVisible} transparent={true} animationType="fade">
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+      <Modal
+        visible={editPresetModalVisible}
+        transparent={true}
+        animationType="fade"
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1 }}
+        >
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <View style={styles.namingOverlay}>
               <TouchableWithoutFeedback>
@@ -1822,12 +2108,21 @@ export default function Index() {
                     autoFocus={true}
                   />
 
-                  <View style={[styles.namingActionRow, { justifyContent: "space-between" }]}>
+                  <View
+                    style={[
+                      styles.namingActionRow,
+                      { justifyContent: "space-between" },
+                    ]}
+                  >
                     <TouchableOpacity
                       style={styles.namingCancelBtn}
                       onPress={() => deletePreset(editingPresetOriginalName)}
                     >
-                      <Text style={[styles.namingCancelText, { color: "#FF3B30" }]}>削除</Text>
+                      <Text
+                        style={[styles.namingCancelText, { color: "#FF3B30" }]}
+                      >
+                        削除
+                      </Text>
                     </TouchableOpacity>
 
                     <View style={{ flexDirection: "row", gap: 10 }}>
@@ -1882,7 +2177,7 @@ export default function Index() {
         lastSyncedAt={lastSyncedAt}
         onRestore={handleRestore}
         onBackup={handleManualBackup} // 🌟 追加
-        sharedRooms={sharedRooms}     // 🌟 追加
+        sharedRooms={sharedRooms} // 🌟 追加
         onAddSharedRoom={handleAddSharedRoom} // 🌟 追加
         onDeleteAccount={handleDeleteAccount}
       />
@@ -1917,7 +2212,6 @@ export default function Index() {
         visible={onboardingVisible}
         onComplete={handleCompleteOnboarding}
       />
-
     </SafeAreaView>
   );
 }
@@ -2317,19 +2611,46 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  pinInputWrapper: { marginTop: 10, marginBottom: 10, justifyContent: 'center', alignItems: 'center', width: '100%' },
-  hiddenTextInput: { position: 'absolute', width: '100%', height: '100%', opacity: 0, zIndex: 1 },
-  pinDisplayContainer: { flexDirection: 'row', gap: 15 },
-  pinBox: { width: 55, height: 65, borderWidth: 1, borderRadius: 16, borderColor: '#C7C7CC', justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF' },
-  pinBoxFocused: { borderColor: '#1C1C1E', borderWidth: 2, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 5 },
-  pinDot: { fontSize: 36, color: '#1C1C1E' },
+  pinInputWrapper: {
+    marginTop: 10,
+    marginBottom: 10,
+    justifyContent: "center",
+    alignItems: "center",
+    width: "100%",
+  },
+  hiddenTextInput: {
+    position: "absolute",
+    width: "100%",
+    height: "100%",
+    opacity: 0,
+    zIndex: 1,
+  },
+  pinDisplayContainer: { flexDirection: "row", gap: 15 },
+  pinBox: {
+    width: 55,
+    height: 65,
+    borderWidth: 1,
+    borderRadius: 16,
+    borderColor: "#C7C7CC",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#FFF",
+  },
+  pinBoxFocused: {
+    borderColor: "#1C1C1E",
+    borderWidth: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+  },
+  pinDot: { fontSize: 36, color: "#1C1C1E" },
 
   adContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#fff',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E5E5EA',
-    paddingBottom: Platform.OS === 'ios' ? 0 : 5, // iPhoneのホームバー対策
+    borderTopColor: "#E5E5EA",
+    paddingBottom: Platform.OS === "ios" ? 0 : 5, // iPhoneのホームバー対策
   },
 });

@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useState, memo } from "react";
+import React, { memo, useState } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -7,15 +7,15 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { ScheduleItem, SubTask } from "../../../types";
 import { useAppStore } from "../../../store/useAppStore";
+import { ScheduleItem, SubTask } from "../../../types";
 
 interface TodoItemProps {
-  item: ScheduleItem; 
+  item: ScheduleItem;
   itemDate: string;
   selectedDate: string;
-  formatEventTime: (item: ScheduleItem) => string; 
-  openEditModal: (item: ScheduleItem) => void; 
+  formatEventTime: (item: ScheduleItem) => string;
+  openEditModal: (item: ScheduleItem) => void;
   toggleTodo: (date: string, id: string) => void;
   toggleSubTodo: (date: string, parentId: string, subTaskId: number) => void;
 
@@ -123,7 +123,12 @@ const TodoItem = memo(function TodoItem({
           <View style={styles.todoSubRow}>
             {streakCount > 0 && (
               <View style={styles.streakBadge}>
-                <Ionicons name="flame" size={10} color="#FF9500" style={{ marginRight: 2 }} />
+                <Ionicons
+                  name="flame"
+                  size={10}
+                  color="#FF9500"
+                  style={{ marginRight: 2 }}
+                />
                 <Text style={styles.streakText}>{streakCount} Days</Text>
               </View>
             )}
@@ -184,13 +189,18 @@ const TodoItem = memo(function TodoItem({
         )}
       </TouchableOpacity>
 
-
       {/* 🌟 サブタスクの表示 */}
       {item.subTasks && item.subTasks.length > 0 && (
         <View>
           {/* 🌟 展開用トグルボタン */}
           <TouchableOpacity
-            style={{ flexDirection: "row", alignItems: "center", marginTop: 8, marginLeft: 20, paddingVertical: 4 }}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginTop: 8,
+              marginLeft: 20,
+              paddingVertical: 4,
+            }}
             onPress={() => setIsExpanded(!isExpanded)}
             activeOpacity={0.6}
           >
@@ -199,8 +209,17 @@ const TodoItem = memo(function TodoItem({
               size={16}
               color="#8E8E93"
             />
-            <Text style={{ fontSize: 12, color: "#8E8E93", marginLeft: 6, fontWeight: "600" }}>
-              サブタスク ({item.subTasks.filter((s: SubTask) => s.isDone).length}/{item.subTasks.length})
+            <Text
+              style={{
+                fontSize: 12,
+                color: "#8E8E93",
+                marginLeft: 6,
+                fontWeight: "600",
+              }}
+            >
+              サブタスク (
+              {item.subTasks.filter((s: SubTask) => s.isDone).length}/
+              {item.subTasks.length})
             </Text>
           </TouchableOpacity>
 
@@ -222,14 +241,33 @@ const TodoItem = memo(function TodoItem({
                       style={{ marginRight: 8 }}
                     />
                   )}
-                  <Text style={[styles.subTaskMiniTitle, sub.isDone && { color: "#8E8E93", textDecorationLine: "line-through" }]}>
+                  <Text
+                    style={[
+                      styles.subTaskMiniTitle,
+                      sub.isDone && {
+                        color: "#8E8E93",
+                        textDecorationLine: "line-through",
+                      },
+                    ]}
+                  >
                     {sub.title}
                   </Text>
 
                   {/* サブタスクの時間 */}
                   {sub.hasDateTime && sub.endTime && (
-                    <View style={{ flexDirection: "row", alignItems: "center", marginRight: 8 }}>
-                      <Ionicons name="time-outline" size={12} color="#AEAEB2" style={{ marginRight: 4 }} />
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        marginRight: 8,
+                      }}
+                    >
+                      <Ionicons
+                        name="time-outline"
+                        size={12}
+                        color="#AEAEB2"
+                        style={{ marginRight: 4 }}
+                      />
                       <Text style={{ fontSize: 10, color: "#8E8E93" }}>
                         {/* 🌟 データの型が何であっても、確実に文字の時刻にして表示する */}
                         {sub.endTime instanceof Date
@@ -241,7 +279,14 @@ const TodoItem = memo(function TodoItem({
 
                   {/* お金の表示 */}
                   {(sub.isExpense || sub.isIncome) && (
-                    <Text style={{ fontSize: 12, fontWeight: "bold", color: sub.isExpense ? "#FF3B30" : "#34C759", marginRight: 8 }}>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: "bold",
+                        color: sub.isExpense ? "#FF3B30" : "#34C759",
+                        marginRight: 8,
+                      }}
+                    >
                       {sub.isExpense ? "-" : "+"}¥{sub.amount?.toLocaleString()}
                     </Text>
                   )}
@@ -258,7 +303,11 @@ const TodoItem = memo(function TodoItem({
                       setSubTaskModalVisible(true);
                     }}
                   >
-                    <Ionicons name="ellipsis-horizontal" size={16} color="#C7C7CC" />
+                    <Ionicons
+                      name="ellipsis-horizontal"
+                      size={16}
+                      color="#C7C7CC"
+                    />
                   </TouchableOpacity>
                 </TouchableOpacity>
               ))}
@@ -268,7 +317,7 @@ const TodoItem = memo(function TodoItem({
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   todoCard: {
@@ -393,6 +442,5 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 });
-
 
 export default TodoItem;

@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons"; // アイコン
 import * as Haptics from "expo-haptics"; // 振動
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useAppStore } from "../../(tabs)/store/useAppStore";
+import { useAppStore } from "../../../store/useAppStore";
 
 interface TabBarProps {
   themeColor: string;
