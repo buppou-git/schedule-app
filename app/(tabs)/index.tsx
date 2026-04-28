@@ -7,7 +7,7 @@ import { StatusBar } from "expo-status-bar";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useScheduleManager } from "../../hooks/useScheduleManager";
 
-import { ScheduleItem, SubTask } from "../(tabs)/types";
+import { ScheduleItem, SubTask } from "../../types";
 
 import { useCalendarData } from "../../hooks/useCalendarData";
 import { useNotificationManager } from "../../hooks/useNotificationManager";
@@ -15,12 +15,12 @@ import { useNotificationManager } from "../../hooks/useNotificationManager";
 import { signInAnonymously } from "firebase/auth";
 import { collection, doc, onSnapshot, setDoc } from "firebase/firestore";
 import { AppState } from "react-native";
-import { auth, db } from "./firebaseConfig";
+import { auth, db } from "../../firebaseConfig";
 
 import EventItem from "./components/EventItem";
 import TodoItem from "./components/TodoItem";
 
-import { useAppStore } from "../(tabs)/store/useAppStore";
+import { useAppStore } from "../../store/useAppStore";
 
 import OnboardingModal from "./components/OnboardingModal";
 

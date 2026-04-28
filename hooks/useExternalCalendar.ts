@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'; // 🌟 追加
 import * as Calendar from 'expo-calendar';
 import { useEffect, useState } from 'react';
-import { ScheduleItem } from '../app/(tabs)/types';
+import { ScheduleItem } from '../types';
 
 export function useExternalCalendar(selectedDate: string) {
   const [externalEvents, setExternalEvents] = useState<{ [date: string]: ScheduleItem[] }>({});

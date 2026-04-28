@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ScheduleItem } from "../app/(tabs)/types";
+import { ScheduleItem } from "../types";
 
 export function useCalendarData(
   scheduleData: { [key: string]: ScheduleItem[] },

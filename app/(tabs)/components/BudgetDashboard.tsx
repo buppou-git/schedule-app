@@ -18,9 +18,9 @@ import {
   View,
 } from "react-native";
 import { PieChart } from "react-native-chart-kit";
-import { useAppStore } from "../store/useAppStore";
-import { ScheduleItem } from "../types";
-import { CHART_PALETTE, getItemTotalExpense, getItemTotalIncome, PRESET_COLORS } from "../utils/helpers";
+import { useAppStore } from "../../../store/useAppStore";
+import { ScheduleItem } from "../../../types";
+import { CHART_PALETTE, getItemTotalExpense, getItemTotalIncome, PRESET_COLORS } from "../../../utils/helpers";
 
 import HistoryAnalytics from "./HistoryAnalytics";
 

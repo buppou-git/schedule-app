@@ -1,6 +1,6 @@
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { LayerMaster, ScheduleItem, TagMaster } from "../types";
+import { LayerMaster, ScheduleItem, TagMaster } from "../../../types";
 
 interface EventItemProps {
   item: ScheduleItem; // 🌟 any を撃退！

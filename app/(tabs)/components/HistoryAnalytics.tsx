@@ -3,20 +3,20 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-    Dimensions,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+  Dimensions,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native";
 import { LineChart } from "react-native-chart-kit";
+import { ScheduleItem } from "../../../types";
+import { getItemTotalExpense, getItemTotalIncome } from "../../../utils/helpers";
 import { useAppStore } from "../store/useAppStore";
-import { ScheduleItem } from "../types";
-import { getItemTotalExpense, getItemTotalIncome } from "../utils/helpers";
 
 const screenWidth = Dimensions.get("window").width;
 

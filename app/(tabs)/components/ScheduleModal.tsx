@@ -6,13 +6,13 @@ import React, { useEffect, useMemo, useState } from "react";
 
 // 🌟 通知の脳みそをインポート
 import { useNotificationManager } from "../../../hooks/useNotificationManager";
-import { ScheduleItem, SubTask } from "../types";
-import { PRESET_COLORS } from "../utils/helpers";
+import { ScheduleItem, SubTask } from "../../../types";
+import { PRESET_COLORS } from "../../../utils/helpers";
 
 import { exportToStandardCalendar } from "../../../hooks/useCalendarExport";
 
 import { deleteDoc, doc, setDoc } from "firebase/firestore";
-import { db } from "../firebaseConfig";
+import { db } from "../../../firebaseConfig";
 
 import {
   ActivityIndicator,

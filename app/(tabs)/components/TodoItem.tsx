@@ -7,8 +7,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { ScheduleItem, SubTask } from "../../../types";
 import { useAppStore } from "../store/useAppStore";
-import { ScheduleItem, SubTask } from "../types";
 
 interface TodoItemProps {
   item: ScheduleItem; 

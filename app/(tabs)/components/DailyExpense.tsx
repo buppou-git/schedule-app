@@ -14,9 +14,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useAppStore } from "../store/useAppStore";
-import { ScheduleItem } from "../types";
-import { getItemTotalExpense, getItemTotalIncome, PRESET_COLORS } from "../utils/helpers";
+import { useAppStore } from "../../../store/useAppStore";
+import { ScheduleItem } from "../../../types";
+import { getItemTotalExpense, getItemTotalIncome, PRESET_COLORS } from "../../../utils/helpers";
 
 interface DailyExpenseProps {
   selectedDate: string;

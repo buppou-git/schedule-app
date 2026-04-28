@@ -2,11 +2,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { doc, setDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
 // ※ auth と db のパスは、ご自身の環境に合わせて修正してください
-import { auth, db } from "../app/(tabs)/firebaseConfig";
-import { ScheduleItem } from "../app/(tabs)/types";
+import { auth, db } from "../firebaseConfig";
+import { ScheduleItem } from "../types";
 
 // 🌟 追加：Zustand の魔法の倉庫をインポート
-import { useAppStore } from "../app/(tabs)/store/useAppStore";
+import { useAppStore } from "../store/useAppStore";
 
 export const useScheduleManager = () => {
   // 🌟 倉庫からデータと「純粋な更新関数」を引き出す

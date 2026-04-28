@@ -30,8 +30,8 @@ import {
   TouchableWithoutFeedback,
   View
 } from "react-native";
+import { auth } from "../../../firebaseConfig";
 import { useNotificationManager } from "../../../hooks/useNotificationManager";
-import { auth } from "../firebaseConfig";
 
 interface ConfigModalProps {
   visible: boolean;
@@ -79,7 +79,7 @@ export default function ConfigModal({
 
   const [createRoomVisible, setCreateRoomVisible] = useState(false);
   const [newRoomName, setNewRoomName] = useState("");
-  
+
   const [joinRoomVisible, setJoinRoomVisible] = useState(false);
   const [joinRoomId, setJoinRoomId] = useState("");
   const [joinRoomName, setJoinRoomName] = useState("");
@@ -356,17 +356,17 @@ export default function ConfigModal({
 
   const handleCreateRoom = () => {
     if (!newRoomName.trim()) return;
-    
+
     // IDの生成と登録
     const generatedRoomId = "room_" + CryptoJS.lib.WordArray.random(8).toString();
     onAddSharedRoom(newRoomName.trim(), generatedRoomId);
-    
+
     // 🌟 変更：作成画面を閉じて、新しい「作成完了ポップアップ」を開く準備をする
     setCreatedRoomName(newRoomName.trim());
     setCreatedRoomId(generatedRoomId);
     setNewRoomName("");
     setCreateRoomVisible(false);
-    
+
     // 少し遅延させてから完了画面を開く（モーダルの重なりエラーを防ぐため）
     setTimeout(() => {
       setShowCreatedRoomInfoVisible(true);
@@ -375,13 +375,13 @@ export default function ConfigModal({
 
   const handleJoinRoom = () => {
     if (!joinRoomName.trim() || !joinRoomId.trim()) return;
-    
+
     let extractedId = joinRoomId.trim();
-    
+
     if (extractedId.includes("room=")) {
       extractedId = extractedId.split("room=")[1].split("&")[0];
     }
-    
+
     onAddSharedRoom(joinRoomName.trim(), extractedId);
     setJoinRoomVisible(false);
     setJoinRoomId("");
@@ -709,13 +709,13 @@ export default function ConfigModal({
             <View style={styles.subModalContent}>
               <Text style={styles.title}>NEW SHARED ROOM</Text>
               <Text style={styles.subTitle}>新しい共有レイヤーの名前を決めてください</Text>
-              <TextInput 
-                style={styles.inputField} 
-                placeholder="例：ゼミ合宿、家族の予定" 
-                placeholderTextColor="#C7C7CC" 
-                autoFocus 
-                value={newRoomName} 
-                onChangeText={setNewRoomName} 
+              <TextInput
+                style={styles.inputField}
+                placeholder="例：ゼミ合宿、家族の予定"
+                placeholderTextColor="#C7C7CC"
+                autoFocus
+                value={newRoomName}
+                onChangeText={setNewRoomName}
               />
               <View style={styles.modalActionRow}>
                 <TouchableOpacity onPress={() => setCreateRoomVisible(false)}><Text style={styles.cancelText}>キャンセル</Text></TouchableOpacity>
@@ -733,21 +733,21 @@ export default function ConfigModal({
             <View style={styles.subModalContent}>
               <Text style={styles.title}>JOIN SHARED ROOM</Text>
               <Text style={styles.subTitle}>送られたURLかIDを貼り付けてください</Text>
-              <TextInput 
-                style={styles.inputField} 
-                placeholder="URL または ID" 
-                placeholderTextColor="#C7C7CC" 
-                autoFocus 
-                value={joinRoomId} 
-                onChangeText={setJoinRoomId} 
+              <TextInput
+                style={styles.inputField}
+                placeholder="URL または ID"
+                placeholderTextColor="#C7C7CC"
+                autoFocus
+                value={joinRoomId}
+                onChangeText={setJoinRoomId}
               />
-              <Text style={[styles.subTitle, {marginTop: 15}]}>自分のアプリでの表示名（レイヤー名）</Text>
-              <TextInput 
-                style={styles.inputField} 
-                placeholder="例：サークル用カレンダー" 
-                placeholderTextColor="#C7C7CC" 
-                value={joinRoomName} 
-                onChangeText={setJoinRoomName} 
+              <Text style={[styles.subTitle, { marginTop: 15 }]}>自分のアプリでの表示名（レイヤー名）</Text>
+              <TextInput
+                style={styles.inputField}
+                placeholder="例：サークル用カレンダー"
+                placeholderTextColor="#C7C7CC"
+                value={joinRoomName}
+                onChangeText={setJoinRoomName}
               />
               <View style={styles.modalActionRow}>
                 <TouchableOpacity onPress={() => setJoinRoomVisible(false)}><Text style={styles.cancelText}>キャンセル</Text></TouchableOpacity>
@@ -787,7 +787,7 @@ export default function ConfigModal({
       <Modal visible={showCreatedRoomInfoVisible} transparent animationType="fade">
         <View style={styles.overlay}>
           <View style={styles.subModalContent}>
-            
+
             <View style={{ alignItems: "center", marginBottom: 20 }}>
               <Ionicons name="checkmark-circle" size={50} color="#34C759" />
               <Text style={[styles.title, { marginTop: 10 }]}>作成完了！</Text>
@@ -801,9 +801,9 @@ export default function ConfigModal({
 
             <Text style={{ fontSize: 12, color: "#8E8E93", fontWeight: "bold", marginBottom: 5 }}>ルームID (長押しでコピー)</Text>
             <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#F2F2F7", padding: 15, borderRadius: 12 }}>
-              <Text 
-                style={{ flex: 1, fontSize: 16, fontWeight: "bold", color: "#1C1C1E", fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" }} 
-                selectable={true} 
+              <Text
+                style={{ flex: 1, fontSize: 16, fontWeight: "bold", color: "#1C1C1E", fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" }}
+                selectable={true}
               >
                 {createdRoomId}
               </Text>
@@ -848,7 +848,7 @@ const styles = StyleSheet.create({
   pinBox: { width: 55, height: 65, borderWidth: 1, borderRadius: 16, borderColor: '#C7C7CC', justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF' },
   pinBoxFocused: { borderColor: '#1C1C1E', borderWidth: 2, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 5 },
   pinDot: { fontSize: 36, color: '#1C1C1E' },
-  
+
   subModalContent: { backgroundColor: "#FFF", width: "90%", alignSelf: "center", borderRadius: 20, padding: 24, marginBottom: "50%", shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 10 },
   inputField: { backgroundColor: "#F2F2F7", padding: 15, borderRadius: 12, marginTop: 15, fontSize: 16, fontWeight: "600", color: "#1C1C1E" },
   modalActionRow: { flexDirection: "row", justifyContent: "flex-end", alignItems: "center", marginTop: 20, gap: 15 },
