@@ -7,6 +7,7 @@ import { StatusBar } from "expo-status-bar";
 import React, {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -74,7 +75,8 @@ import { useExternalCalendar } from "../../hooks/useExternalCalendar";
 
 function useStableCallback<T extends (...args: any[]) => any>(callback: T) {
   const ref = useRef(callback);
-  useEffect(() => {
+  // 🌟 useEffect を useLayoutEffect に変更！
+  useLayoutEffect(() => {
     ref.current = callback;
   }, [callback]);
   return useCallback((...args: Parameters<T>) => ref.current(...args), []) as T;
@@ -475,9 +477,20 @@ export default function Index() {
       const newData = { ...scheduleData };
 
       if (!isCopy && !isSharedItem(item)) {
-        Object.keys(newData).forEach((d) => {
-          newData[d] = newData[d].filter((i) => i.id !== item.id);
-        });
+        // 🌟 O(N)ループを撤去し、ピンポイントで削除！
+        if (
+          newData[targetDate] &&
+          newData[targetDate].some((i) => i.id === item.id)
+        ) {
+          newData[targetDate] = newData[targetDate].filter(
+            (i) => i.id !== item.id,
+          );
+        } else {
+          // 万が一見つからなかった場合のみ全検索
+          Object.keys(newData).forEach((d) => {
+            newData[d] = newData[d].filter((i) => i.id !== item.id);
+          });
+        }
       }
 
       if (!Object.keys(sharedRooms).includes(targetLayer)) {
@@ -621,7 +634,10 @@ export default function Index() {
                   "activeTags",
                   "sharedRoomsData",
                   "hasCompletedOnboarding", // 🌟 追加：初回フラグも消去する！
+                  "useBiometricLock", // 🌟 追加：生体認証の設定をリセット
+                  "usePinLock", // 🌟 追加：暗証番号の設定をリセット
                 ]);
+                await SecureStore.deleteItemAsync("app_pin_code");
 
                 // 4. メモリ上のステートを初期化
                 setScheduleData({});
