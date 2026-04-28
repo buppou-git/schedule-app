@@ -68,6 +68,7 @@ import LayerManagementModal from "./components/LayerManagementModal";
 import MoneyDashboard from "./components/MoneyDashboard";
 import QuickActionModal from "./components/QuickActionModal";
 import ScheduleModal from "./components/ScheduleModal";
+import SearchModal from "./components/SearchModal"; // 🌟 これを追加
 import SubTaskEditModal from "./components/SubTaskEditModal";
 import TabBar from "./components/TabBar";
 
@@ -282,6 +283,8 @@ export default function Index() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const [configModalVisible, setConfigModalVisible] = useState(false);
+
+  const [searchModalVisible, setSearchModalVisible] = useState(false);
 
   const openFilterModal = useCallback(() => {
     setTempActiveTags(activeTags);
@@ -1560,15 +1563,29 @@ export default function Index() {
           </View>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setConfigModalVisible(true);
-          }}
-          style={{ padding: 8 }}
-        >
-          <Ionicons name="settings-outline" size={24} color="#1C1C1E" />
-        </TouchableOpacity>
+        {/* 🌟 アイコンを横に並べるために View で包む */}
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          {/* 🌟 検索ボタンを追加！ */}
+          <TouchableOpacity
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setSearchModalVisible(true);
+            }}
+            style={{ padding: 8, marginRight: 5 }}
+          >
+            <Ionicons name="search-outline" size={24} color="#1C1C1E" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setConfigModalVisible(true);
+            }}
+            style={{ padding: 8 }}
+          >
+            <Ionicons name="settings-outline" size={24} color="#1C1C1E" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <TabBar themeColor={currentSolidColor} />
@@ -2204,6 +2221,18 @@ export default function Index() {
         onSave={handleSubTaskSave}
         onDelete={handleSubTaskDelete}
         themeColor={currentSolidColor}
+      />
+
+      <SearchModal
+        visible={searchModalVisible}
+        onClose={() => setSearchModalVisible(false)}
+        scheduleData={scheduleData}
+        themeColor={currentSolidColor}
+        onItemPress={(item, date) => {
+          setSelectedDate(date); // その日にジャンプ！
+          setSelectedItem(item); // 編集モーダルにデータを渡す
+          setModalVisible(true); // 詳細（編集）モーダルを開く
+        }}
       />
 
       {/* 🌟 修正：Propsを追加 */}
