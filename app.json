@@ -7,17 +7,25 @@
     "icon": "./assets/icon3.png",
     "scheme": "com.buppou.multicalendar",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true, 
+    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.buppou.multicalendar"
+      "bundleIdentifier": "com.buppou.multicalendar",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon3.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.buppou.multicalendar"
+      "package": "com.buppou.multicalendar",
+      "permissions": [
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR",
+        "com.google.android.gms.permission.AD_ID"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -50,6 +58,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "c5501d38-da79-4ec9-a57f-c84c899d155d"
+      }
     }
   }
 }
