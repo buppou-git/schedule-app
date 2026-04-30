@@ -282,7 +282,9 @@ export default function Index() {
   const [isExternalSyncEnabled, setIsExternalSyncEnabled] = useState(false);
 
   useEffect(() => {
-    AsyncStorage.getItem("externalCalendarSync").then(val => setIsExternalSyncEnabled(val === "true"));
+    AsyncStorage.getItem("externalCalendarSync").then((val) =>
+      setIsExternalSyncEnabled(val === "true"),
+    );
   }, []);
 
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -315,10 +317,16 @@ export default function Index() {
         const next = prev.includes(layer)
           ? prev.filter((t) => t !== layer)
           : [...prev, layer];
-        return next.length === Object.keys(layerMaster).length ? [] : next;
+
+        // 🌟 修正：「すべて表示」に戻す条件を、外部予定も含めた「全レイヤー数」と厳密に比較するように変更
+        const totalLayerCount =
+          Object.keys(layerMaster).length + (isExternalSyncEnabled ? 1 : 0);
+
+        // 全て選択されたら「すべて表示（空配列）」に戻す
+        return next.length >= totalLayerCount ? [] : next;
       });
     },
-    [layerMaster],
+    [layerMaster, isExternalSyncEnabled], // 🌟 修正：依存配列を最新状態に更新
   );
 
   const applyFilters = useCallback(() => {
@@ -1039,6 +1047,55 @@ export default function Index() {
     setHasUnsavedChanges(true);
   };
 
+  const layerSummary = useMemo(() => {
+    if (activeTags.length !== 1) return null; // 1つのレイヤーに絞り込んでいる時だけ発動
+
+    const targetLayer = activeTags[0];
+    if (targetLayer === "外部予定") return null; // 外部予定はお金の計算がないので除外
+
+    const [y, m] = selectedDate.split("-");
+    const targetMonthPrefix = `${y}-${m}-`; // 例: "2026-04-"
+
+    let eventCount = 0;
+    let totalExpense = 0;
+
+    Object.keys(displayData).forEach((date) => {
+      // 選択中の「月」のデータだけを集計する
+      if (date.startsWith(targetMonthPrefix)) {
+        displayData[date].forEach((item) => {
+          const itemTags =
+            item.tags && item.tags.length > 0
+              ? item.tags
+              : item.tag
+                ? [item.tag]
+                : [];
+          const matchLayer = itemTags.some(
+            (tag) =>
+              tag === targetLayer || tagMaster[tag]?.layer === targetLayer,
+          );
+
+          if (matchLayer) {
+            if (item.isEvent || item.isTodo) eventCount++;
+
+            // 支出の集計（親タスク + 子タスク）
+            if (item.isExpense && item.amount) {
+              totalExpense += Number(item.amount);
+            }
+            if (item.subTasks) {
+              item.subTasks.forEach((sub) => {
+                if (sub.isExpense && sub.amount) {
+                  totalExpense += Number(sub.amount);
+                }
+              });
+            }
+          }
+        });
+      }
+    });
+
+    return { targetLayer, eventCount, totalExpense };
+  }, [activeTags, displayData, selectedDate, tagMaster]);
+
   const handleSubTaskSave = async (updatedSub: SubTask) => {
     if (!editingSubTaskInfo) return;
     const { parentId, parentTitle, date } = editingSubTaskInfo;
@@ -1705,42 +1762,42 @@ export default function Index() {
 
               {(activeMode === "todo" ||
                 (activeMode === "money" && !isMoneySummaryMode)) && (
-                  <View style={styles.weekCalendarWrapper}>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        paddingRight: 20,
-                      }}
-                    >
-                      <Text style={styles.monthLabel}>
-                        {parseInt(selectedDate.split("-")[1])}月
-                      </Text>
-                      <TouchableOpacity onPress={handleOpenNewModal}>
-                        <Ionicons
-                          name="add-circle"
-                          size={30}
-                          color={currentSolidColor}
-                        />
-                      </TouchableOpacity>
-                    </View>
-                    <CalendarProvider
-                      date={selectedDate}
-                      onDateChanged={setSelectedDate}
-                    >
-                      <WeekCalendar
-                        firstDay={1}
-                        markedDates={currentMarkedDates}
-                        theme={{
-                          calendarBackground: "transparent",
-                          todayTextColor: currentSolidColor,
-                          selectedDayBackgroundColor: currentSolidColor,
-                        }}
+                <View style={styles.weekCalendarWrapper}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      paddingRight: 20,
+                    }}
+                  >
+                    <Text style={styles.monthLabel}>
+                      {parseInt(selectedDate.split("-")[1])}月
+                    </Text>
+                    <TouchableOpacity onPress={handleOpenNewModal}>
+                      <Ionicons
+                        name="add-circle"
+                        size={30}
+                        color={currentSolidColor}
                       />
-                    </CalendarProvider>
+                    </TouchableOpacity>
                   </View>
-                )}
+                  <CalendarProvider
+                    date={selectedDate}
+                    onDateChanged={setSelectedDate}
+                  >
+                    <WeekCalendar
+                      firstDay={1}
+                      markedDates={currentMarkedDates}
+                      theme={{
+                        calendarBackground: "transparent",
+                        todayTextColor: currentSolidColor,
+                        selectedDayBackgroundColor: currentSolidColor,
+                      }}
+                    />
+                  </CalendarProvider>
+                </View>
+              )}
             </>
           )}
 
@@ -1905,6 +1962,77 @@ export default function Index() {
 
               return (
                 <View style={styles.listPadding}>
+                  {/* 🌟 追加：レイヤー絞り込み時のみ出現する魔法のサマリーカード */}
+                  {layerSummary && (
+                    <View
+                      style={[
+                        styles.summaryCard,
+                        {
+                          backgroundColor: currentBgColor,
+                          borderColor: currentSolidColor + "40",
+                        },
+                      ]}
+                    >
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          marginBottom: 8,
+                        }}
+                      >
+                        <Ionicons
+                          name="analytics"
+                          size={16}
+                          color={currentSolidColor}
+                        />
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: "800",
+                            color: currentSolidColor,
+                            marginLeft: 6,
+                          }}
+                        >
+                          {parseInt(selectedDate.split("-")[1])}月の「
+                          {layerSummary.targetLayer}」サマリー
+                        </Text>
+                      </View>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          justifyContent: "space-between",
+                          alignItems: "flex-end",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            color: "#1C1C1E",
+                            fontWeight: "600",
+                          }}
+                        >
+                          関連予定・タスク:{" "}
+                          <Text style={{ fontSize: 18, fontWeight: "900" }}>
+                            {layerSummary.eventCount}
+                          </Text>{" "}
+                          件
+                        </Text>
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            color: "#1C1C1E",
+                            fontWeight: "600",
+                          }}
+                        >
+                          支出合計:{" "}
+                          <Text style={{ fontSize: 18, fontWeight: "900" }}>
+                            ¥{layerSummary.totalExpense.toLocaleString()}
+                          </Text>
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
                   <Text style={styles.dateTitle}>{selectedDate} の予定</Text>
                   {dayEvents.map((item) => (
                     <EventItem
@@ -2045,18 +2173,46 @@ export default function Index() {
                       style={[
                         styles.gridCard,
                         tempActiveTags.includes("外部予定")
-                          ? { backgroundColor: "#FF2D55", borderColor: "#FF2D55" }
-                          : [styles.gridCardGhost, { borderColor: "#FF2D5540" }],
+                          ? {
+                              backgroundColor: "#FF2D55",
+                              borderColor: "#FF2D55",
+                            }
+                          : [
+                              styles.gridCardGhost,
+                              { borderColor: "#FF2D5540" },
+                            ],
                       ]}
                       onPress={() => toggleTempTag("外部予定")}
                     >
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 4,
+                        }}
+                      >
                         <Ionicons
-                          name={tempActiveTags.includes("外部予定") ? "checkmark-circle" : "ellipse-outline"}
+                          name={
+                            tempActiveTags.includes("外部予定")
+                              ? "checkmark-circle"
+                              : "ellipse-outline"
+                          }
                           size={16}
-                          color={tempActiveTags.includes("外部予定") ? "#FFF" : "#FF2D55"}
+                          color={
+                            tempActiveTags.includes("外部予定")
+                              ? "#FFF"
+                              : "#FF2D55"
+                          }
                         />
-                        <Text style={[styles.gridCardText, tempActiveTags.includes("外部予定") && { color: "#FFF" }]} numberOfLines={1}>
+                        <Text
+                          style={[
+                            styles.gridCardText,
+                            tempActiveTags.includes("外部予定") && {
+                              color: "#FFF",
+                            },
+                          ]}
+                          numberOfLines={1}
+                        >
                           外部予定
                         </Text>
                       </View>
@@ -2074,13 +2230,13 @@ export default function Index() {
                           styles.gridCard,
                           isSelected
                             ? {
-                              backgroundColor: layerMaster[layer],
-                              borderColor: layerMaster[layer],
-                            }
+                                backgroundColor: layerMaster[layer],
+                                borderColor: layerMaster[layer],
+                              }
                             : [
-                              styles.gridCardGhost,
-                              { borderColor: layerMaster[layer] + "40" },
-                            ],
+                                styles.gridCardGhost,
+                                { borderColor: layerMaster[layer] + "40" },
+                              ],
                         ]}
                         onPress={() => toggleTempTag(layer)}
                       >
@@ -2262,7 +2418,9 @@ export default function Index() {
         visible={configModalVisible}
         onClose={() => {
           setConfigModalVisible(false);
-          AsyncStorage.getItem("externalCalendarSync").then(val => setIsExternalSyncEnabled(val === "true"));
+          AsyncStorage.getItem("externalCalendarSync").then((val) =>
+            setIsExternalSyncEnabled(val === "true"),
+          );
         }}
         lastSyncedAt={lastSyncedAt}
         onRestore={handleRestore}
@@ -2756,5 +2914,15 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "#E5E5EA",
     paddingBottom: Platform.OS === "ios" ? 0 : 5, // iPhoneのホームバー対策
+  },
+  summaryCard: {
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
   },
 });

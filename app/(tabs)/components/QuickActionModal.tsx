@@ -62,7 +62,6 @@ export default function QuickActionModal({
         >
           <TouchableWithoutFeedback>
             <View style={styles.sheetContent}>
-
               <View style={styles.dragHandle} />
 
               <View style={styles.quickEditRow}>
@@ -80,44 +79,64 @@ export default function QuickActionModal({
                     onClose();
                   }}
                 >
-                  <Text style={{ color: "#FFF", fontWeight: "bold", fontSize: 12 }}>
+                  <Text
+                    style={{ color: "#FFF", fontWeight: "bold", fontSize: 12 }}
+                  >
                     保存
                   </Text>
                 </TouchableOpacity>
               </View>
 
               <View style={{ marginBottom: 15 }}>
-                <Text style={{ fontSize: 11, fontWeight: '800', color: '#AEAEB2', marginBottom: 10, paddingLeft: 5 }}>
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "800",
+                    color: "#AEAEB2",
+                    marginBottom: 10,
+                    paddingLeft: 5,
+                  }}
+                >
                   LAYER TRANSFER (長押しでコピー)
                 </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 5 }}>
-                  {Object.keys(layerMaster).map(layer => {
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingLeft: 5 }}
+                >
+                  {Object.keys(layerMaster).map((layer) => {
                     // 🌟 修正2：ここで共有レイヤーかどうかの判定（isShared）を定義する！
-                    const isShared = sharedRooms ? Object.keys(sharedRooms).includes(layer) : false;
+                    const isShared = sharedRooms
+                      ? Object.keys(sharedRooms).includes(layer)
+                      : false;
 
                     return (
                       <TouchableOpacity
                         key={layer}
                         style={{
-                          backgroundColor: layerMaster[layer] + '15',
+                          backgroundColor: layerMaster[layer] + "15",
                           paddingHorizontal: 16,
                           paddingVertical: 10,
                           borderRadius: 12,
                           marginRight: 10,
                           borderWidth: 1,
-                          borderColor: layerMaster[layer] + '30',
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 6
+                          borderColor: layerMaster[layer] + "30",
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 6,
                         }}
+                        delayLongPress={300}
                         onPress={() => {
                           Alert.alert(
                             "レイヤー移動",
                             `「${layer}」に移動しますか？\n(元の予定は消えます)`,
                             [
                               { text: "キャンセル", style: "cancel" },
-                              { text: "移動", onPress: () => onMoveOrCopy(item, layer, false) }
-                            ]
+                              {
+                                text: "移動",
+                                onPress: () => onMoveOrCopy(item, layer, false),
+                              },
+                            ],
                           );
                         }}
                         onLongPress={() => {
@@ -126,14 +145,31 @@ export default function QuickActionModal({
                             `「${layer}」にコピーしますか？\n(元の予定も残ります)`,
                             [
                               { text: "キャンセル", style: "cancel" },
-                              { text: "コピー", onPress: () => onMoveOrCopy(item, layer, true) }
-                            ]
+                              {
+                                text: "コピー",
+                                onPress: () => onMoveOrCopy(item, layer, true),
+                              },
+                            ],
                           );
                         }}
                       >
                         {/* 🌟 共有レイヤーなら雲アイコンを表示 */}
-                        {isShared && <Ionicons name="cloud-outline" size={14} color={layerMaster[layer]} />}
-                        <Text style={{ color: layerMaster[layer], fontWeight: '800', fontSize: 14 }}>{layer}</Text>
+                        {isShared && (
+                          <Ionicons
+                            name="cloud-outline"
+                            size={14}
+                            color={layerMaster[layer]}
+                          />
+                        )}
+                        <Text
+                          style={{
+                            color: layerMaster[layer],
+                            fontWeight: "800",
+                            fontSize: 14,
+                          }}
+                        >
+                          {layer}
+                        </Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -148,8 +184,17 @@ export default function QuickActionModal({
                     setTimeout(() => onEditDetail(item), 300);
                   }}
                 >
-                  <View style={[styles.iconCircle, { backgroundColor: themeColor + "15" }]}>
-                    <Ionicons name="options-outline" size={20} color={themeColor} />
+                  <View
+                    style={[
+                      styles.iconCircle,
+                      { backgroundColor: themeColor + "15" },
+                    ]}
+                  >
+                    <Ionicons
+                      name="options-outline"
+                      size={20}
+                      color={themeColor}
+                    />
                   </View>
                   <Text style={styles.menuText}>詳細・繰り返し設定を編集</Text>
                   <Ionicons name="chevron-forward" size={16} color="#C7C7CC" />
@@ -164,7 +209,12 @@ export default function QuickActionModal({
                     onDelete(item);
                   }}
                 >
-                  <View style={[styles.iconCircle, { backgroundColor: "#FF3B3015" }]}>
+                  <View
+                    style={[
+                      styles.iconCircle,
+                      { backgroundColor: "#FF3B3015" },
+                    ]}
+                  >
                     <Ionicons name="trash-outline" size={20} color="#FF3B30" />
                   </View>
                   <Text style={[styles.menuText, { color: "#FF3B30" }]}>
@@ -172,7 +222,6 @@ export default function QuickActionModal({
                   </Text>
                 </TouchableOpacity>
               </View>
-
             </View>
           </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
