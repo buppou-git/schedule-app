@@ -28,7 +28,7 @@ import {
   TextInput,
   TouchableOpacity,
   TouchableWithoutFeedback,
-  View
+  View,
 } from "react-native";
 
 interface ScheduleModalProps {
@@ -212,11 +212,13 @@ export default function ScheduleModal({
   const [editQuickTagModal, setEditQuickTagModal] = useState(false);
   const [editingTagIndex, setEditingTagIndex] = useState<number | null>(null);
   const [tempQuickTagText, setTempQuickTagText] = useState("");
-  const [editingLayerForQuick, setEditingLayerForQuick] = useState("ALL_LAYERS");
+  const [editingLayerForQuick, setEditingLayerForQuick] =
+    useState("ALL_LAYERS");
 
   // 🌟 追加：属性編集用State
   const [editSubTagModalVisible, setEditSubTagModalVisible] = useState(false);
-  const [editingSubTagOriginalName, setEditingSubTagOriginalName] = useState("");
+  const [editingSubTagOriginalName, setEditingSubTagOriginalName] =
+    useState("");
   const [editingSubTagName, setEditingSubTagName] = useState("");
   const [editingSubTagColor, setEditingSubTagColor] = useState("");
 
@@ -232,12 +234,24 @@ export default function ScheduleModal({
     if (editingTagIndex === null || !tempQuickTagText.trim()) return;
     const newTags = { ...quickMainTags };
     if (!newTags[editingLayerForQuick]) {
-      newTags[editingLayerForQuick] = [...(quickMainTags["ALL_LAYERS"] || ["食費", "交通", "日用品", "交際費", "趣味", "その他"])];
+      newTags[editingLayerForQuick] = [
+        ...(quickMainTags["ALL_LAYERS"] || [
+          "食費",
+          "交通",
+          "日用品",
+          "交際費",
+          "趣味",
+          "その他",
+        ]),
+      ];
     }
     newTags[editingLayerForQuick][editingTagIndex] = tempQuickTagText.trim();
     setQuickMainTags(newTags);
     await AsyncStorage.setItem("quickMainTagsData", JSON.stringify(newTags));
-    if (selectedCategory === quickMainTags[editingLayerForQuick]?.[editingTagIndex]) {
+    if (
+      selectedCategory ===
+      quickMainTags[editingLayerForQuick]?.[editingTagIndex]
+    ) {
       setSelectedCategory(tempQuickTagText.trim());
     }
     setEditQuickTagModal(false);
@@ -270,19 +284,28 @@ export default function ScheduleModal({
   };
 
   const deleteSubTag = async () => {
-    Alert.alert("確認", `属性「${editingSubTagOriginalName}」を削除しますか？`, [
-      { text: "キャンセル", style: "cancel" },
-      {
-        text: "削除", style: "destructive", onPress: async () => {
-          const newTagMaster = { ...tagMaster };
-          delete newTagMaster[editingSubTagOriginalName];
-          setTagMaster(newTagMaster);
-          await AsyncStorage.setItem("tagMasterData", JSON.stringify(newTagMaster));
-          if (tagInput === editingSubTagOriginalName) setTagInput("");
-          setEditSubTagModalVisible(false);
-        }
-      }
-    ]);
+    Alert.alert(
+      "確認",
+      `属性「${editingSubTagOriginalName}」を削除しますか？`,
+      [
+        { text: "キャンセル", style: "cancel" },
+        {
+          text: "削除",
+          style: "destructive",
+          onPress: async () => {
+            const newTagMaster = { ...tagMaster };
+            delete newTagMaster[editingSubTagOriginalName];
+            setTagMaster(newTagMaster);
+            await AsyncStorage.setItem(
+              "tagMasterData",
+              JSON.stringify(newTagMaster),
+            );
+            if (tagInput === editingSubTagOriginalName) setTagInput("");
+            setEditSubTagModalVisible(false);
+          },
+        },
+      ],
+    );
   };
 
   const [selectedReminders, setSelectedReminders] = useState<string[]>([]);
@@ -290,136 +313,138 @@ export default function ScheduleModal({
   const { scheduleItemNotification, cancelItemNotification } =
     useNotificationManager();
 
-    const uiThemeColor = layerMaster[selectedLayer] || "#007AFF";
+  const uiThemeColor = layerMaster[selectedLayer] || "#007AFF";
 
-    // 🌟 追加：画面の初期化が完了したかを記憶するフラグ（useRefを追記）
-    const isInitialized = useRef(false);
-  
-    useEffect(() => {
-      const load = async () => {
-        const [q, r] = await Promise.all([
-          AsyncStorage.getItem("quickMainTagsData"),
-          AsyncStorage.getItem("readingMasterData"),
-        ]);
-        if (q) setQuickMainTags(JSON.parse(q));
-        if (r) setReadingMaster(JSON.parse(r));
-      };
-      if (visible) load();
-    }, [visible]);
-  
-    useEffect(() => {
-      // 画面が閉じている時はリセット
-      if (!visible) {
-        setIsReady(false);
-        isInitialized.current = false;
-        return;
-      }
-  
-      if (isInitialized.current) return;
-  
-      // 🌟 修正：画面が下からスライドしてくるアニメーションを優先するため、
-      // 中身の重い処理（準備）を「100ミリ秒」だけ遅らせて実行する！
-      const timer = setTimeout(() => {
-        const layers = Object.keys(layerMaster);
-        const def = layers.length > 0 ? layers[0] : "生活";
-  
-        if (selectedItem) {
-          setInputText(selectedItem.title || "");
-          setInputAmount(
-            selectedItem.amount > 0 ? selectedItem.amount.toString() : "",
-          );
-          setIsEvent(selectedItem.isEvent ?? true);
-          setIsTodo(selectedItem.isTodo ?? false);
-          setIsExpense(selectedItem.isExpense ?? false);
-          setTagInput(selectedItem.tag || "");
-          setTagColor(selectedItem.color || "#007AFF");
-  
-          const savedLayer = tagMaster?.[selectedItem.tag || ""]?.layer 
-                            || (layerMaster[selectedItem.tag || ""] ? selectedItem.tag : def);
-          setSelectedLayer(savedLayer || def);
-  
-          setSelectedCategory(selectedItem.category || "食費");
-          setIsAllDay(selectedItem.isAllDay ?? true);
-          setStartDate(new Date(selectedItem.startDate || selectedDate));
-          setEndDate(new Date(selectedItem.endDate || selectedDate));
-  
-          if (selectedItem.startTime) {
-            const [h, m] = selectedItem.startTime.split(":").map(Number);
-            const d = new Date();
-            d.setHours(h, m, 0, 0);
-            setStartTime(d);
-          }
-          if (selectedItem.endTime) {
-            const [h, m] = selectedItem.endTime.split(":").map(Number);
-            const d = new Date();
-            d.setHours(h, m, 0, 0);
-            setEndTime(d);
-          }
-  
-          const hasOldNotification =
-            selectedItem.notificationIds &&
-            selectedItem.notificationIds.length > 0;
-          setSelectedReminders(
-            selectedItem.reminderOptions || (hasOldNotification ? ["exact"] : []),
-          );
-  
-          if (selectedItem.customReminderTimes) {
-            setCustomReminderTimes(
-              selectedItem.customReminderTimes.map((tStr) => new Date(tStr)),
-            );
-          } else {
-            setCustomReminderTimes([]);
-          }
-          setRepeatType(selectedItem.repeatType || "none");
-          setRepeatDays(selectedItem.repeatDays || []);
-          setRepeatInterval(selectedItem.repeatInterval || 1);
-          setNewTagColor(""); // リセット
-  
-          const savedSubTasks = selectedItem.subTasks || [];
-          setSubTasks(savedSubTasks);
-          setShowSubTasks(savedSubTasks.length > 0);
-  
-          const snapshot = JSON.stringify({
-            title: selectedItem.title || "",
-            amount: parseInt(selectedItem.amount?.toString() || "0"),
-            isTodo: selectedItem.isTodo ?? false,
-            subTasksData: savedSubTasks.map(t => `${t.title}_${t.isDone}`).join(",")
-          });
-          setInitialSnapshot(snapshot);
-  
-        } else {
-          setInputText("");
-          setTagInput("");
-          setTagColor(layerMaster[def] || "#007AFF");
-          setInputAmount("");
-          setIsEvent(activeMode === "calendar");
-          setIsTodo(activeMode === "todo");
-          setIsExpense(activeMode === "money");
-          setSelectedLayer(def);
-          setSelectedCategory("食費");
-          setIsAllDay(true);
-          setStartDate(new Date(selectedDate));
-          setEndDate(new Date(selectedDate));
-          const now = new Date();
-          setStartTime(now);
-          setEndTime(new Date(now.getTime() + 60 * 60 * 1000));
-          setSelectedReminders([]);
-          setCustomReminderTimes([]);
-          setRepeatType("none");
-          setNewTagColor(""); // リセット
-  
-          setSubTasks([]);
-          setShowSubTasks(false);
+  useEffect(() => {
+    const load = async () => {
+      const [q, r] = await Promise.all([
+        AsyncStorage.getItem("quickMainTagsData"),
+        AsyncStorage.getItem("readingMasterData"),
+      ]);
+      if (q) setQuickMainTags(JSON.parse(q));
+      if (r) setReadingMaster(JSON.parse(r));
+    };
+    if (visible) load();
+  }, [visible]);
+
+  // 🌟 1. 画面の初期化が完了したかを記憶するフラグ
+  const isInitialized = useRef(false);
+
+  useEffect(() => {
+    // 画面が閉じている時はリセット
+    if (!visible) {
+      setIsReady(false);
+      isInitialized.current = false;
+      return;
+    }
+
+    if (isInitialized.current) return;
+
+    // 🌟 2. 画面がスライドしてくるアニメーションを優先するため、
+    // 　　  中身の重い処理（準備）を「10ミリ秒」だけ遅らせて実行する
+    const timer = setTimeout(() => {
+      const layers = Object.keys(layerMaster);
+      const def = layers.length > 0 ? layers[0] : "生活";
+
+      if (selectedItem) {
+        setInputText(selectedItem.title || "");
+        setInputAmount(
+          selectedItem.amount > 0 ? selectedItem.amount.toString() : "",
+        );
+        setIsEvent(selectedItem.isEvent ?? true);
+        setIsTodo(selectedItem.isTodo ?? false);
+        setIsExpense(selectedItem.isExpense ?? false);
+        setTagInput(selectedItem.tag || "");
+        setTagColor(selectedItem.color || "#007AFF");
+
+        const savedLayer =
+          tagMaster?.[selectedItem.tag || ""]?.layer ||
+          (layerMaster[selectedItem.tag || ""] ? selectedItem.tag : def);
+        setSelectedLayer(savedLayer || def);
+
+        setSelectedCategory(selectedItem.category || "食費");
+        setIsAllDay(selectedItem.isAllDay ?? true);
+        setStartDate(new Date(selectedItem.startDate || selectedDate));
+        setEndDate(new Date(selectedItem.endDate || selectedDate));
+
+        if (selectedItem.startTime) {
+          const [h, m] = selectedItem.startTime.split(":").map(Number);
+          const d = new Date();
+          d.setHours(h, m, 0, 0);
+          setStartTime(d);
         }
-        setIsCreatingNewTag(false);
-  
-        isInitialized.current = true;
-        setIsReady(true); // 🌟 ここで準備完了フラグを立てる！
-      }, 100);
-  
-      // 🌟 タイマーの後始末
-      return () => clearTimeout(timer);
-    }, [visible, selectedItem, activeMode, layerMaster, selectedDate, tagMaster]);
+        if (selectedItem.endTime) {
+          const [h, m] = selectedItem.endTime.split(":").map(Number);
+          const d = new Date();
+          d.setHours(h, m, 0, 0);
+          setEndTime(d);
+        }
+
+        const hasOldNotification =
+          selectedItem.notificationIds &&
+          selectedItem.notificationIds.length > 0;
+        setSelectedReminders(
+          selectedItem.reminderOptions || (hasOldNotification ? ["exact"] : []),
+        );
+
+        if (selectedItem.customReminderTimes) {
+          setCustomReminderTimes(
+            selectedItem.customReminderTimes.map((tStr) => new Date(tStr)),
+          );
+        } else {
+          setCustomReminderTimes([]);
+        }
+        setRepeatType(selectedItem.repeatType || "none");
+        setRepeatDays(selectedItem.repeatDays || []);
+        setRepeatInterval(selectedItem.repeatInterval || 1);
+        setNewTagColor("");
+
+        const savedSubTasks = selectedItem.subTasks || [];
+        setSubTasks(savedSubTasks);
+        setShowSubTasks(savedSubTasks.length > 0);
+
+        const snapshot = JSON.stringify({
+          title: selectedItem.title || "",
+          amount: parseInt(selectedItem.amount?.toString() || "0"),
+          isTodo: selectedItem.isTodo ?? false,
+          subTasksData: savedSubTasks
+            .map((t: any) => `${t.title}_${t.isDone}`)
+            .join(","),
+        });
+        setInitialSnapshot(snapshot);
+      } else {
+        setInputText("");
+        setTagInput("");
+        setTagColor(layerMaster[def] || "#007AFF");
+        setInputAmount("");
+        setIsEvent(activeMode === "calendar");
+        setIsTodo(activeMode === "todo");
+        setIsExpense(activeMode === "money");
+        setSelectedLayer(def);
+        setSelectedCategory("食費");
+        setIsAllDay(true);
+        setStartDate(new Date(selectedDate));
+        setEndDate(new Date(selectedDate));
+        const now = new Date();
+        setStartTime(now);
+        setEndTime(new Date(now.getTime() + 60 * 60 * 1000));
+        setSelectedReminders([]);
+        setCustomReminderTimes([]);
+        setRepeatType("none");
+        setNewTagColor("");
+
+        setSubTasks([]);
+        setShowSubTasks(false);
+      }
+      setIsCreatingNewTag(false);
+
+      isInitialized.current = true;
+      setIsReady(true); // 🌟 ここで「準備完了」の合図を出す
+    }, 10); // 👈 10ms後に実行する
+
+    // 🌟 タイマーの後始末
+    return () => clearTimeout(timer);
+  }, [visible, selectedItem, activeMode, layerMaster, selectedDate, tagMaster]);
 
   const toHiragana = (str: string) =>
     str
@@ -428,23 +453,22 @@ export default function ScheduleModal({
       )
       .toLowerCase();
 
-      const titleHistory = useMemo(() => {
-        // 🌟 修正：画面の準備ができていない時は計算をスキップする（開く時の重さを軽減）
-        if (!isReady) return [];
-        
-        const titles = new Set<string>();
-        
-        // 🌟 修正：すべての過去の予定をループすると重すぎるので、
-        // 直近「150件」のデータからのみタイトル履歴を抽出する（爆速化）
-        const allItems = Object.values(scheduleData).flat() as ScheduleItem[];
-        const recentItems = allItems.slice(-150); 
-        
-        recentItems.forEach((i) => {
-          if (i.title) titles.add(i.title);
-        });
-        
-        return Array.from(titles);
-      }, [scheduleData, isReady]);
+  const titleHistory = useMemo(() => {
+    // 🌟 1. 画面の準備ができていない時は計算を完全にスキップする
+    if (!isReady || !visible) return [];
+
+    const titles = new Set<string>();
+
+    // 🌟 2. すべての過去の予定ではなく、直近「150件」のデータだけを調べる
+    const allItems = Object.values(scheduleData).flat() as ScheduleItem[];
+    const recentItems = allItems.slice(-150);
+
+    recentItems.forEach((i) => {
+      if (i.title) titles.add(i.title);
+    });
+
+    return Array.from(titles);
+  }, [scheduleData, isReady, visible]); // 👈 依存配列も忘れずに
 
   const suggestions = useMemo(() => {
     const s = inputText.trim();
@@ -632,8 +656,10 @@ export default function ScheduleModal({
     );
 
     // 🌟 自動完了の判定ロジック（お金の記録を除外）
-    const pureTodos = updatedSubTasks.filter(t => !t.isExpense && !t.isIncome);
-    const allDone = pureTodos.length > 0 && pureTodos.every(t => t.isDone);
+    const pureTodos = updatedSubTasks.filter(
+      (t) => !t.isExpense && !t.isIncome,
+    );
+    const allDone = pureTodos.length > 0 && pureTodos.every((t) => t.isDone);
 
     const newData = { ...scheduleData };
     const sStr = startDate.toISOString().split("T")[0];
@@ -645,7 +671,7 @@ export default function ScheduleModal({
       isEvent,
       isTodo,
       isExpense,
-      isDone: allDone ? true : (selectedItem ? selectedItem.isDone : false), // 🌟 完了状態をここで確定
+      isDone: allDone ? true : selectedItem ? selectedItem.isDone : false, // 🌟 完了状態をここで確定
       color: finalColor,
       category: isExpense ? selectedCategory : undefined,
       repeatType: repeatType !== "none" ? repeatType : undefined,
@@ -703,7 +729,9 @@ export default function ScheduleModal({
           newData[sStr].push(newItem);
         } else {
           Object.keys(newData).forEach((d) => {
-            newData[d] = newData[d].filter((i: any) => i.id !== selectedItem.id);
+            newData[d] = newData[d].filter(
+              (i: any) => i.id !== selectedItem.id,
+            );
           });
           if (!newData[sStr]) newData[sStr] = [];
           newData[sStr].push({ ...selectedItem, ...itemData });
@@ -720,10 +748,22 @@ export default function ScheduleModal({
 
     const startForExport = isAllDay
       ? startDate
-      : new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), startTime.getHours(), startTime.getMinutes());
+      : new Date(
+          startDate.getFullYear(),
+          startDate.getMonth(),
+          startDate.getDate(),
+          startTime.getHours(),
+          startTime.getMinutes(),
+        );
     const endForExport = isAllDay
       ? endDate
-      : new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), endTime.getHours(), endTime.getMinutes());
+      : new Date(
+          endDate.getFullYear(),
+          endDate.getMonth(),
+          endDate.getDate(),
+          endTime.getHours(),
+          endTime.getMinutes(),
+        );
 
     exportToStandardCalendar(inputText, startForExport, endForExport, isAllDay);
 
@@ -774,7 +814,8 @@ export default function ScheduleModal({
         }
       }
 
-      const isShared = selectedItem.tags?.includes("共有") || selectedItem.tag === "共有";
+      const isShared =
+        selectedItem.tags?.includes("共有") || selectedItem.tag === "共有";
       if (isShared) {
         try {
           await deleteDoc(doc(db, "shared_schedules", selectedItem.id));
@@ -1001,7 +1042,6 @@ export default function ScheduleModal({
                 if (!nextState) {
                   setTagInput("");
                   setNewTagColor("");
-
                 }
               }}
               style={[
@@ -1043,7 +1083,9 @@ export default function ScheduleModal({
                     setIsCreatingNewTag(false);
                     setNewTagColor(""); // 既存のを選ぶ時はカラーをリセット
                   }}
-                  onLongPress={() => handleLongPressSubTag(t, tagMaster[t].color)} // 🌟 追加：長押しで編集
+                  onLongPress={() =>
+                    handleLongPressSubTag(t, tagMaster[t].color)
+                  } // 🌟 追加：長押しで編集
                   style={[
                     styles.tagChip,
                     tagInput === t && {
@@ -1117,7 +1159,6 @@ export default function ScheduleModal({
     repeatInterval,
   ]);
 
-
   const subTaskSection = useMemo(() => {
     if (!isReady) return null;
     return (
@@ -1145,8 +1186,14 @@ export default function ScheduleModal({
                 key={task.id}
                 style={[
                   styles.subTaskCard,
-                  { borderLeftColor: task.isExpense ? "#FF9500" : (task.isIncome ? "#34C759" : uiThemeColor) },
-                  { paddingVertical: 12 }
+                  {
+                    borderLeftColor: task.isExpense
+                      ? "#FF9500"
+                      : task.isIncome
+                        ? "#34C759"
+                        : uiThemeColor,
+                  },
+                  { paddingVertical: 12 },
                 ]}
               >
                 {task.isExpense ? (
@@ -1154,13 +1201,40 @@ export default function ScheduleModal({
                   // 💰 【金額・内訳モード】
                   // =======================================================
                   <View>
-                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                      <Text style={{ fontSize: 11, fontWeight: "bold", color: "#8E8E93" }}>カテゴリを選択</Text>
-                      <TouchableOpacity onPress={() => setSubTasks(subTasks.filter((t) => t.id !== task.id))}>
-                        <Ionicons name="close-circle" size={20} color="#FF3B30" />
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: 12,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: "bold",
+                          color: "#8E8E93",
+                        }}
+                      >
+                        カテゴリを選択
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() =>
+                          setSubTasks(subTasks.filter((t) => t.id !== task.id))
+                        }
+                      >
+                        <Ionicons
+                          name="close-circle"
+                          size={20}
+                          color="#FF3B30"
+                        />
                       </TouchableOpacity>
                     </View>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 15 }}>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={{ marginBottom: 15 }}
+                    >
                       {currentQuickTags.map((cat) => {
                         const isSelected = task.category === cat;
                         return (
@@ -1174,19 +1248,54 @@ export default function ScheduleModal({
                             }}
                             style={[
                               styles.miniReminderChip,
-                              { marginRight: 8, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 6 },
-                              isSelected && { backgroundColor: "#FF9500", borderColor: "#FF9500" }
+                              {
+                                marginRight: 8,
+                                borderRadius: 16,
+                                paddingHorizontal: 14,
+                                paddingVertical: 6,
+                              },
+                              isSelected && {
+                                backgroundColor: "#FF9500",
+                                borderColor: "#FF9500",
+                              },
                             ]}
                           >
-                            <Text style={{ fontSize: 11, fontWeight: "bold", color: isSelected ? "#FFF" : "#8E8E93" }}>{cat}</Text>
+                            <Text
+                              style={{
+                                fontSize: 11,
+                                fontWeight: "bold",
+                                color: isSelected ? "#FFF" : "#8E8E93",
+                              }}
+                            >
+                              {cat}
+                            </Text>
                           </TouchableOpacity>
                         );
                       })}
                     </ScrollView>
-                    <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#F2F2F7", padding: 12, borderRadius: 14 }}>
-                      <Ionicons name="wallet-outline" size={16} color="#FF9500" style={{ marginRight: 8 }} />
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        backgroundColor: "#F2F2F7",
+                        padding: 12,
+                        borderRadius: 14,
+                      }}
+                    >
+                      <Ionicons
+                        name="wallet-outline"
+                        size={16}
+                        color="#FF9500"
+                        style={{ marginRight: 8 }}
+                      />
                       <TextInput
-                        style={{ flex: 1, fontSize: 18, fontWeight: "bold", textAlign: "right", color: "#1C1C1E" }}
+                        style={{
+                          flex: 1,
+                          fontSize: 18,
+                          fontWeight: "bold",
+                          textAlign: "right",
+                          color: "#1C1C1E",
+                        }}
                         keyboardType="numeric"
                         placeholder="0"
                         value={task.amount ? task.amount.toString() : ""}
@@ -1196,7 +1305,16 @@ export default function ScheduleModal({
                           setSubTasks(n);
                         }}
                       />
-                      <Text style={{ fontSize: 14, fontWeight: "bold", color: "#1C1C1E", marginLeft: 6 }}>円</Text>
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          fontWeight: "bold",
+                          color: "#1C1C1E",
+                          marginLeft: 6,
+                        }}
+                      >
+                        円
+                      </Text>
                     </View>
                   </View>
                 ) : (
@@ -1205,31 +1323,91 @@ export default function ScheduleModal({
                   // =======================================================
                   <View>
                     {/* 1段目：チェック・タイトル・削除ボタン（タイトル幅を最大化） */}
-                    <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 10 }}>
-                      <TouchableOpacity onPress={() => { const n = [...subTasks]; n[idx].isDone = !n[idx].isDone; setSubTasks(n); }} style={{ marginRight: 10 }}>
-                        <Ionicons name={task.isDone ? "checkbox" : "square-outline"} size={24} color={task.isDone ? "#8E8E93" : uiThemeColor} />
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        marginBottom: 10,
+                      }}
+                    >
+                      <TouchableOpacity
+                        onPress={() => {
+                          const n = [...subTasks];
+                          n[idx].isDone = !n[idx].isDone;
+                          setSubTasks(n);
+                        }}
+                        style={{ marginRight: 10 }}
+                      >
+                        <Ionicons
+                          name={task.isDone ? "checkbox" : "square-outline"}
+                          size={24}
+                          color={task.isDone ? "#8E8E93" : uiThemeColor}
+                        />
                       </TouchableOpacity>
                       <TextInput
                         style={[
                           styles.subTaskInput,
-                          { flex: 1, fontSize: 16, minHeight: 32, paddingVertical: 4 }, // 🌟 高さを固定せず、最低限の余白を確保
-                          task.isDone && { textDecorationLine: "line-through", color: "#8E8E93" }
+                          {
+                            flex: 1,
+                            fontSize: 16,
+                            minHeight: 32,
+                            paddingVertical: 4,
+                          }, // 🌟 高さを固定せず、最低限の余白を確保
+                          task.isDone && {
+                            textDecorationLine: "line-through",
+                            color: "#8E8E93",
+                          },
                         ]}
                         placeholder="タスクを入力..."
                         placeholderTextColor="#BBB"
                         value={task.title}
-                        onChangeText={(t) => { const n = [...subTasks]; n[idx].title = t; setSubTasks(n); }}
+                        onChangeText={(t) => {
+                          const n = [...subTasks];
+                          n[idx].title = t;
+                          setSubTasks(n);
+                        }}
                       />
-                      <TouchableOpacity onPress={() => setSubTasks(subTasks.filter((t) => t.id !== task.id))} style={{ marginLeft: 8 }}>
-                        <Ionicons name="close-circle" size={20} color="#FF3B30" />
+                      <TouchableOpacity
+                        onPress={() =>
+                          setSubTasks(subTasks.filter((t) => t.id !== task.id))
+                        }
+                        style={{ marginLeft: 8 }}
+                      >
+                        <Ionicons
+                          name="close-circle"
+                          size={20}
+                          color="#FF3B30"
+                        />
                       </TouchableOpacity>
                     </View>
 
                     {/* 2段目：収入と期限（横並びに配置） */}
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
                       {/* 収入記録 */}
-                      <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: task.isIncome ? "#34C75915" : "#F2F2F7", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-                        <Ionicons name="trending-up" size={14} color={task.isIncome ? "#34C759" : "#8E8E93"} />
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          backgroundColor: task.isIncome
+                            ? "#34C75915"
+                            : "#F2F2F7",
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 8,
+                        }}
+                      >
+                        <Ionicons
+                          name="trending-up"
+                          size={14}
+                          color={task.isIncome ? "#34C759" : "#8E8E93"}
+                        />
                         <Switch
                           value={task.isIncome || false}
                           onValueChange={(v) => {
@@ -1243,11 +1421,21 @@ export default function ScheduleModal({
                         />
                         {task.isIncome && (
                           <TextInput
-                            style={{ width: 60, textAlign: "right", fontSize: 12, fontWeight: "bold", marginLeft: 4 }}
+                            style={{
+                              width: 60,
+                              textAlign: "right",
+                              fontSize: 12,
+                              fontWeight: "bold",
+                              marginLeft: 4,
+                            }}
                             keyboardType="numeric"
                             placeholder="￥金額"
                             value={task.amount ? task.amount.toString() : ""}
-                            onChangeText={(t) => { const n = [...subTasks]; n[idx].amount = parseInt(t) || 0; setSubTasks(n); }}
+                            onChangeText={(t) => {
+                              const n = [...subTasks];
+                              n[idx].amount = parseInt(t) || 0;
+                              setSubTasks(n);
+                            }}
                           />
                         )}
                       </View>
@@ -1265,23 +1453,51 @@ export default function ScheduleModal({
                             setSubTasks(n);
                           }}
                         >
-                          <Text style={{ fontSize: 11, color: "#8E8E93", fontWeight: "bold" }}>+ ⏱️ 締切を設定</Text>
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              color: "#8E8E93",
+                              fontWeight: "bold",
+                            }}
+                          >
+                            + ⏱️ 締切を設定
+                          </Text>
                         </TouchableOpacity>
                       ) : (
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
                           <ModernDatePicker
                             value={task.deadlineDate || new Date(selectedDate)}
                             mode="date"
-                            onChange={(d) => { const n = [...subTasks]; n[idx].deadlineDate = d; setSubTasks(n); }}
+                            onChange={(d) => {
+                              const n = [...subTasks];
+                              n[idx].deadlineDate = d;
+                              setSubTasks(n);
+                            }}
                             themeColor={uiThemeColor}
                           />
                           <ModernDatePicker
                             value={task.endTime || new Date()}
                             mode="time"
-                            onChange={(d) => { const n = [...subTasks]; n[idx].endTime = d; setSubTasks(n); }}
+                            onChange={(d) => {
+                              const n = [...subTasks];
+                              n[idx].endTime = d;
+                              setSubTasks(n);
+                            }}
                             themeColor={uiThemeColor}
                           />
-                          <TouchableOpacity onPress={() => { const n = [...subTasks]; n[idx].hasDateTime = false; setSubTasks(n); }}>
+                          <TouchableOpacity
+                            onPress={() => {
+                              const n = [...subTasks];
+                              n[idx].hasDateTime = false;
+                              setSubTasks(n);
+                            }}
+                          >
                             <Ionicons name="close" size={16} color="#8E8E93" />
                           </TouchableOpacity>
                         </View>
@@ -1294,33 +1510,101 @@ export default function ScheduleModal({
 
             <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
               <TouchableOpacity
-                style={[styles.addSubTaskBtn, { flex: 1, backgroundColor: uiThemeColor + "15", borderRadius: 12, paddingVertical: 12, justifyContent: 'center' }]}
+                style={[
+                  styles.addSubTaskBtn,
+                  {
+                    flex: 1,
+                    backgroundColor: uiThemeColor + "15",
+                    borderRadius: 12,
+                    paddingVertical: 12,
+                    justifyContent: "center",
+                  },
+                ]}
                 onPress={() => {
                   setIsTodo(true);
                   // 🌟 追加した瞬間の日付を date (スタート日) として自動保持
-                  setSubTasks([...subTasks, { id: Date.now(), title: "", date: new Date(selectedDate), hasDateTime: false, amount: 0, isExpense: false, isIncome: false, isDone: false, category: "" }]);
+                  setSubTasks([
+                    ...subTasks,
+                    {
+                      id: Date.now(),
+                      title: "",
+                      date: new Date(selectedDate),
+                      hasDateTime: false,
+                      amount: 0,
+                      isExpense: false,
+                      isIncome: false,
+                      isDone: false,
+                      category: "",
+                    },
+                  ]);
                 }}
               >
                 <Ionicons name="add-circle" size={18} color={uiThemeColor} />
-                <Text style={{ color: uiThemeColor, fontWeight: "bold", marginLeft: 6 }}>サブタスク</Text>
+                <Text
+                  style={{
+                    color: uiThemeColor,
+                    fontWeight: "bold",
+                    marginLeft: 6,
+                  }}
+                >
+                  サブタスク
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.addSubTaskBtn, { flex: 1, backgroundColor: "#FF950015", borderRadius: 12, paddingVertical: 12, justifyContent: 'center' }]}
+                style={[
+                  styles.addSubTaskBtn,
+                  {
+                    flex: 1,
+                    backgroundColor: "#FF950015",
+                    borderRadius: 12,
+                    paddingVertical: 12,
+                    justifyContent: "center",
+                  },
+                ]}
                 onPress={() => {
                   setIsExpense(true);
-                  setSubTasks([...subTasks, { id: Date.now(), title: "", date: new Date(selectedDate), hasDateTime: false, amount: 0, isExpense: true, isIncome: false, isDone: false, category: currentQuickTags[0] || "食費" }]);
+                  setSubTasks([
+                    ...subTasks,
+                    {
+                      id: Date.now(),
+                      title: "",
+                      date: new Date(selectedDate),
+                      hasDateTime: false,
+                      amount: 0,
+                      isExpense: true,
+                      isIncome: false,
+                      isDone: false,
+                      category: currentQuickTags[0] || "食費",
+                    },
+                  ]);
                 }}
               >
                 <Ionicons name="wallet" size={18} color="#FF9500" />
-                <Text style={{ color: "#FF9500", fontWeight: "bold", marginLeft: 6 }}>追加出費</Text>
+                <Text
+                  style={{
+                    color: "#FF9500",
+                    fontWeight: "bold",
+                    marginLeft: 6,
+                  }}
+                >
+                  追加出費
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
         )}
       </View>
     );
-  }, [isReady, showSubTasks, subTasks, uiThemeColor, selectedCategory, selectedDate, currentQuickTags]);
+  }, [
+    isReady,
+    showSubTasks,
+    subTasks,
+    uiThemeColor,
+    selectedCategory,
+    selectedDate,
+    currentQuickTags,
+  ]);
 
   return (
     <Modal
@@ -1473,19 +1757,19 @@ export default function ScheduleModal({
 
                         {(isAllDay
                           ? [
-                            { label: "当日の朝(7:00)", value: "morning" },
-                            { label: "前日", value: "dayBefore" },
-                            { label: "2日前", value: "2daysBefore" },
-                            { label: "カスタム", value: "custom" },
-                          ]
+                              { label: "当日の朝(7:00)", value: "morning" },
+                              { label: "前日", value: "dayBefore" },
+                              { label: "2日前", value: "2daysBefore" },
+                              { label: "カスタム", value: "custom" },
+                            ]
                           : [
-                            { label: "ちょうど", value: "exact" },
-                            { label: "10分前", value: "10min" },
-                            { label: "30分前", value: "30min" },
-                            { label: "1時間前", value: "1hour" },
-                            { label: "当日の朝", value: "morning" },
-                            { label: "カスタム", value: "custom" },
-                          ]
+                              { label: "ちょうど", value: "exact" },
+                              { label: "10分前", value: "10min" },
+                              { label: "30分前", value: "30min" },
+                              { label: "1時間前", value: "1hour" },
+                              { label: "当日の朝", value: "morning" },
+                              { label: "カスタム", value: "custom" },
+                            ]
                         ).map((opt) => {
                           const isSelected = selectedReminders.includes(
                             opt.value,
@@ -1503,7 +1787,9 @@ export default function ScheduleModal({
                                   backgroundColor: isSelected
                                     ? uiThemeColor
                                     : "#FFF",
-                                  shadowColor: isSelected ? uiThemeColor : "#000",
+                                  shadowColor: isSelected
+                                    ? uiThemeColor
+                                    : "#000",
                                   shadowOffset: { width: 0, height: 2 },
                                   shadowOpacity: isSelected ? 0.4 : 0.05,
                                   shadowRadius: 3,
@@ -1727,12 +2013,18 @@ export default function ScheduleModal({
                   </View>
 
                   <View style={styles.actionButtons}>
-                    <TouchableOpacity onPress={onClose} style={styles.cancelBtn}>
+                    <TouchableOpacity
+                      onPress={onClose}
+                      style={styles.cancelBtn}
+                    >
                       <Text style={{ color: "#999" }}>キャンセル</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={handleSavePress}
-                      style={[styles.saveBtn, { backgroundColor: uiThemeColor }]}
+                      style={[
+                        styles.saveBtn,
+                        { backgroundColor: uiThemeColor },
+                      ]}
                     >
                       <Text style={styles.saveBtnText}>保存して閉じる</Text>
                     </TouchableOpacity>
@@ -1743,8 +2035,14 @@ export default function ScheduleModal({
                       onPress={handleDeletePress}
                       style={styles.deleteBtn}
                     >
-                      <Ionicons name="trash-outline" size={18} color="#FF3B30" />
-                      <Text style={styles.deleteBtnText}>この予定を削除する</Text>
+                      <Ionicons
+                        name="trash-outline"
+                        size={18}
+                        color="#FF3B30"
+                      />
+                      <Text style={styles.deleteBtnText}>
+                        この予定を削除する
+                      </Text>
                     </TouchableOpacity>
                   )}
                 </ScrollView>
@@ -1754,24 +2052,88 @@ export default function ScheduleModal({
         </TouchableOpacity>
 
         {editSubTagModalVisible && (
-          <Modal visible={editSubTagModalVisible} transparent animationType="fade">
-            <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setEditSubTagModalVisible(false)}>
-              <View style={[styles.modalContent, { height: "auto", borderTopWidth: 8, borderTopColor: editingSubTagColor || uiThemeColor }]}>
-                <Text style={[styles.modalTitle, { marginBottom: 15 }]}>属性の編集</Text>
+          <Modal
+            visible={editSubTagModalVisible}
+            transparent
+            animationType="fade"
+          >
+            <TouchableOpacity
+              style={styles.modalOverlay}
+              activeOpacity={1}
+              onPress={() => setEditSubTagModalVisible(false)}
+            >
+              <View
+                style={[
+                  styles.modalContent,
+                  {
+                    height: "auto",
+                    borderTopWidth: 8,
+                    borderTopColor: editingSubTagColor || uiThemeColor,
+                  },
+                ]}
+              >
+                <Text style={[styles.modalTitle, { marginBottom: 15 }]}>
+                  属性の編集
+                </Text>
 
                 <Text style={styles.label}>属性名</Text>
-                <TextInput style={styles.input} value={editingSubTagName} onChangeText={setEditingSubTagName} autoFocus />
+                <TextInput
+                  style={styles.input}
+                  value={editingSubTagName}
+                  onChangeText={setEditingSubTagName}
+                  autoFocus
+                />
 
                 <Text style={[styles.label, { marginTop: 15 }]}>カラー</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20, paddingBottom: 5 }}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={{ marginBottom: 20, paddingBottom: 5 }}
+                >
                   {PRESET_COLORS.map((color) => (
-                    <TouchableOpacity key={color} style={[{ width: 30, height: 30, borderRadius: 15, backgroundColor: color, marginRight: 10 }, editingSubTagColor === color && { borderWidth: 3, borderColor: "#1C1C1E" }]} onPress={() => setEditingSubTagColor(color)} />
+                    <TouchableOpacity
+                      key={color}
+                      style={[
+                        {
+                          width: 30,
+                          height: 30,
+                          borderRadius: 15,
+                          backgroundColor: color,
+                          marginRight: 10,
+                        },
+                        editingSubTagColor === color && {
+                          borderWidth: 3,
+                          borderColor: "#1C1C1E",
+                        },
+                      ]}
+                      onPress={() => setEditingSubTagColor(color)}
+                    />
                   ))}
                 </ScrollView>
 
-                <View style={[styles.actionButtons, { justifyContent: "space-between", marginTop: 0 }]}>
-                  <TouchableOpacity onPress={deleteSubTag} style={styles.cancelBtn}><Text style={{ color: "#FF3B30", fontWeight: "bold" }}>削除</Text></TouchableOpacity>
-                  <TouchableOpacity style={[styles.saveBtn, { backgroundColor: editingSubTagColor || uiThemeColor }]} onPress={saveEditedSubTag}><Text style={styles.saveBtnText}>保存</Text></TouchableOpacity>
+                <View
+                  style={[
+                    styles.actionButtons,
+                    { justifyContent: "space-between", marginTop: 0 },
+                  ]}
+                >
+                  <TouchableOpacity
+                    onPress={deleteSubTag}
+                    style={styles.cancelBtn}
+                  >
+                    <Text style={{ color: "#FF3B30", fontWeight: "bold" }}>
+                      削除
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.saveBtn,
+                      { backgroundColor: editingSubTagColor || uiThemeColor },
+                    ]}
+                    onPress={saveEditedSubTag}
+                  >
+                    <Text style={styles.saveBtnText}>保存</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             </TouchableOpacity>
@@ -1781,17 +2143,51 @@ export default function ScheduleModal({
         {/* 🌟 追加：カテゴリ（プリセット）の名称編集モーダル */}
         {editQuickTagModal && (
           <Modal visible={editQuickTagModal} transparent animationType="fade">
-            <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setEditQuickTagModal(false)}>
-              <View style={[styles.modalContent, { height: "auto", borderTopWidth: 8, borderTopColor: uiThemeColor }]}>
-                <Text style={[styles.modalTitle, { marginBottom: 15 }]}>カテゴリ名の編集</Text>
+            <TouchableOpacity
+              style={styles.modalOverlay}
+              activeOpacity={1}
+              onPress={() => setEditQuickTagModal(false)}
+            >
+              <View
+                style={[
+                  styles.modalContent,
+                  {
+                    height: "auto",
+                    borderTopWidth: 8,
+                    borderTopColor: uiThemeColor,
+                  },
+                ]}
+              >
+                <Text style={[styles.modalTitle, { marginBottom: 15 }]}>
+                  カテゴリ名の編集
+                </Text>
                 <Text style={styles.label}>新しい名称を入力</Text>
-                <TextInput style={styles.input} value={tempQuickTagText} onChangeText={setTempQuickTagText} autoFocus />
-                <View style={[styles.actionButtons, { justifyContent: "center", marginTop: 20 }]}>
-                  <TouchableOpacity style={[styles.saveBtn, { backgroundColor: uiThemeColor, width: "100%", alignItems: "center" }]} onPress={saveQuickTag}>
+                <TextInput
+                  style={styles.input}
+                  value={tempQuickTagText}
+                  onChangeText={setTempQuickTagText}
+                  autoFocus
+                />
+                <View
+                  style={[
+                    styles.actionButtons,
+                    { justifyContent: "center", marginTop: 20 },
+                  ]}
+                >
+                  <TouchableOpacity
+                    style={[
+                      styles.saveBtn,
+                      {
+                        backgroundColor: uiThemeColor,
+                        width: "100%",
+                        alignItems: "center",
+                      },
+                    ]}
+                    onPress={saveQuickTag}
+                  >
                     <Text style={styles.saveBtnText}>保存する</Text>
                   </TouchableOpacity>
                 </View>
-
               </View>
             </TouchableOpacity>
           </Modal>

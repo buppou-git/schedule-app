@@ -319,6 +319,7 @@ export default function Index() {
           : [...prev, layer];
 
         // 🌟 修正：「すべて表示」に戻す条件を、外部予定も含めた「全レイヤー数」と厳密に比較するように変更
+        // isExternalSyncEnabled が true の時、layerMaster の数 + 1 が全レイヤー数になる
         const totalLayerCount =
           Object.keys(layerMaster).length + (isExternalSyncEnabled ? 1 : 0);
 
@@ -1801,6 +1802,71 @@ export default function Index() {
             </>
           )}
 
+          {activeMode === "calendar" && layerSummary && (
+            <View
+              style={[
+                styles.summaryCard,
+                {
+                  backgroundColor: currentBgColor,
+                  borderColor: currentSolidColor + "40",
+                  marginHorizontal: 15, // 横幅をリストに合わせる
+                  marginTop: 10, // カレンダーとの隙間
+                  marginBottom: 0, // 下のリストとの隙間はリスト側に任せる
+                },
+              ]}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginBottom: 8,
+                }}
+              >
+                <Ionicons
+                  name="analytics"
+                  size={16}
+                  color={currentSolidColor}
+                />
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: "800",
+                    color: currentSolidColor,
+                    marginLeft: 6,
+                  }}
+                >
+                  {parseInt(selectedDate.split("-")[1])}月の「
+                  {layerSummary.targetLayer}」サマリー
+                </Text>
+              </View>
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "flex-end",
+                }}
+              >
+                <Text
+                  style={{ fontSize: 13, color: "#1C1C1E", fontWeight: "600" }}
+                >
+                  関連予定:{" "}
+                  <Text style={{ fontSize: 18, fontWeight: "900" }}>
+                    {layerSummary.eventCount}
+                  </Text>{" "}
+                  件
+                </Text>
+                <Text
+                  style={{ fontSize: 13, color: "#1C1C1E", fontWeight: "600" }}
+                >
+                  支出合計:{" "}
+                  <Text style={{ fontSize: 18, fontWeight: "900" }}>
+                    ¥{layerSummary.totalExpense.toLocaleString()}
+                  </Text>
+                </Text>
+              </View>
+            </View>
+          )}
+
           <ScrollView
             style={styles.scheduleList}
             contentContainerStyle={{ paddingBottom: 120 }}
@@ -1962,77 +2028,6 @@ export default function Index() {
 
               return (
                 <View style={styles.listPadding}>
-                  {/* 🌟 追加：レイヤー絞り込み時のみ出現する魔法のサマリーカード */}
-                  {layerSummary && (
-                    <View
-                      style={[
-                        styles.summaryCard,
-                        {
-                          backgroundColor: currentBgColor,
-                          borderColor: currentSolidColor + "40",
-                        },
-                      ]}
-                    >
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          marginBottom: 8,
-                        }}
-                      >
-                        <Ionicons
-                          name="analytics"
-                          size={16}
-                          color={currentSolidColor}
-                        />
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            fontWeight: "800",
-                            color: currentSolidColor,
-                            marginLeft: 6,
-                          }}
-                        >
-                          {parseInt(selectedDate.split("-")[1])}月の「
-                          {layerSummary.targetLayer}」サマリー
-                        </Text>
-                      </View>
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          justifyContent: "space-between",
-                          alignItems: "flex-end",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 13,
-                            color: "#1C1C1E",
-                            fontWeight: "600",
-                          }}
-                        >
-                          関連予定・タスク:{" "}
-                          <Text style={{ fontSize: 18, fontWeight: "900" }}>
-                            {layerSummary.eventCount}
-                          </Text>{" "}
-                          件
-                        </Text>
-                        <Text
-                          style={{
-                            fontSize: 13,
-                            color: "#1C1C1E",
-                            fontWeight: "600",
-                          }}
-                        >
-                          支出合計:{" "}
-                          <Text style={{ fontSize: 18, fontWeight: "900" }}>
-                            ¥{layerSummary.totalExpense.toLocaleString()}
-                          </Text>
-                        </Text>
-                      </View>
-                    </View>
-                  )}
-
                   <Text style={styles.dateTitle}>{selectedDate} の予定</Text>
                   {dayEvents.map((item) => (
                     <EventItem
