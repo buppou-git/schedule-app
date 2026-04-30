@@ -12,7 +12,14 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.buppou.multicalendar",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.633661996714-m1eoribajuqgbe5grrv3gpcco27peqrv"
+            ]
+          }
+        ]
       }
     },
     "android": {
@@ -54,7 +61,13 @@
           "userTrackingUsageDescription": "あなたの好みに合わせた広告を表示するために使用します。"
         }
       ],
-      "expo-tracking-transparency"
+      "expo-tracking-transparency",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.633661996714-m1eoribajuqgbe5grrv3gpcco27peqrv"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
@@ -64,6 +77,12 @@
       "eas": {
         "projectId": "c5501d38-da79-4ec9-a57f-c84c899d155d"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/c5501d38-da79-4ec9-a57f-c84c899d155d"
     }
   }
 }
