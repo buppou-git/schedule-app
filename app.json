@@ -4,7 +4,7 @@
     "slug": "multi-calendar",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon3.png",
+    "icon": "./assets/icon.png",
     "scheme": "com.buppou.multicalendar",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -32,7 +32,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/icon3.png",
+          "image": "./assets/icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"

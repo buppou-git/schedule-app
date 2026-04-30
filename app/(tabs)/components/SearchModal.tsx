@@ -1,16 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useMemo, useState } from "react";
 import {
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { ScheduleItem } from "../../../types";
 
@@ -51,7 +51,6 @@ export default function SearchModal({
     );
   };
 
-  // 🌟 検索＆絞り込みロジック
   const searchResults = useMemo(() => {
     if (!searchQuery.trim() && selectedFilters.length === 0) return [];
 
@@ -60,7 +59,6 @@ export default function SearchModal({
 
     Object.entries(scheduleData).forEach(([date, items]) => {
       items.forEach((item) => {
-        // 1. 絞り込みの判定
         if (selectedFilters.length > 0) {
           const itemTags =
             item.tags && item.tags.length > 0
@@ -74,8 +72,8 @@ export default function SearchModal({
 
           const matchFilter = selectedFilters.some((filter) => {
             if (filter === "money") return isMoney;
-            if (filter === "todo") return item.isTodo; // 🌟 追加：TODOの判定
-            if (filter === "event") return item.isEvent; // 🌟 追加：予定の判定
+            if (filter === "todo") return item.isTodo;
+            if (filter === "event") return item.isEvent;
             return itemTags.some(
               (tag) => tag === filter || tagMaster[tag]?.layer === filter,
             );
@@ -83,7 +81,6 @@ export default function SearchModal({
           if (!matchFilter) return;
         }
 
-        // 2. 文字検索の判定
         if (searchQuery.trim()) {
           const normalizedTitle = item.title
             ? toHiragana(item.title.toLowerCase())
@@ -108,19 +105,20 @@ export default function SearchModal({
     <Modal
       visible={visible}
       animationType="slide"
-      presentationStyle="pageSheet"
+      presentationStyle="pageSheet" // 🌟 変更：これで下にスワイプして閉じられるようになります
+      onRequestClose={onClose}
     >
       <SafeAreaView style={styles.container}>
+        {/* 🌟 追加：スワイプで閉じられることを示す「ハンドル（横線）」 */}
+        <View style={styles.dragHandle} />
+
         <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-            <Text
-              style={{ color: themeColor, fontSize: 16, fontWeight: "600" }}
-            >
-              閉じる
-            </Text>
-          </TouchableOpacity>
-          <Text style={styles.title}>検索</Text>
+          {/* pageSheetにすると左上の「閉じる」ボタンが不要になるため、削除してスッキリさせます */}
           <View style={{ width: 50 }} />
+          <Text style={styles.title}>検索</Text>
+          <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+            <Ionicons name="close-circle" size={26} color="#E5E5EA" />
+          </TouchableOpacity>
         </View>
 
         <KeyboardAvoidingView
@@ -137,13 +135,14 @@ export default function SearchModal({
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 clearButtonMode="while-editing"
+                autoFocus={true} // 🌟 開いた瞬間にキーボードを出す
               />
             </View>
 
             <TouchableOpacity
               style={[
                 styles.filterToggleBtn,
-                selectedFilters.length > 0 && { backgroundColor: themeColor },
+                selectedFilters.length > 0 && { backgroundColor: themeColor, borderColor: themeColor },
               ]}
               onPress={() => setIsFilterSheetVisible(true)}
             >
@@ -165,6 +164,7 @@ export default function SearchModal({
           <ScrollView
             style={styles.resultList}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag" // 🌟 スクロールしたらキーボードを隠す
           >
             {searchResults.map((item) => (
               <TouchableOpacity
@@ -176,11 +176,28 @@ export default function SearchModal({
                 }}
               >
                 <View style={styles.resultDateRow}>
-                  <Text style={styles.resultDateText}>{item.date}</Text>
+                  <Text style={styles.resultDateText}>{item.date.replace(/-/g, "/")}</Text>
                 </View>
+                {/* 🌟 変更：文字サイズを大きく */}
                 <Text style={styles.resultTitleText}>{item.title}</Text>
+                
+                {/* 🌟 追加：予定のカテゴリなどを小さく表示するとより見やすくなります */}
+                <View style={{ flexDirection: "row", marginTop: 6, alignItems: "center", gap: 6 }}>
+                  {item.isEvent && <Ionicons name="calendar" size={12} color="#007AFF" />}
+                  {item.isTodo && <Ionicons name="checkbox-outline" size={12} color="#FF9500" />}
+                  <Text style={{ fontSize: 11, color: item.color || "#8E8E93", fontWeight: "600" }}>
+                    {item.tag || item.category || "予定"}
+                  </Text>
+                </View>
               </TouchableOpacity>
             ))}
+            
+            {/* 検索結果が空の時の表示 */}
+            {searchQuery.trim() !== "" && searchResults.length === 0 && (
+              <Text style={{ textAlign: "center", color: "#8E8E93", marginTop: 40, fontWeight: "600" }}>
+                見つかりませんでした
+              </Text>
+            )}
           </ScrollView>
         </KeyboardAvoidingView>
 
@@ -195,80 +212,43 @@ export default function SearchModal({
               <View style={styles.sheetHeader}>
                 <Text style={styles.sheetTitle}>絞り込み</Text>
                 <TouchableOpacity onPress={() => setSelectedFilters([])}>
-                  <Text
-                    style={{
-                      color: "#FF3B30",
-                      fontSize: 12,
-                      fontWeight: "600",
-                    }}
-                  >
-                    リセット
-                  </Text>
+                  <Text style={{ color: "#FF3B30", fontSize: 14, fontWeight: "600" }}>リセット</Text>
                 </TouchableOpacity>
               </View>
 
               <ScrollView contentContainerStyle={styles.chipGrid}>
-                {/* 🌟 追加：予定フィルター */}
+                {/* 🌟 アイコン仕様に変更 */}
                 <TouchableOpacity
                   style={[
                     styles.chip,
-                    selectedFilters.includes("event") && {
-                      backgroundColor: "#007AFF",
-                      borderColor: "#007AFF",
-                    },
+                    selectedFilters.includes("event") && { backgroundColor: "#007AFF", borderColor: "#007AFF" },
                   ]}
                   onPress={() => toggleFilter("event")}
                 >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      selectedFilters.includes("event") && { color: "#FFF" },
-                    ]}
-                  >
-                    📅 予定
-                  </Text>
+                  <Ionicons name="calendar-outline" size={16} color={selectedFilters.includes("event") ? "#FFF" : "#8E8E93"} style={{ marginRight: 4 }} />
+                  <Text style={[styles.chipText, selectedFilters.includes("event") && { color: "#FFF" }]}>予定</Text>
                 </TouchableOpacity>
 
-                {/* 🌟 追加：TODOフィルター */}
                 <TouchableOpacity
                   style={[
                     styles.chip,
-                    selectedFilters.includes("todo") && {
-                      backgroundColor: "#FF9500",
-                      borderColor: "#FF9500",
-                    },
+                    selectedFilters.includes("todo") && { backgroundColor: "#FF9500", borderColor: "#FF9500" },
                   ]}
                   onPress={() => toggleFilter("todo")}
                 >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      selectedFilters.includes("todo") && { color: "#FFF" },
-                    ]}
-                  >
-                    ✅ TODO
-                  </Text>
+                  <Ionicons name="checkbox-outline" size={16} color={selectedFilters.includes("todo") ? "#FFF" : "#8E8E93"} style={{ marginRight: 4 }} />
+                  <Text style={[styles.chipText, selectedFilters.includes("todo") && { color: "#FFF" }]}>TODO</Text>
                 </TouchableOpacity>
 
-                {/* 家計簿フィルター */}
                 <TouchableOpacity
                   style={[
                     styles.chip,
-                    selectedFilters.includes("money") && {
-                      backgroundColor: "#34C759",
-                      borderColor: "#34C759",
-                    },
+                    selectedFilters.includes("money") && { backgroundColor: "#34C759", borderColor: "#34C759" },
                   ]}
                   onPress={() => toggleFilter("money")}
                 >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      selectedFilters.includes("money") && { color: "#FFF" },
-                    ]}
-                  >
-                    💰 家計簿
-                  </Text>
+                  <Ionicons name="wallet-outline" size={16} color={selectedFilters.includes("money") ? "#FFF" : "#8E8E93"} style={{ marginRight: 4 }} />
+                  <Text style={[styles.chipText, selectedFilters.includes("money") && { color: "#FFF" }]}>家計簿</Text>
                 </TouchableOpacity>
 
                 {/* レイヤーフィルター */}
@@ -277,21 +257,12 @@ export default function SearchModal({
                     key={layer}
                     style={[
                       styles.chip,
-                      selectedFilters.includes(layer) && {
-                        backgroundColor: layerMaster[layer],
-                        borderColor: layerMaster[layer],
-                      },
+                      selectedFilters.includes(layer) && { backgroundColor: layerMaster[layer], borderColor: layerMaster[layer] },
                     ]}
                     onPress={() => toggleFilter(layer)}
                   >
-                    <Text
-                      style={[
-                        styles.chipText,
-                        selectedFilters.includes(layer) && { color: "#FFF" },
-                      ]}
-                    >
-                      {layer}
-                    </Text>
+                    <Ionicons name="layers-outline" size={16} color={selectedFilters.includes(layer) ? "#FFF" : "#8E8E93"} style={{ marginRight: 4 }} />
+                    <Text style={[styles.chipText, selectedFilters.includes(layer) && { color: "#FFF" }]}>{layer}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -312,20 +283,29 @@ export default function SearchModal({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F2F2F7" },
+  dragHandle: { // 🌟 追加：引っ張るためのハンドル
+    width: 40,
+    height: 5,
+    backgroundColor: "#C7C7CC",
+    borderRadius: 3,
+    alignSelf: "center",
+    marginTop: 10,
+    marginBottom: 5,
+  },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 15,
-    backgroundColor: "#FFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E5EA",
+    paddingHorizontal: 20,
+    paddingBottom: 15,
+    backgroundColor: "#F2F2F7", // 🌟 変更：背景色と同化させてモダンに
   },
-  title: { fontSize: 16, fontWeight: "700", color: "#1C1C1E" },
-  closeBtn: { width: 50 },
+  title: { fontSize: 18, fontWeight: "800", color: "#1C1C1E" },
+  closeBtn: { width: 50, alignItems: "flex-end" },
   searchBarRow: {
     flexDirection: "row",
-    padding: 15,
+    paddingHorizontal: 15,
+    paddingBottom: 15,
     gap: 10,
     alignItems: "center",
   },
@@ -336,20 +316,28 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF",
     paddingHorizontal: 12,
     borderRadius: 12,
-    height: 44,
+    height: 48, // 🌟 変更：少し高さを出して押しやすく
     borderWidth: 1,
     borderColor: "#E5E5EA",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
   },
   searchInput: { flex: 1, fontSize: 16, color: "#1C1C1E", marginLeft: 8 },
   filterToggleBtn: {
-    width: 44,
-    height: 44,
+    width: 48, // 🌟 変更：高さを揃える
+    height: 48,
     backgroundColor: "#FFF",
     borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,
     borderColor: "#E5E5EA",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
   },
   filterBadge: {
     position: "absolute",
@@ -357,24 +345,29 @@ const styles = StyleSheet.create({
     right: -5,
     backgroundColor: "#FF3B30",
     borderRadius: 10,
-    width: 18,
-    height: 18,
+    width: 20,
+    height: 20,
     justifyContent: "center",
     alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#FFF",
   },
-  filterBadgeText: { color: "#FFF", fontSize: 10, fontWeight: "bold" },
+  filterBadgeText: { color: "#FFF", fontSize: 10, fontWeight: "900" },
   resultList: { flex: 1, paddingHorizontal: 15 },
   resultCard: {
     backgroundColor: "#FFF",
-    padding: 15,
-    borderRadius: 12,
-    marginBottom: 10,
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
   },
-  resultDateRow: { marginBottom: 4 },
-  resultDateText: { fontSize: 12, color: "#8E8E93", fontWeight: "600" },
-  resultTitleText: { fontSize: 16, fontWeight: "700", color: "#1C1C1E" },
+  resultDateRow: { marginBottom: 6 },
+  resultDateText: { fontSize: 13, color: "#8E8E93", fontWeight: "700", letterSpacing: 0.5 }, // 🌟 変更：大きく・太く
+  resultTitleText: { fontSize: 18, fontWeight: "800", color: "#1C1C1E" }, // 🌟 変更：タイトルをかなり大きく強調
 
-  // 🌟 シートのスタイル
   sheetOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -382,11 +375,11 @@ const styles = StyleSheet.create({
   },
   sheetContent: {
     backgroundColor: "#FFF",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
     paddingBottom: 40,
-    maxHeight: "70%",
+    maxHeight: "80%",
   },
   sheetHeader: {
     flexDirection: "row",
@@ -394,22 +387,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
-  sheetTitle: { fontSize: 18, fontWeight: "bold" },
+  sheetTitle: { fontSize: 20, fontWeight: "800", color: "#1C1C1E" },
   chipGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   chip: {
+    flexDirection: "row", // 🌟 追加：アイコンと文字を横並びに
+    alignItems: "center",
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: "#E5E5EA",
     backgroundColor: "#F8F8FA",
   },
-  chipText: { fontSize: 14, fontWeight: "600", color: "#8E8E93" },
+  chipText: { fontSize: 14, fontWeight: "700", color: "#8E8E93" },
   applyBtn: {
     marginTop: 30,
     paddingVertical: 16,
-    borderRadius: 15,
+    borderRadius: 16,
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
   applyBtnText: { color: "#FFF", fontSize: 16, fontWeight: "800" },
 });

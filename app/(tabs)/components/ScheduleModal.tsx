@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Haptics from "expo-haptics";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 // 🌟 通知の脳みそをインポート
 import { useNotificationManager } from "../../../hooks/useNotificationManager";
@@ -28,7 +28,7 @@ import {
   TextInput,
   TouchableOpacity,
   TouchableWithoutFeedback,
-  View,
+  View
 } from "react-native";
 
 interface ScheduleModalProps {
@@ -290,120 +290,136 @@ export default function ScheduleModal({
   const { scheduleItemNotification, cancelItemNotification } =
     useNotificationManager();
 
-  const uiThemeColor = layerMaster[selectedLayer] || "#007AFF";
+    const uiThemeColor = layerMaster[selectedLayer] || "#007AFF";
 
-  useEffect(() => {
-    if (!visible) setIsReady(false);
-  }, [visible]);
-
-  useEffect(() => {
-    const load = async () => {
-      const [q, r] = await Promise.all([
-        AsyncStorage.getItem("quickMainTagsData"),
-        AsyncStorage.getItem("readingMasterData"),
-      ]);
-      if (q) setQuickMainTags(JSON.parse(q));
-      if (r) setReadingMaster(JSON.parse(r));
-    };
-    if (visible) load();
-  }, [visible]);
-
-  useEffect(() => {
-    if (visible) {
-      const layers = Object.keys(layerMaster);
-      const def = layers.length > 0 ? layers[0] : "生活";
-
-      if (selectedItem) {
-        setInputText(selectedItem.title || "");
-        setInputAmount(
-          selectedItem.amount > 0 ? selectedItem.amount.toString() : "",
-        );
-        setIsEvent(selectedItem.isEvent ?? true);
-        setIsTodo(selectedItem.isTodo ?? false);
-        setIsExpense(selectedItem.isExpense ?? false);
-        setTagInput(selectedItem.tag || "");
-        setTagColor(selectedItem.color || "#007AFF");
-
-        const savedLayer = tagMaster?.[selectedItem.tag || ""]?.layer 
-                          || (layerMaster[selectedItem.tag || ""] ? selectedItem.tag : def);
-        setSelectedLayer(savedLayer || def);
-
-        setSelectedCategory(selectedItem.category || "食費");
-        setIsAllDay(selectedItem.isAllDay ?? true);
-        setStartDate(new Date(selectedItem.startDate || selectedDate));
-        setEndDate(new Date(selectedItem.endDate || selectedDate));
-
-        if (selectedItem.startTime) {
-          const [h, m] = selectedItem.startTime.split(":").map(Number);
-          const d = new Date();
-          d.setHours(h, m, 0, 0);
-          setStartTime(d);
-        }
-        if (selectedItem.endTime) {
-          const [h, m] = selectedItem.endTime.split(":").map(Number);
-          const d = new Date();
-          d.setHours(h, m, 0, 0);
-          setEndTime(d);
-        }
-
-        const hasOldNotification =
-          selectedItem.notificationIds &&
-          selectedItem.notificationIds.length > 0;
-        setSelectedReminders(
-          selectedItem.reminderOptions || (hasOldNotification ? ["exact"] : []),
-        );
-
-        if (selectedItem.customReminderTimes) {
-          setCustomReminderTimes(
-            selectedItem.customReminderTimes.map((tStr) => new Date(tStr)),
-          );
-        } else {
-          setCustomReminderTimes([]);
-        }
-        setRepeatType(selectedItem.repeatType || "none");
-        setRepeatDays(selectedItem.repeatDays || []);
-        setRepeatInterval(selectedItem.repeatInterval || 1);
-        setNewTagColor(""); // 🌟 リセット
-
-        const savedSubTasks = selectedItem.subTasks || [];
-        setSubTasks(savedSubTasks);
-        setShowSubTasks(savedSubTasks.length > 0);
-
-        const snapshot = JSON.stringify({
-          title: selectedItem.title || "",
-          amount: parseInt(selectedItem.amount?.toString() || "0"),
-          isTodo: selectedItem.isTodo ?? false,
-          subTasksData: savedSubTasks.map(t => `${t.title}_${t.isDone}`).join(",")
-        });
-        setInitialSnapshot(snapshot);
-
-      } else {
-        setInputText("");
-        setTagInput("");
-        setTagColor(layerMaster[def] || "#007AFF");
-        setInputAmount("");
-        setIsEvent(activeMode === "calendar");
-        setIsTodo(activeMode === "todo");
-        setIsExpense(activeMode === "money");
-        setSelectedLayer(def);
-        setSelectedCategory("食費");
-        setIsAllDay(true);
-        setStartDate(new Date(selectedDate));
-        setEndDate(new Date(selectedDate));
-        const now = new Date();
-        setStartTime(now);
-        setEndTime(new Date(now.getTime() + 60 * 60 * 1000));
-        setSelectedReminders([]);
-        setCustomReminderTimes([]);
-        setRepeatType("none");
-        setNewTagColor(""); // 🌟 リセット
-
-        setSubTasks([]);
-        setShowSubTasks(false);
+    // 🌟 追加：画面の初期化が完了したかを記憶するフラグ（useRefを追記）
+    const isInitialized = useRef(false);
+  
+    useEffect(() => {
+      const load = async () => {
+        const [q, r] = await Promise.all([
+          AsyncStorage.getItem("quickMainTagsData"),
+          AsyncStorage.getItem("readingMasterData"),
+        ]);
+        if (q) setQuickMainTags(JSON.parse(q));
+        if (r) setReadingMaster(JSON.parse(r));
+      };
+      if (visible) load();
+    }, [visible]);
+  
+    useEffect(() => {
+      // 画面が閉じている時はリセット
+      if (!visible) {
+        setIsReady(false);
+        isInitialized.current = false;
+        return;
       }
-      setIsCreatingNewTag(false);
-    }
-  }, [visible, selectedItem, activeMode, layerMaster, selectedDate, tagMaster]);
+  
+      if (isInitialized.current) return;
+  
+      // 🌟 修正：画面が下からスライドしてくるアニメーションを優先するため、
+      // 中身の重い処理（準備）を「100ミリ秒」だけ遅らせて実行する！
+      const timer = setTimeout(() => {
+        const layers = Object.keys(layerMaster);
+        const def = layers.length > 0 ? layers[0] : "生活";
+  
+        if (selectedItem) {
+          setInputText(selectedItem.title || "");
+          setInputAmount(
+            selectedItem.amount > 0 ? selectedItem.amount.toString() : "",
+          );
+          setIsEvent(selectedItem.isEvent ?? true);
+          setIsTodo(selectedItem.isTodo ?? false);
+          setIsExpense(selectedItem.isExpense ?? false);
+          setTagInput(selectedItem.tag || "");
+          setTagColor(selectedItem.color || "#007AFF");
+  
+          const savedLayer = tagMaster?.[selectedItem.tag || ""]?.layer 
+                            || (layerMaster[selectedItem.tag || ""] ? selectedItem.tag : def);
+          setSelectedLayer(savedLayer || def);
+  
+          setSelectedCategory(selectedItem.category || "食費");
+          setIsAllDay(selectedItem.isAllDay ?? true);
+          setStartDate(new Date(selectedItem.startDate || selectedDate));
+          setEndDate(new Date(selectedItem.endDate || selectedDate));
+  
+          if (selectedItem.startTime) {
+            const [h, m] = selectedItem.startTime.split(":").map(Number);
+            const d = new Date();
+            d.setHours(h, m, 0, 0);
+            setStartTime(d);
+          }
+          if (selectedItem.endTime) {
+            const [h, m] = selectedItem.endTime.split(":").map(Number);
+            const d = new Date();
+            d.setHours(h, m, 0, 0);
+            setEndTime(d);
+          }
+  
+          const hasOldNotification =
+            selectedItem.notificationIds &&
+            selectedItem.notificationIds.length > 0;
+          setSelectedReminders(
+            selectedItem.reminderOptions || (hasOldNotification ? ["exact"] : []),
+          );
+  
+          if (selectedItem.customReminderTimes) {
+            setCustomReminderTimes(
+              selectedItem.customReminderTimes.map((tStr) => new Date(tStr)),
+            );
+          } else {
+            setCustomReminderTimes([]);
+          }
+          setRepeatType(selectedItem.repeatType || "none");
+          setRepeatDays(selectedItem.repeatDays || []);
+          setRepeatInterval(selectedItem.repeatInterval || 1);
+          setNewTagColor(""); // リセット
+  
+          const savedSubTasks = selectedItem.subTasks || [];
+          setSubTasks(savedSubTasks);
+          setShowSubTasks(savedSubTasks.length > 0);
+  
+          const snapshot = JSON.stringify({
+            title: selectedItem.title || "",
+            amount: parseInt(selectedItem.amount?.toString() || "0"),
+            isTodo: selectedItem.isTodo ?? false,
+            subTasksData: savedSubTasks.map(t => `${t.title}_${t.isDone}`).join(",")
+          });
+          setInitialSnapshot(snapshot);
+  
+        } else {
+          setInputText("");
+          setTagInput("");
+          setTagColor(layerMaster[def] || "#007AFF");
+          setInputAmount("");
+          setIsEvent(activeMode === "calendar");
+          setIsTodo(activeMode === "todo");
+          setIsExpense(activeMode === "money");
+          setSelectedLayer(def);
+          setSelectedCategory("食費");
+          setIsAllDay(true);
+          setStartDate(new Date(selectedDate));
+          setEndDate(new Date(selectedDate));
+          const now = new Date();
+          setStartTime(now);
+          setEndTime(new Date(now.getTime() + 60 * 60 * 1000));
+          setSelectedReminders([]);
+          setCustomReminderTimes([]);
+          setRepeatType("none");
+          setNewTagColor(""); // リセット
+  
+          setSubTasks([]);
+          setShowSubTasks(false);
+        }
+        setIsCreatingNewTag(false);
+  
+        isInitialized.current = true;
+        setIsReady(true); // 🌟 ここで準備完了フラグを立てる！
+      }, 100);
+  
+      // 🌟 タイマーの後始末
+      return () => clearTimeout(timer);
+    }, [visible, selectedItem, activeMode, layerMaster, selectedDate, tagMaster]);
 
   const toHiragana = (str: string) =>
     str
@@ -412,14 +428,23 @@ export default function ScheduleModal({
       )
       .toLowerCase();
 
-  const titleHistory = useMemo(() => {
-    if (!isReady) return [];
-    const titles = new Set<string>();
-    for (const d in scheduleData) {
-      scheduleData[d].forEach((i: any) => i.title && titles.add(i.title));
-    }
-    return Array.from(titles);
-  }, [scheduleData, isReady]);
+      const titleHistory = useMemo(() => {
+        // 🌟 修正：画面の準備ができていない時は計算をスキップする（開く時の重さを軽減）
+        if (!isReady) return [];
+        
+        const titles = new Set<string>();
+        
+        // 🌟 修正：すべての過去の予定をループすると重すぎるので、
+        // 直近「150件」のデータからのみタイトル履歴を抽出する（爆速化）
+        const allItems = Object.values(scheduleData).flat() as ScheduleItem[];
+        const recentItems = allItems.slice(-150); 
+        
+        recentItems.forEach((i) => {
+          if (i.title) titles.add(i.title);
+        });
+        
+        return Array.from(titles);
+      }, [scheduleData, isReady]);
 
   const suggestions = useMemo(() => {
     const s = inputText.trim();

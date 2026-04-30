@@ -393,7 +393,7 @@ export default function DailyExpense({
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          snapToInterval={exactCardWidth + 10} // marginRight分の10pxを足す
+          snapToInterval={exactCardWidth + 10}
           decelerationRate="fast"
           contentContainerStyle={{ paddingRight: 10 }}
           keyboardShouldPersistTaps="handled"
@@ -415,7 +415,7 @@ export default function DailyExpense({
                 style={[
                   styles.inputCard,
                   {
-                    width: exactCardWidth, // 🌟 ここがポイント！ピッタリ1枚分に！
+                    width: exactCardWidth,
                     backgroundColor: c + "15",
                     borderColor: c + "30",
                   },
@@ -425,15 +425,14 @@ export default function DailyExpense({
                   <Text style={[styles.inputCardTitle, { color: c }]}>
                     {isAll ? "全体/共通" : l}
                   </Text>
-                  {!isAll && (
-                    <TouchableOpacity onPress={toggleManualMode}>
-                      <Ionicons
-                        name={isManualInput ? "flash" : "create-outline"}
-                        size={16}
-                        color={c}
-                      />
-                    </TouchableOpacity>
-                  )}
+                  {/* 🌟 修正1：共通タブでも手動入力に切り替えられるように変更 */}
+                  <TouchableOpacity onPress={toggleManualMode}>
+                    <Ionicons
+                      name={isManualInput ? "flash" : "create-outline"}
+                      size={16}
+                      color={c}
+                    />
+                  </TouchableOpacity>
                 </View>
                 <View
                   style={[
@@ -453,7 +452,8 @@ export default function DailyExpense({
                 </View>
                 <View style={{ flex: 1, justifyContent: "space-between" }}>
                   <View>
-                    {isAll || isManualInput ? (
+                    {/* 🌟 修正2：チップ表示の条件を「手動モードの時だけ」に変更 */}
+                    {isManualInput ? (
                       <View style={{ gap: 4, marginTop: 4 }}>
                         <TextInput
                           style={[
@@ -551,7 +551,7 @@ export default function DailyExpense({
                                 key={sub}
                                 style={[styles.subChip, { backgroundColor: selectedSubTag === sub ? c : "#FFF", borderColor: selectedSubTag === sub ? c : c + "30" }]}
                                 onPress={() => setSelectedSubTag(sub)}
-                                onLongPress={() => handleLongPressSubTag(sub, tagMaster[sub].color)} // 🌟 追加：長押しで編集
+                                onLongPress={() => handleLongPressSubTag(sub, tagMaster[sub].color)} 
                               >
                                 <Text style={[styles.subChipText, { color: selectedSubTag === sub ? "#FFF" : c }]}>{sub}</Text>
                               </TouchableOpacity>

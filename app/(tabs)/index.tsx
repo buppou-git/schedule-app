@@ -252,22 +252,39 @@ export default function Index() {
     }
   };
 
+  const appState = useRef(AppState.currentState);
+
   useEffect(() => {
-    handleAuthenticate();
+    handleAuthenticate(); // 初回起動時
+
     const subscription = AppState.addEventListener("change", (nextAppState) => {
-      if (nextAppState === "active") {
+      // 🌟 修正：完全に「バックグラウンド（裏側）」から戻ってきた時だけ認証する
+      if (appState.current === "background" && nextAppState === "active") {
         handleAuthenticate();
-      } else if (nextAppState === "background") {
+      }
+      // 🌟 アプリがバックグラウンドに行った時にロックをかける
+      else if (nextAppState === "background") {
         AsyncStorage.getItem("useBiometricLock").then((val) => {
           if (val === "true") setIsAppLocked(true);
         });
+        AsyncStorage.getItem("usePinLock").then((val) => {
+          if (val === "true") setIsAppLocked(true);
+        });
       }
+      appState.current = nextAppState; // 状態を更新
     });
 
     return () => subscription.remove();
   }, []);
 
   const [activeTags, setActiveTags] = useState<string[]>([]);
+
+  const [isExternalSyncEnabled, setIsExternalSyncEnabled] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem("externalCalendarSync").then(val => setIsExternalSyncEnabled(val === "true"));
+  }, []);
+
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [layerModalVisible, setLayerModalVisible] = useState(false);
   const [presetModalVisible, setPresetModalVisible] = useState(false);
@@ -850,17 +867,21 @@ export default function Index() {
     selectedDate,
   );
 
-  const currentSolidColor = useMemo(
-    () => (activeTags.length === 1 ? layerMaster[activeTags[0]] : "#1C1C1E"),
-    [activeTags, layerMaster],
-  );
-  const currentBgColor = useMemo(
-    () =>
-      activeTags.length === 1
-        ? getPastelColor(layerMaster[activeTags[0]])
-        : "#F8F9FA",
-    [activeTags, layerMaster],
-  );
+  const currentSolidColor = useMemo(() => {
+    if (activeTags.length === 1) {
+      if (activeTags[0] === "外部予定") return "#FF2D55"; // 🌟 システム専用色
+      return layerMaster[activeTags[0]] || "#1C1C1E";
+    }
+    return "#1C1C1E";
+  }, [activeTags, layerMaster]);
+
+  const currentBgColor = useMemo(() => {
+    if (activeTags.length === 1) {
+      if (activeTags[0] === "外部予定") return getPastelColor("#FF2D55"); // 🌟 システム専用背景色
+      return getPastelColor(layerMaster[activeTags[0]]) || "#F8F9FA";
+    }
+    return "#F8F9FA";
+  }, [activeTags, layerMaster]);
 
   const currentHeaderTitle = useMemo(() => {
     if (activeTags.length === 0) return "ALL_LAYERS";
@@ -1684,42 +1705,42 @@ export default function Index() {
 
               {(activeMode === "todo" ||
                 (activeMode === "money" && !isMoneySummaryMode)) && (
-                <View style={styles.weekCalendarWrapper}>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      paddingRight: 20,
-                    }}
-                  >
-                    <Text style={styles.monthLabel}>
-                      {parseInt(selectedDate.split("-")[1])}月
-                    </Text>
-                    <TouchableOpacity onPress={handleOpenNewModal}>
-                      <Ionicons
-                        name="add-circle"
-                        size={30}
-                        color={currentSolidColor}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                  <CalendarProvider
-                    date={selectedDate}
-                    onDateChanged={setSelectedDate}
-                  >
-                    <WeekCalendar
-                      firstDay={1}
-                      markedDates={currentMarkedDates}
-                      theme={{
-                        calendarBackground: "transparent",
-                        todayTextColor: currentSolidColor,
-                        selectedDayBackgroundColor: currentSolidColor,
+                  <View style={styles.weekCalendarWrapper}>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        paddingRight: 20,
                       }}
-                    />
-                  </CalendarProvider>
-                </View>
-              )}
+                    >
+                      <Text style={styles.monthLabel}>
+                        {parseInt(selectedDate.split("-")[1])}月
+                      </Text>
+                      <TouchableOpacity onPress={handleOpenNewModal}>
+                        <Ionicons
+                          name="add-circle"
+                          size={30}
+                          color={currentSolidColor}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                    <CalendarProvider
+                      date={selectedDate}
+                      onDateChanged={setSelectedDate}
+                    >
+                      <WeekCalendar
+                        firstDay={1}
+                        markedDates={currentMarkedDates}
+                        theme={{
+                          calendarBackground: "transparent",
+                          todayTextColor: currentSolidColor,
+                          selectedDayBackgroundColor: currentSolidColor,
+                        }}
+                      />
+                    </CalendarProvider>
+                  </View>
+                )}
             </>
           )}
 
@@ -2017,6 +2038,31 @@ export default function Index() {
                       すべて表示
                     </Text>
                   </TouchableOpacity>
+
+                  {/* 🌟 追加：システムレイヤー（同期ONの時だけ出現！） */}
+                  {isExternalSyncEnabled && (
+                    <TouchableOpacity
+                      style={[
+                        styles.gridCard,
+                        tempActiveTags.includes("外部予定")
+                          ? { backgroundColor: "#FF2D55", borderColor: "#FF2D55" }
+                          : [styles.gridCardGhost, { borderColor: "#FF2D5540" }],
+                      ]}
+                      onPress={() => toggleTempTag("外部予定")}
+                    >
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                        <Ionicons
+                          name={tempActiveTags.includes("外部予定") ? "checkmark-circle" : "ellipse-outline"}
+                          size={16}
+                          color={tempActiveTags.includes("外部予定") ? "#FFF" : "#FF2D55"}
+                        />
+                        <Text style={[styles.gridCardText, tempActiveTags.includes("外部予定") && { color: "#FFF" }]} numberOfLines={1}>
+                          外部予定
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
+
                   {Object.keys(layerMaster).map((layer) => {
                     const isSelected = tempActiveTags.includes(layer);
                     const isShared = Object.keys(sharedRooms).includes(layer);
@@ -2028,13 +2074,13 @@ export default function Index() {
                           styles.gridCard,
                           isSelected
                             ? {
-                                backgroundColor: layerMaster[layer],
-                                borderColor: layerMaster[layer],
-                              }
+                              backgroundColor: layerMaster[layer],
+                              borderColor: layerMaster[layer],
+                            }
                             : [
-                                styles.gridCardGhost,
-                                { borderColor: layerMaster[layer] + "40" },
-                              ],
+                              styles.gridCardGhost,
+                              { borderColor: layerMaster[layer] + "40" },
+                            ],
                         ]}
                         onPress={() => toggleTempTag(layer)}
                       >
@@ -2096,7 +2142,15 @@ export default function Index() {
               <TouchableOpacity
                 style={[
                   styles.confirmBtn,
-                  { backgroundColor: currentSolidColor },
+                  {
+                    // 🌟 修正：選んだレイヤーが1つだけの時、その色にボタンを染める！
+                    backgroundColor:
+                      tempActiveTags.length === 1
+                        ? tempActiveTags[0] === "外部予定"
+                          ? "#FF2D55"
+                          : layerMaster[tempActiveTags[0]] || "#1C1C1E"
+                        : "#1C1C1E", // 複数選択時や未選択時はキリッとした黒に戻す
+                  },
                 ]}
                 onPress={applyFilters}
               >
@@ -2206,7 +2260,10 @@ export default function Index() {
 
       <ConfigModal
         visible={configModalVisible}
-        onClose={() => setConfigModalVisible(false)}
+        onClose={() => {
+          setConfigModalVisible(false);
+          AsyncStorage.getItem("externalCalendarSync").then(val => setIsExternalSyncEnabled(val === "true"));
+        }}
         lastSyncedAt={lastSyncedAt}
         onRestore={handleRestore}
         onBackup={handleManualBackup} // 🌟 追加
@@ -2276,7 +2333,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   header: {
-    paddingTop: 65,
+    paddingTop: Platform.OS === "ios" ? 10 : 65,
     paddingBottom: 20,
     paddingHorizontal: 24,
     borderBottomWidth: StyleSheet.hairlineWidth,

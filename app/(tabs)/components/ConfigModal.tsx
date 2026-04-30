@@ -657,169 +657,181 @@ export default function ConfigModal({
       </TouchableOpacity>
 
       {/* PIN設定用モーダル */}
-      <Modal visible={isPinSetupVisible} transparent={true} animationType="fade">
-        <View style={styles.overlay}>
-          <View style={[styles.content, { maxHeight: 350 }]}>
-            <Text style={styles.title}>PIN SETTING</Text>
-            <Text style={styles.subTitle}>新しい暗証番号を決めてください</Text>
+      {isPinSetupVisible && (
+        <Modal visible={isPinSetupVisible} transparent={true} animationType="fade">
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === "ios" ? "padding" : "height"} 
+            style={{ flex: 1 }}
+          >
+            {/* 🌟 修正：下寄せではなく「中央寄せ」に変更 */}
+            <View style={[styles.overlay, { justifyContent: "center" }]}>
+              {/* 🌟 修正：marginBottomを0にし、角丸を全体に適用 */}
+              <View style={[styles.content, { maxHeight: 380, marginBottom: 0, borderRadius: 24 }]}>
+                <Text style={styles.title}>PIN SETTING</Text>
+                <Text style={styles.subTitle}>新しい暗証番号を決めてください</Text>
 
-            <View style={styles.pinInputWrapper}>
-              <TextInput
-                style={styles.hiddenTextInput}
-                keyboardType="number-pad"
-                maxLength={4}
-                secureTextEntry
-                autoFocus
-                value={pinInput}
-                onChangeText={setPinInput}
-              />
-              <View style={styles.pinDisplayContainer}>
-                {[...Array(4)].map((_, i) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.pinBox,
-                      pinInput.length === i && styles.pinBoxFocused
-                    ]}
-                  >
-                    {pinInput.length > i && (
-                      <Text style={styles.pinDot}>●</Text>
-                    )}
+                <View style={styles.pinInputWrapper}>
+                  <TextInput
+                    style={styles.hiddenTextInput}
+                    keyboardType="number-pad"
+                    maxLength={4}
+                    secureTextEntry
+                    autoFocus
+                    value={pinInput}
+                    onChangeText={setPinInput}
+                  />
+                  <View style={styles.pinDisplayContainer}>
+                    {[...Array(4)].map((_, i) => (
+                      <View
+                        key={i}
+                        style={[
+                          styles.pinBox,
+                          pinInput.length === i && styles.pinBoxFocused
+                        ]}
+                      >
+                        {pinInput.length > i && (
+                          <Text style={styles.pinDot}>●</Text>
+                        )}
+                      </View>
+                    ))}
                   </View>
-                ))}
+                </View>
+
+                <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 16, marginBottom: 20 }}>
+                  <TouchableOpacity 
+                    onPress={() => { setIsPinSetupVisible(false); setPinInput(""); setIsPinEnabled(false); }} 
+                    style={{ padding: 10 }}
+                  >
+                    <Text style={{ fontSize: 14, fontWeight: "700", color: "#8E8E93" }}>キャンセル</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    onPress={savePin} 
+                    style={{ backgroundColor: "#1C1C1E", paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 }}
+                  >
+                    <Text style={{ fontSize: 14, fontWeight: "700", color: "#FFF" }}>保存する</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
-
-            <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 16, marginBottom: 20 }}>
-              <TouchableOpacity onPress={() => { setIsPinSetupVisible(false); setPinInput(""); setIsPinEnabled(false); }} style={{ padding: 10 }}>
-                <Text style={{ fontSize: 14, fontWeight: "700", color: "#8E8E93" }}>キャンセル</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={savePin} style={{ backgroundColor: "#1C1C1E", paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 }}>
-                <Text style={{ fontSize: 14, fontWeight: "700", color: "#FFF" }}>保存する</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+          </KeyboardAvoidingView>
+        </Modal>
+      )}
 
       {/* 🌟 1. 共有カレンダー作成モーダル */}
-      <Modal visible={createRoomVisible} transparent animationType="fade">
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
-          <View style={styles.overlay}>
-            <View style={styles.subModalContent}>
-              <Text style={styles.title}>NEW SHARED ROOM</Text>
-              <Text style={styles.subTitle}>新しい共有レイヤーの名前を決めてください</Text>
-              <TextInput
-                style={styles.inputField}
-                placeholder="例：ゼミ合宿、家族の予定"
-                placeholderTextColor="#C7C7CC"
-                autoFocus
-                value={newRoomName}
-                onChangeText={setNewRoomName}
-              />
-              <View style={styles.modalActionRow}>
-                <TouchableOpacity onPress={() => setCreateRoomVisible(false)}><Text style={styles.cancelText}>キャンセル</Text></TouchableOpacity>
-                <TouchableOpacity style={styles.saveBtn} onPress={handleCreateRoom}><Text style={styles.saveBtnText}>作成</Text></TouchableOpacity>
+      {createRoomVisible && (
+        <Modal visible={createRoomVisible} transparent animationType="fade">
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === "ios" ? "padding" : "height"} 
+            style={{ flex: 1 }}
+          >
+            {/* 🌟 修正：中央寄せに変更 */}
+            <View style={[styles.overlay, { justifyContent: "center" }]}>
+              {/* 🌟 修正：余白をリセットして綺麗に配置 */}
+              <View style={[styles.subModalContent, { marginBottom: 0 }]}>
+                <Text style={styles.title}>NEW SHARED ROOM</Text>
+                <Text style={styles.subTitle}>共有レイヤーの名前を決めてください</Text>
+                <TextInput
+                  style={styles.inputField}
+                  placeholder="例：ゼミ、家族"
+                  placeholderTextColor="#C7C7CC"
+                  autoFocus
+                  value={newRoomName}
+                  onChangeText={setNewRoomName}
+                />
+                <View style={styles.modalActionRow}>
+                  <TouchableOpacity onPress={() => setCreateRoomVisible(false)}><Text style={styles.cancelText}>キャンセル</Text></TouchableOpacity>
+                  <TouchableOpacity style={styles.saveBtn} onPress={handleCreateRoom}><Text style={styles.saveBtnText}>作成</Text></TouchableOpacity>
+                </View>
               </View>
             </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+          </KeyboardAvoidingView>
+        </Modal>
+      )}
 
       {/* 🌟 2. 共有カレンダー参加モーダル */}
-      <Modal visible={joinRoomVisible} transparent animationType="fade">
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
-          <View style={styles.overlay}>
-            <View style={styles.subModalContent}>
-              <Text style={styles.title}>JOIN SHARED ROOM</Text>
-              <Text style={styles.subTitle}>送られたURLかIDを貼り付けてください</Text>
-              <TextInput
-                style={styles.inputField}
-                placeholder="URL または ID"
-                placeholderTextColor="#C7C7CC"
-                autoFocus
-                value={joinRoomId}
-                onChangeText={setJoinRoomId}
-              />
-              <Text style={[styles.subTitle, { marginTop: 15 }]}>自分のアプリでの表示名（レイヤー名）</Text>
-              <TextInput
-                style={styles.inputField}
-                placeholder="例：サークル用カレンダー"
-                placeholderTextColor="#C7C7CC"
-                value={joinRoomName}
-                onChangeText={setJoinRoomName}
-              />
-              <View style={styles.modalActionRow}>
-                <TouchableOpacity onPress={() => setJoinRoomVisible(false)}><Text style={styles.cancelText}>キャンセル</Text></TouchableOpacity>
-                <TouchableOpacity style={styles.saveBtn} onPress={handleJoinRoom}><Text style={styles.saveBtnText}>参加</Text></TouchableOpacity>
+      {joinRoomVisible && (
+        <Modal visible={joinRoomVisible} transparent animationType="fade">
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === "ios" ? "padding" : "height"} 
+            style={{ flex: 1 }}
+          >
+            {/* 🌟 修正：中央寄せに変更 */}
+            <View style={[styles.overlay, { justifyContent: "center" }]}>
+              <View style={[styles.subModalContent, { marginBottom: 0 }]}>
+                <Text style={styles.title}>JOIN SHARED ROOM</Text>
+                <TextInput
+                  style={styles.inputField}
+                  placeholder="URL または ID"
+                  placeholderTextColor="#C7C7CC"
+                  autoFocus
+                  value={joinRoomId}
+                  onChangeText={setJoinRoomId}
+                />
+                <TextInput
+                  style={[styles.inputField, { marginTop: 10 }]}
+                  placeholder="表示名（カテゴリ名）"
+                  placeholderTextColor="#C7C7CC"
+                  value={joinRoomName}
+                  onChangeText={setJoinRoomName}
+                />
+                <View style={styles.modalActionRow}>
+                  <TouchableOpacity onPress={() => setJoinRoomVisible(false)}><Text style={styles.cancelText}>キャンセル</Text></TouchableOpacity>
+                  <TouchableOpacity style={styles.saveBtn} onPress={handleJoinRoom}><Text style={styles.saveBtnText}>参加</Text></TouchableOpacity>
+                </View>
               </View>
             </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+          </KeyboardAvoidingView>
+        </Modal>
+      )}
 
       {/* 🌟 3. リンク送信先選択モーダル */}
-      <Modal visible={shareRoomListVisible} transparent animationType="slide">
-        <View style={styles.overlay}>
-          <View style={[styles.subModalContent, { paddingBottom: 40 }]}>
-            <Text style={styles.title}>SHARE LINK</Text>
-            <Text style={styles.subTitle}>招待したいカレンダーを選んでください</Text>
-            <ScrollView style={{ marginTop: 20, maxHeight: 200 }}>
-              {Object.keys(sharedRooms).length === 0 && (
-                <Text style={{ textAlign: "center", color: "#8E8E93", marginVertical: 20 }}>共有カレンダーがありません</Text>
-              )}
-              {Object.entries(sharedRooms).map(([name, roomId]) => (
-                <TouchableOpacity key={roomId} style={styles.roomListItem} onPress={() => handleShareRoom(name, roomId)}>
-                  <Ionicons name="cloud-outline" size={20} color="#007AFF" />
-                  <Text style={styles.roomListText}>{name}</Text>
-                  <Ionicons name="share-outline" size={18} color="#C7C7CC" />
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-            <TouchableOpacity style={[styles.saveBtn, { marginTop: 20, width: "100%", alignItems: 'center' }]} onPress={() => setShareRoomListVisible(false)}>
-              <Text style={styles.saveBtnText}>閉じる</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* 🌟 4. 新規追加：作成完了＆ID確認モーダル（URLが使えない人向け） */}
-      <Modal visible={showCreatedRoomInfoVisible} transparent animationType="fade">
-        <View style={styles.overlay}>
-          <View style={styles.subModalContent}>
-
-            <View style={{ alignItems: "center", marginBottom: 20 }}>
-              <Ionicons name="checkmark-circle" size={50} color="#34C759" />
-              <Text style={[styles.title, { marginTop: 10 }]}>作成完了！</Text>
-              <Text style={[styles.subTitle, { textAlign: "center", marginTop: 5 }]}>
-                カレンダーを共有するには、以下の情報をメンバーに伝えてください。
-              </Text>
+      {shareRoomListVisible && (
+        <Modal visible={shareRoomListVisible} transparent animationType="slide">
+          {/* 🌟 修正：中央寄せに変更 */}
+          <View style={[styles.overlay, { justifyContent: "center" }]}>
+            <View style={[styles.subModalContent, { paddingBottom: 40, marginBottom: 0 }]}>
+              <Text style={styles.title}>SHARE LINK</Text>
+              <ScrollView style={{ marginTop: 20, maxHeight: 200 }}>
+                {Object.entries(sharedRooms).map(([name, roomId]) => (
+                  <TouchableOpacity key={roomId} style={styles.roomListItem} onPress={() => handleShareRoom(name, roomId)}>
+                    <Ionicons name="cloud-outline" size={20} color="#007AFF" />
+                    <Text style={styles.roomListText}>{name}</Text>
+                    <Ionicons name="share-outline" size={18} color="#C7C7CC" />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <TouchableOpacity style={[styles.saveBtn, { marginTop: 20, alignItems: 'center' }]} onPress={() => setShareRoomListVisible(false)}>
+                <Text style={styles.saveBtnText}>閉じる</Text>
+              </TouchableOpacity>
             </View>
+          </View>
+        </Modal>
+      )}
 
-            <Text style={{ fontSize: 12, color: "#8E8E93", fontWeight: "bold", marginBottom: 5 }}>カレンダー名</Text>
-            <Text style={{ fontSize: 18, fontWeight: "bold", color: "#1C1C1E", marginBottom: 20 }}>{createdRoomName}</Text>
-
-            <Text style={{ fontSize: 12, color: "#8E8E93", fontWeight: "bold", marginBottom: 5 }}>ルームID (長押しでコピー)</Text>
-            <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#F2F2F7", padding: 15, borderRadius: 12 }}>
-              <Text
-                style={{ flex: 1, fontSize: 16, fontWeight: "bold", color: "#1C1C1E", fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" }}
-                selectable={true}
+      {/* 🌟 4. 作成完了＆ID確認モーダル */}
+      {showCreatedRoomInfoVisible && (
+        <Modal visible={showCreatedRoomInfoVisible} transparent animationType="fade">
+          {/* 🌟 修正：中央寄せに変更 */}
+          <View style={[styles.overlay, { justifyContent: "center" }]}>
+            <View style={[styles.subModalContent, { marginBottom: 0 }]}>
+              <View style={{ alignItems: "center", marginBottom: 20 }}>
+                <Ionicons name="checkmark-circle" size={50} color="#34C759" />
+                <Text style={[styles.title, { marginTop: 10 }]}>作成完了！</Text>
+              </View>
+              <Text style={{ fontSize: 12, color: "#8E8E93", fontWeight: "bold" }}>ルームID</Text>
+              <View style={{ backgroundColor: "#F2F2F7", padding: 15, borderRadius: 12, marginTop: 5 }}>
+                <Text style={{ fontSize: 16, fontWeight: "bold", color: "#1C1C1E" }} selectable={true}>{createdRoomId}</Text>
+              </View>
+              <TouchableOpacity 
+                style={[styles.saveBtn, { marginTop: 25, width: "100%", alignItems: "center" }]} 
+                onPress={() => setShowCreatedRoomInfoVisible(false)}
               >
-                {createdRoomId}
-              </Text>
+                <Text style={styles.saveBtnText}>閉じる</Text>
+              </TouchableOpacity>
             </View>
-
-            <TouchableOpacity
-              style={[styles.saveBtn, { marginTop: 25, width: "100%", alignItems: "center" }]}
-              onPress={() => setShowCreatedRoomInfoVisible(false)}
-            >
-              <Text style={styles.saveBtnText}>閉じる</Text>
-            </TouchableOpacity>
-
           </View>
-        </View>
-      </Modal>
-
+        </Modal>
+      )}
     </Modal>
   );
 }
