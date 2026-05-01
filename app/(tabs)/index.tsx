@@ -38,6 +38,7 @@ import { requestTrackingPermissionsAsync } from "expo-tracking-transparency";
 import { MobileAds } from "react-native-google-mobile-ads";
 
 import {
+  ActivityIndicator,
   Alert,
   Keyboard,
   KeyboardAvoidingView,
@@ -280,6 +281,14 @@ export default function Index() {
   const [activeTags, setActiveTags] = useState<string[]>([]);
 
   const [isExternalSyncEnabled, setIsExternalSyncEnabled] = useState(false);
+
+  const [isAppReady, setIsAppReady] = useState(false);
+
+  useEffect(() => {
+    // アプリ起動から0.1秒だけ待って、UIの準備完了フラグを立てる（これで一気に軽くなる）
+    const timer = setTimeout(() => setIsAppReady(true), 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     AsyncStorage.getItem("externalCalendarSync").then((val) =>
@@ -746,26 +755,34 @@ export default function Index() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        // 過去のスケジュールデータ（myScheduleData）があるかどうかも確認する
-        const [layers, pre, tags, onboarded, scheduleExists] =
+        const [layers, pre, tags, onboarded, scheduleExists, extSync] =
           await Promise.all([
             AsyncStorage.getItem("layerMasterData"),
             AsyncStorage.getItem("filterPresets"),
             AsyncStorage.getItem("tagMasterData"),
             AsyncStorage.getItem("hasCompletedOnboarding"),
-            AsyncStorage.getItem("myScheduleData"), // 🌟 追加：過去データの有無
+            AsyncStorage.getItem("myScheduleData"),
+            AsyncStorage.getItem("externalCalendarSync"), // 🌟 外部同期の設定も読み込む
           ]);
 
-        // 🌟 修正：初回フラグがなく、かつ過去のデータも一切ない「完全な新規」だけマニュアルを出す
+        let initialLayers = layers ? JSON.parse(layers) : {};
+
+        // 🌟 追加：「外部同期」がONなのにレイヤーマスターに「外部予定」が無い場合、自動で追加する
+        if (extSync === "true" && !initialLayers["外部予定"]) {
+          initialLayers = { ...initialLayers, 外部予定: "#FF2D55" };
+        } else if (extSync !== "true" && initialLayers["外部予定"]) {
+          // 同期がOFFになったらレイヤーから消す
+          delete initialLayers["外部予定"];
+        }
+
         if (!onboarded && !scheduleExists) {
           setOnboardingVisible(true);
         } else {
-          // 既存ユーザーの保護：フラグがなくてもデータがあるなら、暗黙的にフラグを立てる
           if (!onboarded && scheduleExists) {
             await AsyncStorage.setItem("hasCompletedOnboarding", "true");
           }
 
-          if (layers) setLayerMaster(JSON.parse(layers));
+          setLayerMaster(initialLayers); // 🌟 更新したレイヤーマスターをセット
           if (pre) setPresets(JSON.parse(pre));
           if (tags) setTagMaster(JSON.parse(tags));
         }
@@ -774,7 +791,7 @@ export default function Index() {
       }
     };
     loadData();
-  }, []);
+  }, [isExternalSyncEnabled]); // 🌟 外部同期が切り替わった時にも再実行されるように依存配列に追加
 
   useEffect(() => {
     const syncToStorage = async () => {
@@ -878,15 +895,13 @@ export default function Index() {
 
   const currentSolidColor = useMemo(() => {
     if (activeTags.length === 1) {
-      if (activeTags[0] === "外部予定") return "#FF2D55"; // 🌟 システム専用色
-      return layerMaster[activeTags[0]] || "#1C1C1E";
+      return layerMaster[activeTags[0]] || "#1C1C1E"; // 外部予定の色も layerMaster に登録される前提
     }
     return "#1C1C1E";
   }, [activeTags, layerMaster]);
 
   const currentBgColor = useMemo(() => {
     if (activeTags.length === 1) {
-      if (activeTags[0] === "外部予定") return getPastelColor("#FF2D55"); // 🌟 システム専用背景色
       return getPastelColor(layerMaster[activeTags[0]]) || "#F8F9FA";
     }
     return "#F8F9FA";
@@ -1672,51 +1687,69 @@ export default function Index() {
       <View style={styles.mainContent}>
         <View style={styles.calendarArea}>
           {activeMode === "calendar" ? (
-            <CalendarList
-              current={selectedDate}
-              key={calendarKey}
-              markingType={"multi-dot"}
-              pastScrollRange={6}
-              futureScrollRange={6}
-              initialNumToRender={1}
-              windowSize={3}
-              renderHeader={(date) => (
-                <View
-                  style={[
-                    styles.monthHeaderContainer,
-                    {
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      paddingRight: 15,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[styles.monthformat, { color: currentSolidColor }]}
+            // 🌟 修正：起動直後は空っぽのViewを出して一瞬で画面を開かせ、0.1秒後にカレンダーをフワッと出す
+            !isAppReady ? (
+              <View
+                style={{
+                  height: 350,
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+              >
+                <ActivityIndicator size="small" color={currentSolidColor} />
+              </View>
+            ) : (
+              <CalendarList
+                current={selectedDate}
+                key={calendarKey}
+                markingType={"multi-dot"}
+                // 🌟 修正：前後6ヶ月の制限を外し、50ヶ月（約4年）に変更！
+                pastScrollRange={50}
+                futureScrollRange={50}
+                // 🌟 修正：起動時に一気に描画する月数を「1ヶ月（今月）」だけに絞る（爆速化の要！）
+                initialNumToRender={1}
+                windowSize={3}
+                maxToRenderPerBatch={2}
+                updateCellsBatchingPeriod={30}
+                removeClippedSubviews={true} // 見えない月をメモリから消して軽くする
+                renderHeader={(date) => (
+                  <View
+                    style={[
+                      styles.monthHeaderContainer,
+                      {
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        paddingRight: 15,
+                      },
+                    ]}
                   >
-                    {date.getMonth() + 1}月
-                  </Text>
-                  <TouchableOpacity onPress={handleOpenNewModal}>
-                    <Ionicons
-                      name="add-circle"
-                      size={30}
-                      color={currentSolidColor}
-                    />
-                  </TouchableOpacity>
-                </View>
-              )}
-              horizontal
-              pagingEnabled
-              markedDates={currentMarkedDates}
-              onDayPress={(day) => setSelectedDate(day.dateString)}
-              theme={{
-                calendarBackground: "transparent",
-                todayTextColor: "#FFF",
-                todayBackgroundColor: currentSolidColor + "33",
-                selectedDayBackgroundColor: currentSolidColor,
-              }}
-            />
+                    <Text
+                      style={[styles.monthformat, { color: currentSolidColor }]}
+                    >
+                      {date.getFullYear()}年 {date.getMonth() + 1}月
+                    </Text>
+                    <TouchableOpacity onPress={handleOpenNewModal}>
+                      <Ionicons
+                        name="add-circle"
+                        size={30}
+                        color={currentSolidColor}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                )}
+                horizontal
+                pagingEnabled
+                markedDates={currentMarkedDates}
+                onDayPress={(day) => setSelectedDate(day.dateString)}
+                theme={{
+                  calendarBackground: "transparent",
+                  todayTextColor: "#FFF",
+                  todayBackgroundColor: currentSolidColor + "33",
+                  selectedDayBackgroundColor: currentSolidColor,
+                }}
+              />
+            )
           ) : (
             <>
               {activeMode === "money" && (

@@ -16,7 +16,11 @@ import {
 } from "react-native";
 import { useAppStore } from "../../../store/useAppStore";
 import { ScheduleItem } from "../../../types";
-import { getItemTotalExpense, getItemTotalIncome, PRESET_COLORS } from "../../../utils/helpers";
+import {
+  getItemTotalExpense,
+  getItemTotalIncome,
+  PRESET_COLORS,
+} from "../../../utils/helpers";
 
 interface DailyExpenseProps {
   selectedDate: string;
@@ -69,7 +73,8 @@ export default function DailyExpense({
   const [newSubTagColor, setNewSubTagColor] = useState("");
 
   const [editSubTagModalVisible, setEditSubTagModalVisible] = useState(false);
-  const [editingSubTagOriginalName, setEditingSubTagOriginalName] = useState("");
+  const [editingSubTagOriginalName, setEditingSubTagOriginalName] =
+    useState("");
   const [editingSubTagName, setEditingSubTagName] = useState("");
   const [editingSubTagColor, setEditingSubTagColor] = useState("");
 
@@ -87,11 +92,13 @@ export default function DailyExpense({
     const newTagMaster = { ...tagMaster };
 
     if (trimmed !== editingSubTagOriginalName) {
-      if (newTagMaster[trimmed]) return Alert.alert("エラー", "既に同じ名前が存在します");
+      if (newTagMaster[trimmed])
+        return Alert.alert("エラー", "既に同じ名前が存在します");
       const oldLayer = newTagMaster[editingSubTagOriginalName].layer;
       delete newTagMaster[editingSubTagOriginalName];
       newTagMaster[trimmed] = { layer: oldLayer, color: editingSubTagColor };
-      if (selectedSubTag === editingSubTagOriginalName) setSelectedSubTag(trimmed);
+      if (selectedSubTag === editingSubTagOriginalName)
+        setSelectedSubTag(trimmed);
     } else {
       newTagMaster[trimmed].color = editingSubTagColor;
     }
@@ -102,19 +109,29 @@ export default function DailyExpense({
   };
 
   const deleteSubTag = async () => {
-    Alert.alert("確認", `属性「${editingSubTagOriginalName}」を削除しますか？`, [
-      { text: "キャンセル", style: "cancel" },
-      {
-        text: "削除", style: "destructive", onPress: async () => {
-          const newTagMaster = { ...tagMaster };
-          delete newTagMaster[editingSubTagOriginalName];
-          setTagMaster(newTagMaster);
-          await AsyncStorage.setItem("tagMasterData", JSON.stringify(newTagMaster));
-          if (selectedSubTag === editingSubTagOriginalName) setSelectedSubTag("");
-          setEditSubTagModalVisible(false);
-        }
-      }
-    ]);
+    Alert.alert(
+      "確認",
+      `属性「${editingSubTagOriginalName}」を削除しますか？`,
+      [
+        { text: "キャンセル", style: "cancel" },
+        {
+          text: "削除",
+          style: "destructive",
+          onPress: async () => {
+            const newTagMaster = { ...tagMaster };
+            delete newTagMaster[editingSubTagOriginalName];
+            setTagMaster(newTagMaster);
+            await AsyncStorage.setItem(
+              "tagMasterData",
+              JSON.stringify(newTagMaster),
+            );
+            if (selectedSubTag === editingSubTagOriginalName)
+              setSelectedSubTag("");
+            setEditSubTagModalVisible(false);
+          },
+        },
+      ],
+    );
   };
 
   const screenWidth = Dimensions.get("window").width;
@@ -136,7 +153,6 @@ export default function DailyExpense({
     ? layerMaster[currentActiveLayer]
     : "#1C1C1E";
 
-
   useEffect(() => {
     const load = async () => {
       const q = await AsyncStorage.getItem("quickMainTagsData");
@@ -144,7 +160,6 @@ export default function DailyExpense({
     };
     load();
   }, []);
-
 
   const mainStats = useMemo(() => {
     let dExpense = 0;
@@ -193,7 +208,14 @@ export default function DailyExpense({
     const newTags = { ...quickMainTags };
     if (!newTags[editingLayer]) {
       newTags[editingLayer] = [
-        ...(quickMainTags["ALL_LAYERS"] || ["食費", "交通", "日用品", "交際費", "趣味", "その他"]),
+        ...(quickMainTags["ALL_LAYERS"] || [
+          "食費",
+          "交通",
+          "日用品",
+          "交際費",
+          "趣味",
+          "その他",
+        ]),
       ];
     }
     newTags[editingLayer][editingTagIndex] = tempQuickTagText.trim();
@@ -301,466 +323,592 @@ export default function DailyExpense({
   };
 
   return (
-    <View style={styles.dailyContainer}>
-      <View style={[styles.dailyLeft, { width: "35%" }]}>
-        <View style={styles.iconTextRowSmall}>
-          <Ionicons name="receipt-outline" size={12} color={themeColor} />
-          <Text style={[styles.dailyLabel, { color: themeColor }]}>
-            {selectedDate.split("-")[2]}日 収支
-          </Text>
-        </View>
-
-        <Text style={[styles.dailyTotalText, { color: "#333" }]}>
-          -¥{mainStats.dailyExpense.toLocaleString()}
-        </Text>
-        {mainStats.dailyIncome > 0 && (
-          <Text
-            style={[styles.dailyTotalText, { color: "#8E8E93", fontSize: 16 }]}
-          >
-            +¥{mainStats.dailyIncome.toLocaleString()}
-          </Text>
-        )}
-
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
+    <>
+      {/* 🌟 1. 全体の上にアシストメッセージを配置 */}
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          marginBottom: 6,
+          paddingHorizontal: 4,
+        }}
+      >
+        <Text
+          style={{
+            fontSize: 10,
+            fontWeight: "800",
+            color: "#AEAEB2",
+            letterSpacing: 0.5,
+            width: "35%",
+          }}
         >
-          {(scheduleData[selectedDate] || [])
-            .filter(
-              (i) => getItemTotalExpense(i) > 0 || getItemTotalIncome(i) > 0,
-            )
-            .map((i) => {
-              const isIncome = i.isIncome;
-              const itemTag = i.tags?.[0] || i.tag || "";
-              const itemLayer = tagMaster[itemTag]?.layer || "共通";
+          出費まとめ
+        </Text>
+        <Text
+          style={{
+            fontSize: 10,
+            fontWeight: "800",
+            color: "#AEAEB2",
+            letterSpacing: 0.5,
+            flex: 1,
+            marginLeft: "3%",
+          }}
+        >
+          支出を登録 (左にスワイプで切替)
+        </Text>
+      </View>
 
-              if (
-                !isIncome &&
-                activeTags.length > 0 &&
-                !activeTags.includes(itemLayer)
+      <View style={styles.dailyContainer}>
+        <View style={[styles.dailyLeft, { width: "35%" }]}>
+          <View style={styles.iconTextRowSmall}>
+            <Ionicons name="receipt-outline" size={12} color={themeColor} />
+            <Text style={[styles.dailyLabel, { color: themeColor }]}>
+              {selectedDate.split("-")[2]}日 収支
+            </Text>
+          </View>
+
+          <Text style={[styles.dailyTotalText, { color: "#333" }]}>
+            -¥{mainStats.dailyExpense.toLocaleString()}
+          </Text>
+          {mainStats.dailyIncome > 0 && (
+            <Text
+              style={[
+                styles.dailyTotalText,
+                { color: "#8E8E93", fontSize: 16 },
+              ]}
+            >
+              +¥{mainStats.dailyIncome.toLocaleString()}
+            </Text>
+          )}
+
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {(scheduleData[selectedDate] || [])
+              .filter(
+                (i) => getItemTotalExpense(i) > 0 || getItemTotalIncome(i) > 0,
               )
-                return null;
+              .map((i) => {
+                const isIncome = i.isIncome;
+                const itemTag = i.tags?.[0] || i.tag || "";
+                const itemLayer = tagMaster[itemTag]?.layer || "共通";
 
-              return (
-                <TouchableOpacity
-                  key={i.id}
-                  style={styles.dailyItemRow}
-                  onPress={() => handleOpenEdit(i, selectedDate)}
-                >
-                  <View style={styles.dailyItemInfo}>
-                    <View
-                      style={[
-                        styles.dailyItemDot,
-                        { backgroundColor: isIncome ? "#8E8E93" : i.color },
-                      ]}
-                    />
-                    <View style={{ flex: 1 }}>
+                if (
+                  !isIncome &&
+                  activeTags.length > 0 &&
+                  !activeTags.includes(itemLayer)
+                )
+                  return null;
+
+                return (
+                  <TouchableOpacity
+                    key={i.id}
+                    style={styles.dailyItemRow}
+                    onPress={() => handleOpenEdit(i, selectedDate)}
+                  >
+                    <View style={styles.dailyItemInfo}>
+                      <View
+                        style={[
+                          styles.dailyItemDot,
+                          { backgroundColor: isIncome ? "#8E8E93" : i.color },
+                        ]}
+                      />
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={{
+                            fontWeight: "bold",
+                            fontSize: 11,
+                            color: isIncome ? "#8E8E93" : themeColor,
+                          }}
+                          numberOfLines={1}
+                        >
+                          {itemTag || i.category}
+                        </Text>
+                        <Text
+                          style={{ fontSize: 9, color: "#888" }}
+                          numberOfLines={1}
+                        >
+                          {i.title !== i.category && i.title}
+                        </Text>
+                      </View>
                       <Text
-                        style={{
-                          fontWeight: "bold",
-                          fontSize: 11,
-                          color: isIncome ? "#8E8E93" : themeColor,
-                        }}
-                        numberOfLines={1}
+                        style={[
+                          styles.dailyItemAmount,
+                          isIncome && { color: "#8E8E93" },
+                        ]}
                       >
-                        {itemTag || i.category}
-                      </Text>
-                      <Text
-                        style={{ fontSize: 9, color: "#888" }}
-                        numberOfLines={1}
-                      >
-                        {i.title !== i.category && i.title}
+                        {isIncome ? "+" : ""}¥{i.amount.toLocaleString()}
                       </Text>
                     </View>
-                    <Text
-                      style={[
-                        styles.dailyItemAmount,
-                        isIncome && { color: "#8E8E93" },
-                      ]}
-                    >
-                      {isIncome ? "+" : ""}¥{i.amount.toLocaleString()}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-        </ScrollView>
-      </View>
-
-      <View style={{ width: "3%" }} />
-
-      <View style={[styles.dailyRight, { flex: 1 }]}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          snapToInterval={exactCardWidth + 10}
-          decelerationRate="fast"
-          contentContainerStyle={{ paddingRight: 10 }}
-          keyboardShouldPersistTaps="handled"
-        >
-          {displayLayers.map((l) => {
-            const c =
-              l === "ALL_LAYERS" ? "#8E8E93" : layerMaster[l] || themeColor;
-            const isAll = l === "ALL_LAYERS";
-            const qTags = quickMainTags[l] || quickMainTags["ALL_LAYERS"] || [];
-            const sTags = isAll
-              ? Object.keys(tagMaster).filter(
-                (t) => tagMaster[t].layer === "共通",
-              )
-              : Object.keys(tagMaster).filter((t) => tagMaster[t].layer === l);
-
-            return (
-              <View
-                key={l}
-                style={[
-                  styles.inputCard,
-                  {
-                    width: exactCardWidth,
-                    backgroundColor: c + "15",
-                    borderColor: c + "30",
-                  },
-                ]}
-              >
-                <View style={styles.inputHeaderRow}>
-                  <Text style={[styles.inputCardTitle, { color: c }]}>
-                    {isAll ? "全体/共通" : l}
-                  </Text>
-                  {/* 🌟 修正1：共通タブでも手動入力に切り替えられるように変更 */}
-                  <TouchableOpacity onPress={toggleManualMode}>
-                    <Ionicons
-                      name={isManualInput ? "flash" : "create-outline"}
-                      size={16}
-                      color={c}
-                    />
                   </TouchableOpacity>
-                </View>
+                );
+              })}
+          </ScrollView>
+        </View>
+
+        <View style={{ width: "3%" }} />
+
+        <View style={[styles.dailyRight, { flex: 1 }]}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            snapToInterval={exactCardWidth + 10}
+            decelerationRate="fast"
+            contentContainerStyle={{ paddingRight: 10 }}
+            keyboardShouldPersistTaps="handled"
+          >
+            {displayLayers.map((l) => {
+              const c =
+                l === "ALL_LAYERS" ? "#8E8E93" : layerMaster[l] || themeColor;
+              const isAll = l === "ALL_LAYERS";
+              const qTags =
+                quickMainTags[l] || quickMainTags["ALL_LAYERS"] || [];
+              const sTags = isAll
+                ? Object.keys(tagMaster).filter(
+                    (t) => tagMaster[t].layer === "共通",
+                  )
+                : Object.keys(tagMaster).filter(
+                    (t) => tagMaster[t].layer === l,
+                  );
+
+              return (
                 <View
+                  key={l}
                   style={[
-                    styles.modernInputWrapper,
-                    { borderColor: c + "30", backgroundColor: "#FFF" },
+                    styles.inputCard,
+                    {
+                      width: exactCardWidth,
+                      backgroundColor: c + "15",
+                      borderColor: c + "30",
+                    },
                   ]}
                 >
-                  <Text style={[styles.modernCurrency, { color: c }]}>¥</Text>
-                  <TextInput
-                    style={[styles.modernQuickInput, { color: c }]}
-                    placeholder="0"
-                    placeholderTextColor={c + "40"}
-                    keyboardType="numeric"
-                    value={inputAmount}
-                    onChangeText={setInputAmount}
-                  />
-                </View>
-                <View style={{ flex: 1, justifyContent: "space-between" }}>
-                  <View>
-                    {/* 🌟 修正2：チップ表示の条件を「手動モードの時だけ」に変更 */}
-                    {isManualInput ? (
-                      <View style={{ gap: 4, marginTop: 4 }}>
-                        <TextInput
-                          style={[
-                            styles.smallManualInput,
-                            { color: c, borderColor: c + "30", borderWidth: 1 },
-                          ]}
-                          placeholder={
-                            isAll
-                              ? "属性(空欄でカテゴリ)"
-                              : "属性(空欄でレイヤー名)"
-                          }
-                          placeholderTextColor={c + "60"}
-                          value={manualTag}
-                          onChangeText={setManualTag}
-                        />
-                        <TextInput
-                          style={[
-                            styles.smallManualInput,
-                            { color: c, borderColor: c + "30", borderWidth: 1 },
-                          ]}
-                          placeholder="詳細メモ (任意)"
-                          placeholderTextColor={c + "60"}
-                          value={manualTitle}
-                          onChangeText={setManualTitle}
-                        />
-                      </View>
-                    ) : (
-                      <>
-                        <View style={styles.layerQuickChipsGrid}>
-                          {qTags.map((tag, idx) => (
-                            <TouchableOpacity
-                              key={tag}
-                              style={[
-                                styles.layerQuickChip3Col,
-                                {
-                                  backgroundColor:
-                                    selectedMainTag === tag ? c : "#FFF",
-                                  borderColor:
-                                    selectedMainTag === tag ? c : c + "30",
-                                },
-                              ]}
-                              onPress={() => setSelectedMainTag(tag)}
-                              onLongPress={() =>
-                                handleLongPressQuickTag(idx, tag, l)
-                              }
-                            >
-                              <Text
+                  <View style={styles.inputHeaderRow}>
+                    <Text style={[styles.inputCardTitle, { color: c }]}>
+                      {isAll ? "全体/共通" : l}
+                    </Text>
+                    {/* 🌟 修正1：共通タブでも手動入力に切り替えられるように変更 */}
+                    <TouchableOpacity onPress={toggleManualMode}>
+                      <Ionicons
+                        name={isManualInput ? "flash" : "create-outline"}
+                        size={16}
+                        color={c}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                  <View
+                    style={[
+                      styles.modernInputWrapper,
+                      { borderColor: c + "30", backgroundColor: "#FFF" },
+                    ]}
+                  >
+                    <Text style={[styles.modernCurrency, { color: c }]}>¥</Text>
+                    <TextInput
+                      style={[styles.modernQuickInput, { color: c }]}
+                      placeholder="0"
+                      placeholderTextColor={c + "40"}
+                      keyboardType="numeric"
+                      value={inputAmount}
+                      onChangeText={setInputAmount}
+                    />
+                  </View>
+                  <View style={{ flex: 1, justifyContent: "space-between" }}>
+                    <View>
+                      {/* 🌟 修正2：チップ表示の条件を「手動モードの時だけ」に変更 */}
+                      {isManualInput ? (
+                        <View style={{ gap: 4, marginTop: 4 }}>
+                          <TextInput
+                            style={[
+                              styles.smallManualInput,
+                              {
+                                color: c,
+                                borderColor: c + "30",
+                                borderWidth: 1,
+                              },
+                            ]}
+                            placeholder={
+                              isAll
+                                ? "属性(空欄でカテゴリ)"
+                                : "属性(空欄でレイヤー名)"
+                            }
+                            placeholderTextColor={c + "60"}
+                            value={manualTag}
+                            onChangeText={setManualTag}
+                          />
+                          <TextInput
+                            style={[
+                              styles.smallManualInput,
+                              {
+                                color: c,
+                                borderColor: c + "30",
+                                borderWidth: 1,
+                              },
+                            ]}
+                            placeholder="詳細メモ (任意)"
+                            placeholderTextColor={c + "60"}
+                            value={manualTitle}
+                            onChangeText={setManualTitle}
+                          />
+                        </View>
+                      ) : (
+                        <>
+                          <View style={styles.layerQuickChipsGrid}>
+                            {qTags.map((tag, idx) => (
+                              <TouchableOpacity
+                                key={tag}
                                 style={[
-                                  styles.layerQuickChipText,
+                                  styles.layerQuickChip3Col,
                                   {
-                                    color: selectedMainTag === tag ? "#FFF" : c,
+                                    backgroundColor:
+                                      selectedMainTag === tag ? c : "#FFF",
+                                    borderColor:
+                                      selectedMainTag === tag ? c : c + "30",
                                   },
                                 ]}
-                                numberOfLines={1}
+                                onPress={() => setSelectedMainTag(tag)}
+                                onLongPress={() =>
+                                  handleLongPressQuickTag(idx, tag, l)
+                                }
                               >
-                                {tag}
-                              </Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                        <View
-                          style={[
-                            styles.subTagSection,
-                            { borderTopColor: c + "30" },
-                          ]}
-                        >
-                          <ScrollView
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                            style={styles.subTagScroll}
-                            keyboardShouldPersistTaps="handled"
-                          >
-                            <TouchableOpacity
-                              style={[
-                                styles.subChip,
-                                {
-                                  backgroundColor: "transparent",
-                                  borderColor: c,
-                                  borderStyle: "dashed",
-                                  borderWidth: 1.5,
-                                },
-                              ]}
-                              onPress={() => {
-                                setTargetLayerForSubTag(isAll ? "共通" : l);
-                                setAddSubTagModalVisible(true);
-                              }}
-                            >
-                              <Text style={[styles.subChipText, { color: c }]}>
-                                + 新規追加
-                              </Text>
-                            </TouchableOpacity>
-
-                            {sTags.map((sub) => (
-                              <TouchableOpacity
-                                key={sub}
-                                style={[styles.subChip, { backgroundColor: selectedSubTag === sub ? c : "#FFF", borderColor: selectedSubTag === sub ? c : c + "30" }]}
-                                onPress={() => setSelectedSubTag(sub)}
-                                onLongPress={() => handleLongPressSubTag(sub, tagMaster[sub].color)} 
-                              >
-                                <Text style={[styles.subChipText, { color: selectedSubTag === sub ? "#FFF" : c }]}>{sub}</Text>
+                                <Text
+                                  style={[
+                                    styles.layerQuickChipText,
+                                    {
+                                      color:
+                                        selectedMainTag === tag ? "#FFF" : c,
+                                    },
+                                  ]}
+                                  numberOfLines={1}
+                                >
+                                  {tag}
+                                </Text>
                               </TouchableOpacity>
                             ))}
-                          </ScrollView>
-                        </View>
-                      </>
-                    )}
+                          </View>
+                          <View
+                            style={[
+                              styles.subTagSection,
+                              { borderTopColor: c + "30" },
+                            ]}
+                          >
+                            <ScrollView
+                              horizontal
+                              showsHorizontalScrollIndicator={false}
+                              style={styles.subTagScroll}
+                              keyboardShouldPersistTaps="handled"
+                            >
+                              <TouchableOpacity
+                                style={[
+                                  styles.subChip,
+                                  {
+                                    backgroundColor: "transparent",
+                                    borderColor: c,
+                                    borderStyle: "dashed",
+                                    borderWidth: 1.5,
+                                  },
+                                ]}
+                                onPress={() => {
+                                  setTargetLayerForSubTag(isAll ? "共通" : l);
+                                  setAddSubTagModalVisible(true);
+                                }}
+                              >
+                                <Text
+                                  style={[styles.subChipText, { color: c }]}
+                                >
+                                  + 新規追加
+                                </Text>
+                              </TouchableOpacity>
+
+                              {sTags.map((sub) => (
+                                <TouchableOpacity
+                                  key={sub}
+                                  style={[
+                                    styles.subChip,
+                                    {
+                                      backgroundColor:
+                                        selectedSubTag === sub ? c : "#FFF",
+                                      borderColor:
+                                        selectedSubTag === sub ? c : c + "30",
+                                    },
+                                  ]}
+                                  onPress={() => setSelectedSubTag(sub)}
+                                  onLongPress={() =>
+                                    handleLongPressSubTag(
+                                      sub,
+                                      tagMaster[sub].color,
+                                    )
+                                  }
+                                >
+                                  <Text
+                                    style={[
+                                      styles.subChipText,
+                                      {
+                                        color:
+                                          selectedSubTag === sub ? "#FFF" : c,
+                                      },
+                                    ]}
+                                  >
+                                    {sub}
+                                  </Text>
+                                </TouchableOpacity>
+                              ))}
+                            </ScrollView>
+                          </View>
+                        </>
+                      )}
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.addExecuteBtn, { backgroundColor: c }]}
+                      onPress={() => handleAddExpense(l, c)}
+                    >
+                      <Ionicons name="checkmark-done" size={20} color="#FFF" />
+                    </TouchableOpacity>
                   </View>
-                  <TouchableOpacity
-                    style={[styles.addExecuteBtn, { backgroundColor: c }]}
-                    onPress={() => handleAddExpense(l, c)}
-                  >
-                    <Ionicons name="checkmark-done" size={20} color="#FFF" />
-                  </TouchableOpacity>
                 </View>
-              </View>
-            );
-          })}
-        </ScrollView>
-      </View>
+              );
+            })}
+          </ScrollView>
+        </View>
 
-      <Modal visible={editModalVisible} transparent animationType="fade">
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setEditModalVisible(false)}
-        >
-          <View style={styles.editCardModal}>
-            <Text style={styles.editTitle}>データの編集</Text>
-            <Text style={styles.settingLabel}>詳細メモ</Text>
-            <TextInput
-              style={styles.editInputText}
-              value={editTitle}
-              onChangeText={setEditTitle}
-            />
-            <Text style={styles.settingLabel}>金額</Text>
-            <TextInput
-              style={styles.editInputAmount}
-              keyboardType="numeric"
-              value={editAmount}
-              onChangeText={setEditAmount}
-            />
-            <View style={styles.editActionRow}>
-              <TouchableOpacity
-                onPress={() => {
-                  if (!editingItem) return;
-                  const newData = { ...scheduleData };
-                  newData[editingItem.date] = newData[editingItem.date].filter(
-                    (i) => i.id !== editingItem.item.id,
-                  );
-                  setScheduleData(newData);
-                  setEditModalVisible(false);
-                }}
-              >
-                <Text style={{ color: "#FF3B30", fontWeight: "bold" }}>
-                  削除
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.saveBtn, { backgroundColor: themeColor }]}
-                onPress={handleUpdate}
-              >
-                <Text style={styles.saveText}>保存</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-      <Modal visible={editQuickTagModal} transparent animationType="fade">
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setEditQuickTagModal(false)}
-        >
-          <View style={styles.editCardModal}>
-            <Text style={styles.editTitle}>{editingLayer}の項目を編集</Text>
-            <TextInput
-              style={styles.editInputText}
-              value={tempQuickTagText}
-              onChangeText={setTempQuickTagText}
-              autoFocus
-            />
-            <View
-              style={[
-                styles.editActionRow,
-                { justifyContent: "center", marginTop: 10 },
-              ]}
-            >
-              <TouchableOpacity
-                style={[
-                  styles.saveBtn,
-                  {
-                    backgroundColor: themeColor,
-                    width: "100%",
-                    alignItems: "center",
-                  },
-                ]}
-                onPress={saveQuickTag}
-              >
-                <Text style={styles.saveText}>保存する</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-      <Modal visible={addSubTagModalVisible} transparent animationType="fade">
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setAddSubTagModalVisible(false)}
-        >
-          <View style={styles.editCardModal}>
-            <Text style={styles.editTitle}>
-              [{targetLayerForSubTag}] に追加
-            </Text>
-            <Text style={styles.settingLabel}>サブカテゴリ名</Text>
-            <TextInput
-              style={styles.editInputAmount}
-              value={newSubTagName}
-              onChangeText={setNewSubTagName}
-              autoFocus
-            />
-
-            <Text style={styles.settingLabel}>カラーを選択（任意）</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={{ marginBottom: 20 }}
-            >
-              {PRESET_COLORS.map((color) => (
+        <Modal visible={editModalVisible} transparent animationType="fade">
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setEditModalVisible(false)}
+          >
+            <View style={styles.editCardModal}>
+              <Text style={styles.editTitle}>データの編集</Text>
+              <Text style={styles.settingLabel}>詳細メモ</Text>
+              <TextInput
+                style={styles.editInputText}
+                value={editTitle}
+                onChangeText={setEditTitle}
+              />
+              <Text style={styles.settingLabel}>金額</Text>
+              <TextInput
+                style={styles.editInputAmount}
+                keyboardType="numeric"
+                value={editAmount}
+                onChangeText={setEditAmount}
+              />
+              <View style={styles.editActionRow}>
                 <TouchableOpacity
-                  key={color}
+                  onPress={() => {
+                    if (!editingItem) return;
+                    const newData = { ...scheduleData };
+                    newData[editingItem.date] = newData[
+                      editingItem.date
+                    ].filter((i) => i.id !== editingItem.item.id);
+                    setScheduleData(newData);
+                    setEditModalVisible(false);
+                  }}
+                >
+                  <Text style={{ color: "#FF3B30", fontWeight: "bold" }}>
+                    削除
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.saveBtn, { backgroundColor: themeColor }]}
+                  onPress={handleUpdate}
+                >
+                  <Text style={styles.saveText}>保存</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
+        <Modal visible={editQuickTagModal} transparent animationType="fade">
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setEditQuickTagModal(false)}
+          >
+            <View style={styles.editCardModal}>
+              <Text style={styles.editTitle}>{editingLayer}の項目を編集</Text>
+              <TextInput
+                style={styles.editInputText}
+                value={tempQuickTagText}
+                onChangeText={setTempQuickTagText}
+                autoFocus
+              />
+              <View
+                style={[
+                  styles.editActionRow,
+                  { justifyContent: "center", marginTop: 10 },
+                ]}
+              >
+                <TouchableOpacity
                   style={[
+                    styles.saveBtn,
                     {
-                      width: 30,
-                      height: 30,
-                      borderRadius: 15,
-                      backgroundColor: color,
-                      marginRight: 10,
-                    },
-                    newSubTagColor === color && {
-                      borderWidth: 3,
-                      borderColor: "#1C1C1E",
+                      backgroundColor: themeColor,
+                      width: "100%",
+                      alignItems: "center",
                     },
                   ]}
-                  onPress={() => setNewSubTagColor(color)}
-                />
-              ))}
-            </ScrollView>
+                  onPress={saveQuickTag}
+                >
+                  <Text style={styles.saveText}>保存する</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </Modal>
 
-            <View
-              style={[
-                styles.editActionRow,
-                { justifyContent: "space-between" },
-              ]}
-            >
-              <TouchableOpacity
-                onPress={() => setAddSubTagModalVisible(false)}
-                style={{ padding: 10 }}
+        <Modal visible={addSubTagModalVisible} transparent animationType="fade">
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setAddSubTagModalVisible(false)}
+          >
+            <View style={styles.editCardModal}>
+              <Text style={styles.editTitle}>
+                [{targetLayerForSubTag}] に追加
+              </Text>
+              <Text style={styles.settingLabel}>サブカテゴリ名</Text>
+              <TextInput
+                style={styles.editInputAmount}
+                value={newSubTagName}
+                onChangeText={setNewSubTagName}
+                autoFocus
+              />
+
+              <Text style={styles.settingLabel}>カラーを選択（任意）</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ marginBottom: 20 }}
               >
-                <Text style={{ color: "#8E8E93", fontWeight: "bold" }}>
-                  キャンセル
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+                {PRESET_COLORS.map((color) => (
+                  <TouchableOpacity
+                    key={color}
+                    style={[
+                      {
+                        width: 30,
+                        height: 30,
+                        borderRadius: 15,
+                        backgroundColor: color,
+                        marginRight: 10,
+                      },
+                      newSubTagColor === color && {
+                        borderWidth: 3,
+                        borderColor: "#1C1C1E",
+                      },
+                    ]}
+                    onPress={() => setNewSubTagColor(color)}
+                  />
+                ))}
+              </ScrollView>
+
+              <View
                 style={[
-                  styles.saveBtn,
-                  {
-                    backgroundColor:
-                      layerMaster[targetLayerForSubTag] || themeColor,
-                  },
+                  styles.editActionRow,
+                  { justifyContent: "space-between" },
                 ]}
-                onPress={executeAddSubTag}
               >
-                <Text style={styles.saveText}>追加</Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setAddSubTagModalVisible(false)}
+                  style={{ padding: 10 }}
+                >
+                  <Text style={{ color: "#8E8E93", fontWeight: "bold" }}>
+                    キャンセル
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.saveBtn,
+                    {
+                      backgroundColor:
+                        layerMaster[targetLayerForSubTag] || themeColor,
+                    },
+                  ]}
+                  onPress={executeAddSubTag}
+                >
+                  <Text style={styles.saveText}>追加</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+          </TouchableOpacity>
+        </Modal>
 
-      <Modal visible={editSubTagModalVisible} transparent animationType="fade">
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setEditSubTagModalVisible(false)}>
-          <View style={styles.editCardModal}>
-            <Text style={styles.editTitle}>属性の編集</Text>
-            
-            <Text style={styles.settingLabel}>属性名</Text>
-            <TextInput style={styles.editInputAmount} value={editingSubTagName} onChangeText={setEditingSubTagName} />
-            
-            <Text style={styles.settingLabel}>カラーを変更</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
-              {PRESET_COLORS.map((color) => (
-                <TouchableOpacity key={color} style={[{ width: 30, height: 30, borderRadius: 15, backgroundColor: color, marginRight: 10 }, editingSubTagColor === color && { borderWidth: 3, borderColor: "#1C1C1E" }]} onPress={() => setEditingSubTagColor(color)} />
-              ))}
-            </ScrollView>
-            
-            <View style={[styles.editActionRow, { justifyContent: "space-between" }]}>
-              <TouchableOpacity onPress={deleteSubTag} style={{ padding: 10 }}><Text style={{ color: "#FF3B30", fontWeight: "bold" }}>削除</Text></TouchableOpacity>
-              <TouchableOpacity style={[styles.saveBtn, { backgroundColor: editingSubTagColor || themeColor }]} onPress={saveEditedSubTag}><Text style={styles.saveText}>保存</Text></TouchableOpacity>
+        <Modal
+          visible={editSubTagModalVisible}
+          transparent
+          animationType="fade"
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setEditSubTagModalVisible(false)}
+          >
+            <View style={styles.editCardModal}>
+              <Text style={styles.editTitle}>属性の編集</Text>
+
+              <Text style={styles.settingLabel}>属性名</Text>
+              <TextInput
+                style={styles.editInputAmount}
+                value={editingSubTagName}
+                onChangeText={setEditingSubTagName}
+              />
+
+              <Text style={styles.settingLabel}>カラーを変更</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ marginBottom: 20 }}
+              >
+                {PRESET_COLORS.map((color) => (
+                  <TouchableOpacity
+                    key={color}
+                    style={[
+                      {
+                        width: 30,
+                        height: 30,
+                        borderRadius: 15,
+                        backgroundColor: color,
+                        marginRight: 10,
+                      },
+                      editingSubTagColor === color && {
+                        borderWidth: 3,
+                        borderColor: "#1C1C1E",
+                      },
+                    ]}
+                    onPress={() => setEditingSubTagColor(color)}
+                  />
+                ))}
+              </ScrollView>
+
+              <View
+                style={[
+                  styles.editActionRow,
+                  { justifyContent: "space-between" },
+                ]}
+              >
+                <TouchableOpacity
+                  onPress={deleteSubTag}
+                  style={{ padding: 10 }}
+                >
+                  <Text style={{ color: "#FF3B30", fontWeight: "bold" }}>
+                    削除
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.saveBtn,
+                    { backgroundColor: editingSubTagColor || themeColor },
+                  ]}
+                  onPress={saveEditedSubTag}
+                >
+                  <Text style={styles.saveText}>保存</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-
-    </View>
+          </TouchableOpacity>
+        </Modal>
+      </View>
+    </>
   );
 }
 
