@@ -909,13 +909,21 @@ export default function Index() {
       return combinedMap[date];
     };
 
-    // 1. ローカルデータをベースにする
+    // 1. アプリ側の予定が既に持っている外部カレンダーのIDを収集（重複防止）
+    const ownedExternalIds = new Set<string>();
+    Object.values(scheduleData).forEach((dayItems) => {
+      dayItems.forEach((item) => {
+        if (item.externalEventId) ownedExternalIds.add(item.externalEventId);
+      });
+    });
+
+    // 2. ローカルデータをベースにする
     Object.keys(scheduleData).forEach((date) => {
       const map = getMapForDate(date);
       scheduleData[date].forEach((item) => map.set(item.id, item));
     });
 
-    // 2. 共有データを上書きマージ（同IDなら上書きされて重複が消える）
+    // 3. 共有データを上書きマージ（同IDなら上書きされて重複が消える）
     Object.values(roomSchedules).forEach((roomData) => {
       Object.keys(roomData).forEach((date) => {
         const map = getMapForDate(date);
@@ -923,20 +931,51 @@ export default function Index() {
       });
     });
 
-    // 3. 外部カレンダーをマージ
+    // 4. 外部カレンダーをマージ（アプリで作成済みのものは重複スキップ）
     Object.keys(externalEvents).forEach((date) => {
       const map = getMapForDate(date);
-      externalEvents[date].forEach((item) => map.set(item.id, item));
+      externalEvents[date].forEach((item) => {
+        const rawId = item.id.replace("ext_", "");
+        // 🌟 自分の所有している外部IDリストにあれば重複なのでスキップ
+        if (!ownedExternalIds.has(rawId)) {
+          map.set(item.id, item);
+        }
+      });
     });
 
-    // 最後に Map から Array に変換して返す
+    // 5. 最後に Map から Array に変換してフィルタリング
     const result: { [date: string]: ScheduleItem[] } = {};
     Object.keys(combinedMap).forEach((date) => {
-      result[date] = Array.from(combinedMap[date].values());
+      const items = Array.from(combinedMap[date].values());
+      result[date] = items.filter((item) => {
+        // activeTags（選択中のレイヤー）が空ならすべて表示
+        if (activeTags.length === 0) return true;
+
+        // レイヤー名を判定
+        let itemLayer = "共通";
+        if (item.category === "外部カレンダー") {
+          // 🌟 純正カレンダーから読み込んだ「純粋な外部予定」のみ「外部予定」レイヤーにする
+          itemLayer = "外部予定";
+        } else {
+          // 🌟 アプリ内・共有の予定は、外部に同期済みであっても、本来のレイヤー（元の色）を維持！
+          const itemTags =
+            item.tags && item.tags.length > 0
+              ? item.tags
+              : item.tag
+                ? [item.tag]
+                : [];
+          if (itemTags.length > 0) {
+            itemLayer = tagMaster[itemTags[0]]?.layer || "共通";
+          }
+        }
+
+        // 選択されたレイヤーリストに含まれる場合のみ表示
+        return activeTags.includes(itemLayer);
+      });
     });
 
     return result;
-  }, [scheduleData, roomSchedules, externalEvents]);
+  }, [scheduleData, roomSchedules, externalEvents, activeTags, tagMaster]);
 
   const { expandedScheduleData, currentMarkedDates } = useCalendarData(
     displayData,
