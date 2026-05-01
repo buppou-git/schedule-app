@@ -31,13 +31,22 @@ const COLOR_PALETTE = [
   "#1C1C1E",
 ];
 
+// 🌟 Propsの型定義を追加
+interface LayerManagementModalProps {
+  visible: boolean;
+  onClose: () => void;
+  layerMaster: { [key: string]: string };
+  setLayerMaster: (data: { [key: string]: string }) => void;
+  setHasUnsavedChanges: (val: boolean) => void;
+}
+
 export default function LayerManagementModal({
   visible,
   onClose,
   layerMaster,
   setLayerMaster,
   setHasUnsavedChanges,
-}: any) {
+}: LayerManagementModalProps) {
   const [newLayerName, setNewLayerName] = useState("");
   const [selectedColor, setSelectedColor] = useState("#007AFF");
 

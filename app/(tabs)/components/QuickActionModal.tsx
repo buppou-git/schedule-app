@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
+import { ScheduleItem } from "../../../types";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -17,14 +18,14 @@ import {
 interface QuickActionModalProps {
   visible: boolean;
   onClose: () => void;
-  item: any;
+  item: ScheduleItem;
   themeColor: string;
-  onDelete: (item: any) => void;
-  onEditDetail: (item: any) => void;
-  onQuickSave: (item: any, newTitle: string) => void;
+  onDelete: (item: ScheduleItem) => void;
+  onEditDetail: (item: ScheduleItem) => void;
+  onQuickSave: (item: ScheduleItem, newTitle: string) => void;
   layerMaster: { [key: string]: string };
-  sharedRooms: { [layerName: string]: string }; // 🌟 定義
-  onMoveOrCopy: (item: any, targetLayer: string, isCopy: boolean) => void;
+  sharedRooms: { [layerName: string]: string };
+  onMoveOrCopy: (item: ScheduleItem, targetLayer: string, isCopy: boolean) => void;
 }
 
 export default function QuickActionModal({

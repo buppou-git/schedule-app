@@ -80,7 +80,7 @@ const TodoItem = memo(function TodoItem({
         delayLongPress={300} // 0.3秒で発火
       >
         <View style={styles.stripeContainer}>
-          {uniqueColors.map((color: any, idx: number) => (
+          {uniqueColors.map((color: string, idx: number) => (
             <View
               key={idx}
               style={[styles.todoAccent, { backgroundColor: color }]}

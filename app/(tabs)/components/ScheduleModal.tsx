@@ -37,11 +37,15 @@ interface ScheduleModalProps {
   selectedDate: string;
   selectedItem: ScheduleItem | null;
   activeMode: string;
-  scheduleData: any;
-  setScheduleData: (data: any) => void;
+  scheduleData: { [date: string]: ScheduleItem[] };
+  setScheduleData: (data: { [date: string]: ScheduleItem[] }) => void;
   layerMaster?: { [key: string]: string };
   tagMaster?: { [key: string]: { layer: string; color: string } };
-  setTagMaster: (data: any) => void;
+  setTagMaster?: (data: {
+    [key: string]: { layer: string; color: string };
+  }) => void;
+  onForceRender?: () => void;
+  isExternalSyncEnabled?: boolean;
   setHasUnsavedChanges: (val: boolean) => void;
 }
 
@@ -82,7 +86,7 @@ const ModernDatePicker = ({
       >
         {icon && (
           <Ionicons
-            name={icon as any}
+            name={icon as React.ComponentProps<typeof Ionicons>["name"]}
             size={16}
             color={themeColor}
             style={{ marginRight: 6 }}
@@ -278,7 +282,7 @@ export default function ScheduleModal({
     } else {
       newTagMaster[trimmed].color = editingSubTagColor;
     }
-    setTagMaster(newTagMaster);
+    setTagMaster?.(newTagMaster);
     await AsyncStorage.setItem("tagMasterData", JSON.stringify(newTagMaster));
     setEditSubTagModalVisible(false);
   };
@@ -295,7 +299,7 @@ export default function ScheduleModal({
           onPress: async () => {
             const newTagMaster = { ...tagMaster };
             delete newTagMaster[editingSubTagOriginalName];
-            setTagMaster(newTagMaster);
+            setTagMaster?.(newTagMaster);
             await AsyncStorage.setItem(
               "tagMasterData",
               JSON.stringify(newTagMaster),
@@ -408,7 +412,7 @@ export default function ScheduleModal({
           amount: parseInt(selectedItem.amount?.toString() || "0"),
           isTodo: selectedItem.isTodo ?? false,
           subTasksData: savedSubTasks
-            .map((t: any) => `${t.title}_${t.isDone}`)
+            .map((t: SubTask) => `${t.title}_${t.isDone}`)
             .join(","),
         });
         setInitialSnapshot(snapshot);
@@ -562,7 +566,7 @@ export default function ScheduleModal({
           ...tagMaster,
           [tagInput.trim()]: { layer: selectedLayer, color: finalColor },
         };
-        setTagMaster(m);
+        setTagMaster?.(m);
         AsyncStorage.setItem("tagMasterData", JSON.stringify(m));
       }
     }
@@ -708,7 +712,7 @@ export default function ScheduleModal({
       if (selectedItem) {
         if (mode === "single") {
           Object.keys(newData).forEach((d) => {
-            newData[d] = newData[d].map((i: any) => {
+            newData[d] = newData[d].map((i: ScheduleItem) => {
               if (i.id === selectedItem.id) {
                 return {
                   ...i,
@@ -730,7 +734,7 @@ export default function ScheduleModal({
         } else {
           Object.keys(newData).forEach((d) => {
             newData[d] = newData[d].filter(
-              (i: any) => i.id !== selectedItem.id,
+              (i: ScheduleItem) => i.id !== selectedItem.id,
             );
           });
           if (!newData[sStr]) newData[sStr] = [];
@@ -792,7 +796,7 @@ export default function ScheduleModal({
 
     if (mode === "single") {
       Object.keys(newData).forEach((d) => {
-        newData[d] = newData[d].map((i: any) => {
+        newData[d] = newData[d].map((i: ScheduleItem) => {
           if (i.id === selectedItem.id) {
             return {
               ...i,
@@ -824,7 +828,9 @@ export default function ScheduleModal({
         }
       } else {
         Object.keys(newData).forEach((d) => {
-          newData[d] = newData[d].filter((i: any) => i.id !== selectedItem.id);
+          newData[d] = newData[d].filter(
+            (i: ScheduleItem) => i.id !== selectedItem.id,
+          );
         });
       }
     }
@@ -918,7 +924,16 @@ export default function ScheduleModal({
                 styles.layerChip,
                 repeatType === opt.value && { backgroundColor: uiThemeColor },
               ]}
-              onPress={() => setRepeatType(opt.value as any)}
+              onPress={() =>
+                setRepeatType(
+                  opt.value as
+                    | "none"
+                    | "daily"
+                    | "weekly"
+                    | "monthly"
+                    | "custom",
+                )
+              }
             >
               <Text
                 style={[

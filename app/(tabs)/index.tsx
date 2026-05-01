@@ -75,7 +75,9 @@ import TabBar from "./components/TabBar";
 
 import { useExternalCalendar } from "../../hooks/useExternalCalendar";
 
-function useStableCallback<T extends (...args: any[]) => any>(callback: T) {
+function useStableCallback<T extends (...args: never[]) => unknown>(
+  callback: T,
+) {
   const ref = useRef(callback);
   // 🌟 useEffect を useLayoutEffect に変更！
   useLayoutEffect(() => {
@@ -690,9 +692,11 @@ export default function Index() {
                 setTimeout(() => {
                   setOnboardingVisible(true);
                 }, 500); // モーダルが重ならないように0.5秒だけ遅らせて開く
-              } catch (error: any) {
+              } catch (error) {
+                const err = error as { code?: string }; // 🌟 エラーの型を安全に定義
                 console.error("Account Deletion Error:", error);
-                if (error.code === "auth/requires-recent-login") {
+                if (err.code === "auth/requires-recent-login") {
+                  // 🌟 error を err に変更
                   Alert.alert(
                     "エラー",
                     "セキュリティのため、一度アプリを完全に終了して再起動してから、再度削除をお試しください。",
@@ -712,8 +716,10 @@ export default function Index() {
   };
 
   useEffect(() => {
-    signInAnonymously(auth).catch((err: any) =>
-      console.error("Auth Error:", err),
+    signInAnonymously(auth).catch(
+      (
+        err, // 🌟 : any を削除
+      ) => console.error("Auth Error:", err),
     );
 
     const subscription = AppState.addEventListener(
@@ -1177,7 +1183,7 @@ export default function Index() {
     setSubTaskModalVisible(false);
   };
 
-  const handleSubTaskDelete = async (subTaskId: number) => {
+  const handleSubTaskDelete = async (subTaskId: string | number) => {
     if (!editingSubTaskInfo) return;
     const { parentId, date } = editingSubTaskInfo;
     const newData = { ...scheduleData };
@@ -1681,9 +1687,7 @@ export default function Index() {
           </TouchableOpacity>
         </View>
       </View>
-
       <TabBar themeColor={currentSolidColor} />
-
       <View style={styles.mainContent}>
         <View style={styles.calendarArea}>
           {activeMode === "calendar" ? (
@@ -2083,7 +2087,6 @@ export default function Index() {
           </ScrollView>
         </View>
       </View>
-
       <Modal
         visible={filterModalVisible}
         transparent={true}
@@ -2344,7 +2347,6 @@ export default function Index() {
           </TouchableWithoutFeedback>
         </TouchableOpacity>
       </Modal>
-
       <PresetSaveModal
         visible={presetModalVisible}
         presetName={tempPresetName}
@@ -2355,7 +2357,6 @@ export default function Index() {
         }}
         onSave={confirmSavePreset}
       />
-
       <Modal
         visible={editPresetModalVisible}
         transparent={true}
@@ -2418,7 +2419,6 @@ export default function Index() {
           </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       </Modal>
-
       <ScheduleModal
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
@@ -2439,9 +2439,7 @@ export default function Index() {
         setLayerMaster={setLayerMaster}
         setHasUnsavedChanges={setHasUnsavedChanges}
       />
-
       <StatusBar style="auto" />
-
       <ConfigModal
         visible={configModalVisible}
         onClose={() => {
@@ -2465,7 +2463,6 @@ export default function Index() {
         onDelete={handleSubTaskDelete}
         themeColor={currentSolidColor}
       />
-
       <SearchModal
         visible={searchModalVisible}
         onClose={() => setSearchModalVisible(false)}
@@ -2479,25 +2476,26 @@ export default function Index() {
           setModalVisible(true);
         }}
       />
-
       {/* 🌟 修正：Propsを追加 */}
-      <QuickActionModal
-        visible={quickActionVisible}
-        onClose={() => setQuickActionVisible(false)}
-        item={quickActionItem}
-        themeColor={currentSolidColor}
-        onDelete={handleQuickDelete}
-        onEditDetail={(item) => {
-          setSelectedItem(item);
-          setModalVisible(true);
-        }}
-        onQuickSave={handleQuickSave}
-        sharedRooms={sharedRooms}
-        layerMaster={layerMaster}
-        onMoveOrCopy={handleMoveOrCopy}
-      />
+      {quickActionItem && ( // 🌟 この行を追加（データがある時だけ表示）
+        <QuickActionModal
+          visible={quickActionVisible}
+          onClose={() => setQuickActionVisible(false)}
+          item={quickActionItem} // 🌟 nullにならないことが保証されるのでエラーが消える！
+          themeColor={currentSolidColor}
+          onDelete={handleQuickDelete}
+          onEditDetail={(item) => {
+            setSelectedItem(item);
+            setModalVisible(true);
+          }}
+          onQuickSave={handleQuickSave}
+          sharedRooms={sharedRooms}
+          layerMaster={layerMaster}
+          onMoveOrCopy={handleMoveOrCopy}
+        />
+      )}{" "}
+      {/* 🌟 閉じカッコを追加 */}
       {/*広告用 */}
-
       <OnboardingModal
         visible={onboardingVisible}
         onComplete={handleCompleteOnboarding}

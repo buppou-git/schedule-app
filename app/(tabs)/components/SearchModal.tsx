@@ -1,16 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useMemo, useState } from "react";
 import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { ScheduleItem } from "../../../types";
 
@@ -20,7 +20,7 @@ interface SearchModalProps {
   scheduleData: { [date: string]: ScheduleItem[] };
   themeColor: string;
   layerMaster: { [key: string]: string };
-  tagMaster: any;
+  tagMaster: { [key: string]: { layer: string; color: string } };
   onItemPress: (item: ScheduleItem, date: string) => void;
 }
 
@@ -142,7 +142,10 @@ export default function SearchModal({
             <TouchableOpacity
               style={[
                 styles.filterToggleBtn,
-                selectedFilters.length > 0 && { backgroundColor: themeColor, borderColor: themeColor },
+                selectedFilters.length > 0 && {
+                  backgroundColor: themeColor,
+                  borderColor: themeColor,
+                },
               ]}
               onPress={() => setIsFilterSheetVisible(true)}
             >
@@ -176,25 +179,55 @@ export default function SearchModal({
                 }}
               >
                 <View style={styles.resultDateRow}>
-                  <Text style={styles.resultDateText}>{item.date.replace(/-/g, "/")}</Text>
+                  <Text style={styles.resultDateText}>
+                    {item.date.replace(/-/g, "/")}
+                  </Text>
                 </View>
                 {/* 🌟 変更：文字サイズを大きく */}
                 <Text style={styles.resultTitleText}>{item.title}</Text>
-                
+
                 {/* 🌟 追加：予定のカテゴリなどを小さく表示するとより見やすくなります */}
-                <View style={{ flexDirection: "row", marginTop: 6, alignItems: "center", gap: 6 }}>
-                  {item.isEvent && <Ionicons name="calendar" size={12} color="#007AFF" />}
-                  {item.isTodo && <Ionicons name="checkbox-outline" size={12} color="#FF9500" />}
-                  <Text style={{ fontSize: 11, color: item.color || "#8E8E93", fontWeight: "600" }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    marginTop: 6,
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  {item.isEvent && (
+                    <Ionicons name="calendar" size={12} color="#007AFF" />
+                  )}
+                  {item.isTodo && (
+                    <Ionicons
+                      name="checkbox-outline"
+                      size={12}
+                      color="#FF9500"
+                    />
+                  )}
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      color: item.color || "#8E8E93",
+                      fontWeight: "600",
+                    }}
+                  >
                     {item.tag || item.category || "予定"}
                   </Text>
                 </View>
               </TouchableOpacity>
             ))}
-            
+
             {/* 検索結果が空の時の表示 */}
             {searchQuery.trim() !== "" && searchResults.length === 0 && (
-              <Text style={{ textAlign: "center", color: "#8E8E93", marginTop: 40, fontWeight: "600" }}>
+              <Text
+                style={{
+                  textAlign: "center",
+                  color: "#8E8E93",
+                  marginTop: 40,
+                  fontWeight: "600",
+                }}
+              >
                 見つかりませんでした
               </Text>
             )}
@@ -212,7 +245,15 @@ export default function SearchModal({
               <View style={styles.sheetHeader}>
                 <Text style={styles.sheetTitle}>絞り込み</Text>
                 <TouchableOpacity onPress={() => setSelectedFilters([])}>
-                  <Text style={{ color: "#FF3B30", fontSize: 14, fontWeight: "600" }}>リセット</Text>
+                  <Text
+                    style={{
+                      color: "#FF3B30",
+                      fontSize: 14,
+                      fontWeight: "600",
+                    }}
+                  >
+                    リセット
+                  </Text>
                 </TouchableOpacity>
               </View>
 
@@ -221,34 +262,85 @@ export default function SearchModal({
                 <TouchableOpacity
                   style={[
                     styles.chip,
-                    selectedFilters.includes("event") && { backgroundColor: "#007AFF", borderColor: "#007AFF" },
+                    selectedFilters.includes("event") && {
+                      backgroundColor: "#007AFF",
+                      borderColor: "#007AFF",
+                    },
                   ]}
                   onPress={() => toggleFilter("event")}
                 >
-                  <Ionicons name="calendar-outline" size={16} color={selectedFilters.includes("event") ? "#FFF" : "#8E8E93"} style={{ marginRight: 4 }} />
-                  <Text style={[styles.chipText, selectedFilters.includes("event") && { color: "#FFF" }]}>予定</Text>
+                  <Ionicons
+                    name="calendar-outline"
+                    size={16}
+                    color={
+                      selectedFilters.includes("event") ? "#FFF" : "#8E8E93"
+                    }
+                    style={{ marginRight: 4 }}
+                  />
+                  <Text
+                    style={[
+                      styles.chipText,
+                      selectedFilters.includes("event") && { color: "#FFF" },
+                    ]}
+                  >
+                    予定
+                  </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={[
                     styles.chip,
-                    selectedFilters.includes("todo") && { backgroundColor: "#FF9500", borderColor: "#FF9500" },
+                    selectedFilters.includes("todo") && {
+                      backgroundColor: "#FF9500",
+                      borderColor: "#FF9500",
+                    },
                   ]}
                   onPress={() => toggleFilter("todo")}
                 >
-                  <Ionicons name="checkbox-outline" size={16} color={selectedFilters.includes("todo") ? "#FFF" : "#8E8E93"} style={{ marginRight: 4 }} />
-                  <Text style={[styles.chipText, selectedFilters.includes("todo") && { color: "#FFF" }]}>TODO</Text>
+                  <Ionicons
+                    name="checkbox-outline"
+                    size={16}
+                    color={
+                      selectedFilters.includes("todo") ? "#FFF" : "#8E8E93"
+                    }
+                    style={{ marginRight: 4 }}
+                  />
+                  <Text
+                    style={[
+                      styles.chipText,
+                      selectedFilters.includes("todo") && { color: "#FFF" },
+                    ]}
+                  >
+                    TODO
+                  </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={[
                     styles.chip,
-                    selectedFilters.includes("money") && { backgroundColor: "#34C759", borderColor: "#34C759" },
+                    selectedFilters.includes("money") && {
+                      backgroundColor: "#34C759",
+                      borderColor: "#34C759",
+                    },
                   ]}
                   onPress={() => toggleFilter("money")}
                 >
-                  <Ionicons name="wallet-outline" size={16} color={selectedFilters.includes("money") ? "#FFF" : "#8E8E93"} style={{ marginRight: 4 }} />
-                  <Text style={[styles.chipText, selectedFilters.includes("money") && { color: "#FFF" }]}>家計簿</Text>
+                  <Ionicons
+                    name="wallet-outline"
+                    size={16}
+                    color={
+                      selectedFilters.includes("money") ? "#FFF" : "#8E8E93"
+                    }
+                    style={{ marginRight: 4 }}
+                  />
+                  <Text
+                    style={[
+                      styles.chipText,
+                      selectedFilters.includes("money") && { color: "#FFF" },
+                    ]}
+                  >
+                    家計簿
+                  </Text>
                 </TouchableOpacity>
 
                 {/* レイヤーフィルター */}
@@ -257,12 +349,29 @@ export default function SearchModal({
                     key={layer}
                     style={[
                       styles.chip,
-                      selectedFilters.includes(layer) && { backgroundColor: layerMaster[layer], borderColor: layerMaster[layer] },
+                      selectedFilters.includes(layer) && {
+                        backgroundColor: layerMaster[layer],
+                        borderColor: layerMaster[layer],
+                      },
                     ]}
                     onPress={() => toggleFilter(layer)}
                   >
-                    <Ionicons name="layers-outline" size={16} color={selectedFilters.includes(layer) ? "#FFF" : "#8E8E93"} style={{ marginRight: 4 }} />
-                    <Text style={[styles.chipText, selectedFilters.includes(layer) && { color: "#FFF" }]}>{layer}</Text>
+                    <Ionicons
+                      name="layers-outline"
+                      size={16}
+                      color={
+                        selectedFilters.includes(layer) ? "#FFF" : "#8E8E93"
+                      }
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text
+                      style={[
+                        styles.chipText,
+                        selectedFilters.includes(layer) && { color: "#FFF" },
+                      ]}
+                    >
+                      {layer}
+                    </Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -283,7 +392,8 @@ export default function SearchModal({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F2F2F7" },
-  dragHandle: { // 🌟 追加：引っ張るためのハンドル
+  dragHandle: {
+    // 🌟 追加：引っ張るためのハンドル
     width: 40,
     height: 5,
     backgroundColor: "#C7C7CC",
@@ -365,7 +475,12 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
   },
   resultDateRow: { marginBottom: 6 },
-  resultDateText: { fontSize: 13, color: "#8E8E93", fontWeight: "700", letterSpacing: 0.5 }, // 🌟 変更：大きく・太く
+  resultDateText: {
+    fontSize: 13,
+    color: "#8E8E93",
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  }, // 🌟 変更：大きく・太く
   resultTitleText: { fontSize: 18, fontWeight: "800", color: "#1C1C1E" }, // 🌟 変更：タイトルをかなり大きく強調
 
   sheetOverlay: {
