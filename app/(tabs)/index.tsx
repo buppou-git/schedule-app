@@ -455,6 +455,54 @@ export default function Index() {
     }, 1000);
   };
 
+  const filteredData = useMemo(() => {
+    const filtered: { [date: string]: ScheduleItem[] } = {};
+    const localData = { ...scheduleData };
+
+    // 1. アプリ側で既に持っている外部イベントIDを収集（重複防止のため）
+    const ownedExternalIds = new Set<string>();
+    Object.values(scheduleData).forEach((dayItems) => {
+      dayItems.forEach((item) => {
+        if (item.externalEventId) ownedExternalIds.add(item.externalEventId);
+      });
+    });
+
+    // 2. 外部予定をマージ（既にアプリ内に存在するIDのものはスキップ）
+    const combined = { ...localData };
+    Object.keys(externalEvents).forEach((d) => {
+      const filteredExt = externalEvents[d].filter((extItem) => {
+        const rawId = extItem.id.replace("ext_", "");
+        return !ownedExternalIds.has(rawId);
+      });
+      combined[d] = [...(combined[d] || []), ...filteredExt];
+    });
+
+    // 3. フィルタリング実行
+    Object.keys(combined).forEach((d) => {
+      filtered[d] = combined[d].filter((item) => {
+        if (activeTags.length === 0) return true;
+
+        // 外部予定または同期設定済みの予定を「外部予定」レイヤーとして判定
+        let itemLayer = "共通";
+        if (item.category === "外部カレンダー" || item.externalEventId) {
+          itemLayer = "外部予定";
+        } else {
+          const itemTags =
+            item.tags && item.tags.length > 0
+              ? item.tags
+              : item.tag
+                ? [item.tag]
+                : [];
+          if (itemTags.length > 0) {
+            itemLayer = tagMaster[itemTags[0]]?.layer || "共通";
+          }
+        }
+        return activeTags.includes(itemLayer);
+      });
+    });
+    return filtered;
+  }, [scheduleData, externalEvents, activeTags, tagMaster]);
+
   // 🌟 追加・修正：通信を1回にまとめる「安全な移動・コピー」
   const handleMoveOrCopy = async (
     item: ScheduleItem & { date?: string },

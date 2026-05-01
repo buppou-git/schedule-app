@@ -47,6 +47,8 @@ export interface ScheduleItem {
   repeatType?: "none" | "daily" | "weekly" | "monthly" | "custom";
   repeatDays?: number[]; // [1, 2, 3, 4, 5] (月〜金) など
   repeatInterval?: number;
+  detailNotes?: string;
+  externalEventId?: string;
 }
 
 // 🌟 タグとレイヤーのマスターデータの型定義

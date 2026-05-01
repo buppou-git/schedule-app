@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import * as Calendar from "expo-calendar";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
@@ -769,7 +770,19 @@ export default function ScheduleModal({
           endTime.getMinutes(),
         );
 
-    exportToStandardCalendar(inputText, startForExport, endForExport, isAllDay);
+    // 🌟 戻り値のIDを受け取り、既存のIDがあれば渡す
+    const returnedId = await exportToStandardCalendar(
+      inputText,
+      startForExport,
+      endForExport,
+      isAllDay,
+      selectedItem?.externalEventId,
+    );
+
+    // 🌟 先ほど newData にプッシュしたアイテムにIDを記録する
+    if (returnedId && newData[sStr] && newData[sStr].length > 0) {
+      newData[sStr][newData[sStr].length - 1].externalEventId = returnedId;
+    }
 
     onClose();
     setTimeout(() => {
@@ -792,6 +805,14 @@ export default function ScheduleModal({
 
   const executeDelete = async (mode: "normal" | "all" | "single") => {
     if (!selectedItem) return;
+
+    // 🌟 追加：アプリから消す前に、外部カレンダーからも予定を消す
+    if (selectedItem.externalEventId) {
+      try {
+        await Calendar.deleteEventAsync(selectedItem.externalEventId);
+      } catch (e) {}
+    }
+
     const newData = { ...scheduleData };
 
     if (mode === "single") {
