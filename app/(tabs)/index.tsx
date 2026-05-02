@@ -490,6 +490,7 @@ export default function Index() {
         let itemLayer = "共通";
         if (item.category === "外部カレンダー" || item.externalEventId) {
           itemLayer = "外部予定";
+          item.color = "#FF2D55";
         } else {
           const itemTags =
             item.tags && item.tags.length > 0
@@ -952,6 +953,7 @@ export default function Index() {
        
         if (item.category === "外部カレンダー" || item.externalEventId) {
           itemLayer = "外部予定";
+          item.color = "#FF2D55";
         } else {
           // アプリ内で作られた、または編集された予定は、本来設定されたレイヤーを維持
           const itemTags = item.tags && item.tags.length > 0 ? item.tags : (item.tag ? [item.tag] : []);
