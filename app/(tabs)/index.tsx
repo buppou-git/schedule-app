@@ -821,13 +821,7 @@ export default function Index() {
 
         let initialLayers = layers ? JSON.parse(layers) : {};
 
-        // 🌟 追加：「外部同期」がONなのにレイヤーマスターに「外部予定」が無い場合、自動で追加する
-        if (extSync === "true" && !initialLayers["外部予定"]) {
-          initialLayers = { ...initialLayers, 外部予定: "#FF2D55" };
-        } else if (extSync !== "true" && initialLayers["外部予定"]) {
-          // 同期がOFFになったらレイヤーから消す
-          delete initialLayers["外部予定"];
-        }
+
 
         if (!onboarded && !scheduleExists) {
           setOnboardingVisible(true);
