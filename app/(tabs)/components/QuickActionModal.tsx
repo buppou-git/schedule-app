@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
-import { ScheduleItem } from "../../../types";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -14,6 +13,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { ScheduleItem } from "../../../types";
 
 interface QuickActionModalProps {
   visible: boolean;
