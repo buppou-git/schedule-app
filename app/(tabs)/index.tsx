@@ -334,8 +334,12 @@ export default function Index() {
         const totalLayerCount =
           Object.keys(layerMaster).length + (isExternalSyncEnabled ? 1 : 0);
 
-        // 全て選択されたら「すべて表示（空配列）」に戻す
-        return next.length >= totalLayerCount ? [] : next;
+        // 🌟 修正：レイヤーが2つ以上ある時だけ、全選択時にリセットする
+        // レイヤーが1つ（外部予定のみ）の時は、個別選択を優先する
+        if (totalLayerCount > 1 && next.length >= totalLayerCount) {
+          return [];
+        }
+        return next;
       });
     },
     [layerMaster, isExternalSyncEnabled], // 🌟 修正：依存配列を最新状態に更新
@@ -945,8 +949,8 @@ export default function Index() {
 
         // レイヤー名を判定
         let itemLayer = "共通";
-        if (item.category === "外部カレンダー") {
-          // 純正カレンダーから直接読み込んだ「純粋な外部予定」（まだアプリで編集されていないもの）
+       
+        if (item.category === "外部カレンダー" || item.externalEventId) {
           itemLayer = "外部予定";
         } else {
           // アプリ内で作られた、または編集された予定は、本来設定されたレイヤーを維持
