@@ -909,50 +909,39 @@ export default function Index() {
       return combinedMap[date];
     };
 
-    // 🌟 1. 重複防止のため、アプリ内の「外部連携ID」と「日付ごとのタイトル一覧」を収集
-    const ownedExternalIds = new Set<string>();
-    const ownedTitlesByDate: { [date: string]: Set<string> } = {};
-
-    Object.keys(scheduleData).forEach((date) => {
-      if (!ownedTitlesByDate[date]) ownedTitlesByDate[date] = new Set();
-      scheduleData[date].forEach((item) => {
-        if (item.externalEventId) ownedExternalIds.add(item.externalEventId);
-        if (item.title) ownedTitlesByDate[date].add(item.title.trim());
-      });
-    });
-
-    // 2. ローカル（アプリ内）データをベースにする
-    Object.keys(scheduleData).forEach((date) => {
-      const map = getMapForDate(date);
-      scheduleData[date].forEach((item) => map.set(item.id, item));
-    });
-
-    // 3. 共有データを上書きマージ（同IDなら上書きされて重複が消える）
-    Object.values(roomSchedules).forEach((roomData) => {
-      Object.keys(roomData).forEach((date) => {
-        const map = getMapForDate(date);
-        roomData[date].forEach((item) => map.set(item.id, item));
-      });
-    });
-
-    // 4. 外部カレンダーをマージ（アプリ側にあるものはスキップ）
+    // 🌟 1. まず、外部カレンダー（ベースデータ）を Map に配置する
+    // キーは「純粋な外部ID（ext_ を外したもの）」とする
     Object.keys(externalEvents).forEach((date) => {
       const map = getMapForDate(date);
       externalEvents[date].forEach((item) => {
         const rawId = item.id.replace("ext_", "");
-        const titleKey = item.title ? item.title.trim() : "";
-
-        // 🌟 強力な重複チェック：IDが一致しているか、同じ日に同じタイトルの予定がある場合はスキップ
-        const isDuplicateById = ownedExternalIds.has(rawId);
-        const isDuplicateByTitle = ownedTitlesByDate[date]?.has(titleKey);
-
-        if (!isDuplicateById && !isDuplicateByTitle) {
-          map.set(item.id, item);
-        }
+        map.set(rawId, { ...item, externalEventId: rawId });
       });
     });
 
-    // 5. 最後に Map から Array に変換してフィルタリング
+    // 🌟 2. 次に、ローカル（アプリ内）データをマージ（上書き）する
+    Object.keys(scheduleData).forEach((date) => {
+      const map = getMapForDate(date);
+      scheduleData[date].forEach((item) => {
+        // 💡 最重要：外部イベントと紐づいている場合は、外部IDをキーにして「上書き」する
+        // これにより、デフォルトの外部予定が、アプリ内で編集した情報（タグ等）で完全に上書き（同一化）される
+        const key = item.externalEventId ? item.externalEventId : item.id;
+        map.set(key, item);
+      });
+    });
+
+    // 🌟 3. 共有データをさらにマージ（同IDなら上書きされて重複が消える）
+    Object.values(roomSchedules).forEach((roomData) => {
+      Object.keys(roomData).forEach((date) => {
+        const map = getMapForDate(date);
+        roomData[date].forEach((item) => {
+           const key = item.externalEventId ? item.externalEventId : item.id;
+           map.set(key, item);
+        });
+      });
+    });
+
+    // 🌟 4. 最後に Map から Array に変換してフィルタリング
     const result: { [date: string]: ScheduleItem[] } = {};
     Object.keys(combinedMap).forEach((date) => {
       const items = Array.from(combinedMap[date].values());
@@ -963,16 +952,16 @@ export default function Index() {
         // レイヤー名を判定
         let itemLayer = "共通";
         if (item.category === "外部カレンダー") {
-          // 純正カレンダーから直接読み込んだ「純粋な外部予定」
+          // 純正カレンダーから直接読み込んだ「純粋な外部予定」（まだアプリで編集されていないもの）
           itemLayer = "外部予定";
         } else {
-          // アプリ内で作られた予定は、本来設定されたレイヤーを維持
+          // アプリ内で作られた、または編集された予定は、本来設定されたレイヤーを維持
           const itemTags = item.tags && item.tags.length > 0 ? item.tags : (item.tag ? [item.tag] : []);
           if (itemTags.length > 0) {
             itemLayer = tagMaster[itemTags[0]]?.layer || "共通";
           }
         }
-
+        
         // 選択されたレイヤーリストに含まれる場合のみ表示
         return activeTags.includes(itemLayer);
       });

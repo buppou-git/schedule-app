@@ -29,13 +29,8 @@ import {
   TextInput,
   TouchableOpacity,
   TouchableWithoutFeedback,
-  UIManager,
-  View
+  View,
 } from "react-native";
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 interface ScheduleModalProps {
   visible: boolean;
@@ -197,7 +192,6 @@ export default function ScheduleModal({
   const [repeatInterval, setRepeatInterval] = useState(1);
 
   const [isAllDay, setIsAllDay] = useState(true);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
   const [startTime, setStartTime] = useState(new Date());
