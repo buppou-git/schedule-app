@@ -909,12 +909,12 @@ export default function Index() {
     };
 
     // 🌟 1. まず、外部カレンダー（ベースデータ）を Map に配置する
-    // キーは「純粋な外部ID（ext_ を外したもの）」とする
+    // 💡 登録の時点で、最初から color: "#FF2D55" を持たせて完全に赤にする！
     Object.keys(externalEvents).forEach((date) => {
       const map = getMapForDate(date);
       externalEvents[date].forEach((item) => {
         const rawId = item.id.replace("ext_", "");
-        map.set(rawId, { ...item, externalEventId: rawId });
+        map.set(rawId, { ...item, externalEventId: rawId, color: "#FF2D55" });
       });
     });
 
@@ -923,13 +923,18 @@ export default function Index() {
       const map = getMapForDate(date);
       scheduleData[date].forEach((item) => {
         // 💡 最重要：外部イベントと紐づいている場合は、外部IDをキーにして「上書き」する
-        // これにより、デフォルトの外部予定が、アプリ内で編集した情報（タグ等）で完全に上書き（同一化）される
         const key = item.externalEventId ? item.externalEventId : item.id;
+        
+        // 外部予定の上書きデータである場合も、確実に赤色を引き継がせる
+        if (item.category === "外部カレンダー" || item.externalEventId) {
+          item.color = "#FF2D55";
+        }
+        
         map.set(key, item);
       });
     });
 
-    // 🌟 3. 共有データをさらにマージ（同IDなら上書きされて重複が消える）
+    // 🌟 3. 共有データをさらにマージ
     Object.values(roomSchedules).forEach((roomData) => {
       Object.keys(roomData).forEach((date) => {
         const map = getMapForDate(date);
@@ -945,15 +950,11 @@ export default function Index() {
     Object.keys(combinedMap).forEach((date) => {
       const items = Array.from(combinedMap[date].values());
       result[date] = items.filter((item) => {
-        // activeTags（選択中のレイヤー）が空ならすべて表示
-        if (activeTags.length === 0) return true;
-
         // レイヤー名を判定
         let itemLayer = "共通";
        
         if (item.category === "外部カレンダー" || item.externalEventId) {
           itemLayer = "外部予定";
-          item.color = "#FF2D55";
         } else {
           // アプリ内で作られた、または編集された予定は、本来設定されたレイヤーを維持
           const itemTags = item.tags && item.tags.length > 0 ? item.tags : (item.tag ? [item.tag] : []);
@@ -961,6 +962,9 @@ export default function Index() {
             itemLayer = tagMaster[itemTags[0]]?.layer || "共通";
           }
         }
+
+        // 🌟 修正：レイヤー名の判定をした後に、すべて表示のチェックをする！
+        if (activeTags.length === 0) return true;
         
         // 選択されたレイヤーリストに含まれる場合のみ表示
         return activeTags.includes(itemLayer);

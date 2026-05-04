@@ -86,11 +86,25 @@ export function useCalendarData(
           (activeMode === "todo" && item.isTodo) ||
           (activeMode === "money" && item.isExpense);
         if (!matchesMode) return;
-        const itemTags = item.tags && item.tags.length > 0 ? item.tags : item.tag ? [item.tag] : [];
+
+        // 1. まずこの予定に付随するタグ（または単一のタグ）を取得
+        const itemTags = item.tags && item.tags.length > 0 ? item.tags : item.tag ? [item.tag] : ["共通"];
+
         itemTags.forEach((tag: string) => {
-          const info = tagMaster[tag] || { layer: tag, color: layerMaster[tag] || "#999" };
+          const info = tagMaster[tag] || { layer: tag };
+
+          // 🌟 ここが「優先順位」のポイント！左から順にチェックします
+          const finalColor =
+            item.color ||                   // ① 個別の色設定（外部カレンダーやカスタム色）
+            tagMaster[tag]?.color ||        // ② タグごとの色
+            layerMaster[info.layer] ||      // ③ レイヤー全体の色
+            "#999";                         // ④ どれもなければグレー
+
+          // フィルタリング（表示設定）のチェック
           if (!isAllLayers && !activeTagsSet.has(info.layer)) return;
-          dayDots.add(info.color);
+
+          // 決定した色をドットとして追加
+          dayDots.add(finalColor);
         });
       });
       if (dayDots.size > 0) marked[date] = { dots: Array.from(dayDots).map((color) => ({ color })) };
