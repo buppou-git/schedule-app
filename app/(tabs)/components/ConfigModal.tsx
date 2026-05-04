@@ -4,7 +4,6 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
-import CryptoJS from "crypto-js";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Calendar from "expo-calendar";
 import * as FileSystem from "expo-file-system";
@@ -106,15 +105,20 @@ export default function ConfigModal({
       setIsAnonymous(user?.isAnonymous ?? true);
     });
 
-    AsyncStorage.getItem("externalCalendarSync").then((val) => {
-      setIsCalendarSyncEnabled(val === "true");
-    });
-    AsyncStorage.getItem("useBiometricLock").then((val) => {
-      setIsBiometricEnabled(val === "true");
-    });
-    AsyncStorage.getItem("usePinLock").then((val) => {
-      setIsPinEnabled(val === "true");
-    });
+    // 🌟 修正：Promise.all で同時に読み込み、setStateの回数を減らす
+    const loadSettings = async () => {
+      const [calendar, bio, pin] = await Promise.all([
+        AsyncStorage.getItem("externalCalendarSync"),
+        AsyncStorage.getItem("useBiometricLock"),
+        AsyncStorage.getItem("usePinLock"),
+      ]);
+
+      setIsCalendarSyncEnabled(calendar === "true");
+      setIsBiometricEnabled(bio === "true");
+      setIsPinEnabled(pin === "true");
+    };
+
+    loadSettings();
 
     return unsubscribe;
   }, []);
@@ -409,7 +413,7 @@ export default function ConfigModal({
 
     // IDの生成と登録
     const generatedRoomId =
-      "room_" + CryptoJS.lib.WordArray.random(8).toString();
+      "room_" + Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
     onAddSharedRoom(newRoomName.trim(), generatedRoomId);
 
     // 🌟 変更：作成画面を閉じて、新しい「作成完了ポップアップ」を開く準備をする
@@ -441,142 +445,169 @@ export default function ConfigModal({
   };
 
   return (
-    <Modal visible={visible} transparent={true} animationType="fade">
-      <TouchableOpacity
-        style={styles.overlay}
-        activeOpacity={1}
-        onPress={onClose}
-      >
-        <TouchableWithoutFeedback>
-          <View style={styles.content}>
-            <View style={styles.header}>
-              <View>
-                <Text style={styles.title}>CONFIG</Text>
-                <Text style={styles.subTitle}>設定とバックアップ</Text>
+    <>
+      <Modal visible={visible} transparent={true} animationType="fade">
+        <TouchableOpacity
+          style={styles.overlay}
+          activeOpacity={1}
+          onPress={onClose}
+        >
+          <TouchableWithoutFeedback>
+            <View style={styles.content}>
+              <View style={styles.header}>
+                <View>
+                  <Text style={styles.title}>CONFIG</Text>
+                  <Text style={styles.subTitle}>設定とバックアップ</Text>
+                </View>
+                <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+                  <Ionicons name="close" size={24} color="#1C1C1E" />
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                <Ionicons name="close" size={24} color="#1C1C1E" />
-              </TouchableOpacity>
-            </View>
 
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 20 }}
-            >
-              <Text style={styles.sectionLabel}>SHARED CALENDAR</Text>
-              <View style={styles.card}>
-                <TouchableOpacity
-                  style={styles.row}
-                  onPress={() => setCreateRoomVisible(true)}
-                >
-                  <View style={styles.rowLeft}>
-                    <Ionicons
-                      name="add-circle-outline"
-                      size={20}
-                      color="#007AFF"
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 20 }}
+              >
+                <Text style={styles.sectionLabel}>SHARED CALENDAR</Text>
+                <View style={styles.card}>
+                  <TouchableOpacity
+                    style={styles.row}
+                    onPress={() => setCreateRoomVisible(true)}
+                  >
+                    <View style={styles.rowLeft}>
+                      <Ionicons
+                        name="add-circle-outline"
+                        size={20}
+                        color="#007AFF"
+                      />
+                      <Text
+                        style={[
+                          styles.rowText,
+                          { color: "#007AFF", fontWeight: "bold" },
+                        ]}
+                      >
+                        共有カレンダーを作成
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.row, styles.borderTop]}
+                    onPress={() => setShareRoomListVisible(true)}
+                  >
+                    <View style={styles.rowLeft}>
+                      <Ionicons
+                        name="share-social-outline"
+                        size={20}
+                        color="#1C1C1E"
+                      />
+                      <Text style={styles.rowText}>招待リンクを送信</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color="#C7C7CC" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.row, styles.borderTop]}
+                    onPress={() => setJoinRoomVisible(true)}
+                  >
+                    <View style={styles.rowLeft}>
+                      <Ionicons name="enter-outline" size={20} color="#1C1C1E" />
+                      <Text style={styles.rowText}>共有カレンダーに参加</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color="#C7C7CC" />
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={[styles.sectionLabel, { marginTop: 20 }]}>
+                  INTEGRATION
+                </Text>
+                <View style={styles.card}>
+                  <View style={styles.row}>
+                    <View style={styles.rowLeft}>
+                      <Ionicons
+                        name="calendar-outline"
+                        size={20}
+                        color="#1C1C1E"
+                      />
+                      <Text style={styles.rowText}>標準カレンダーと同期</Text>
+                    </View>
+                    <Switch
+                      value={isCalendarSyncEnabled}
+                      onValueChange={handleCalendarSyncToggle}
+                      trackColor={{ false: "#E5E5EA", true: "#34C759" }}
                     />
+                  </View>
+                </View>
+
+                <Text style={[styles.sectionLabel, { marginTop: 20 }]}>
+                  ACCOUNT
+                </Text>
+                <View style={styles.card}>
+                  <View style={styles.row}>
+                    <View style={styles.rowLeft}>
+                      <Ionicons
+                        name="person-circle-outline"
+                        size={20}
+                        color="#1C1C1E"
+                      />
+                      <Text style={styles.rowText}>ステータス</Text>
+                    </View>
                     <Text
                       style={[
-                        styles.rowText,
-                        { color: "#007AFF", fontWeight: "bold" },
+                        styles.timeText,
+                        {
+                          color: isAnonymous ? "#8E8E93" : "#34C759",
+                          fontWeight: "bold",
+                        },
                       ]}
                     >
-                      共有カレンダーを作成
+                      {isAnonymous ? "ゲスト (未連携)" : "クラウド 連携済"}
                     </Text>
                   </View>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.row, styles.borderTop]}
-                  onPress={() => setShareRoomListVisible(true)}
-                >
-                  <View style={styles.rowLeft}>
-                    <Ionicons
-                      name="share-social-outline"
-                      size={20}
-                      color="#1C1C1E"
-                    />
-                    <Text style={styles.rowText}>招待リンクを送信</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color="#C7C7CC" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.row, styles.borderTop]}
-                  onPress={() => setJoinRoomVisible(true)}
-                >
-                  <View style={styles.rowLeft}>
-                    <Ionicons name="enter-outline" size={20} color="#1C1C1E" />
-                    <Text style={styles.rowText}>共有カレンダーに参加</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color="#C7C7CC" />
-                </TouchableOpacity>
-              </View>
 
-              <Text style={[styles.sectionLabel, { marginTop: 20 }]}>
-                INTEGRATION
-              </Text>
-              <View style={styles.card}>
-                <View style={styles.row}>
-                  <View style={styles.rowLeft}>
-                    <Ionicons
-                      name="calendar-outline"
-                      size={20}
-                      color="#1C1C1E"
-                    />
-                    <Text style={styles.rowText}>標準カレンダーと同期</Text>
-                  </View>
-                  <Switch
-                    value={isCalendarSyncEnabled}
-                    onValueChange={handleCalendarSyncToggle}
-                    trackColor={{ false: "#E5E5EA", true: "#34C759" }}
-                  />
-                </View>
-              </View>
+                  {/* 🌟 変更：匿名ユーザーの場合はAppleとGoogleの両方を表示 */}
+                  {isAnonymous && (
+                    <>
+                      {/* Apple サインインボタン */}
+                      {Platform.OS === "ios" && (
+                        <TouchableOpacity
+                          style={[styles.row, styles.borderTop]}
+                          disabled={isLinking}
+                          onPress={handleAppleSignIn}
+                        >
+                          <View style={styles.rowLeft}>
+                            <Ionicons
+                              name="logo-apple"
+                              size={20}
+                              color="#1C1C1E"
+                            />
+                            <Text style={styles.rowText}>
+                              Appleでデータを保護
+                            </Text>
+                          </View>
+                          {isLinking ? (
+                            <ActivityIndicator size="small" color="#1C1C1E" />
+                          ) : (
+                            <Ionicons
+                              name="chevron-forward"
+                              size={20}
+                              color="#C7C7CC"
+                            />
+                          )}
+                        </TouchableOpacity>
+                      )}
 
-              <Text style={[styles.sectionLabel, { marginTop: 20 }]}>
-                ACCOUNT
-              </Text>
-              <View style={styles.card}>
-                <View style={styles.row}>
-                  <View style={styles.rowLeft}>
-                    <Ionicons
-                      name="person-circle-outline"
-                      size={20}
-                      color="#1C1C1E"
-                    />
-                    <Text style={styles.rowText}>ステータス</Text>
-                  </View>
-                  <Text
-                    style={[
-                      styles.timeText,
-                      {
-                        color: isAnonymous ? "#8E8E93" : "#34C759",
-                        fontWeight: "bold",
-                      },
-                    ]}
-                  >
-                    {isAnonymous ? "ゲスト (未連携)" : "クラウド 連携済"}
-                  </Text>
-                </View>
-
-                {/* 🌟 変更：匿名ユーザーの場合はAppleとGoogleの両方を表示 */}
-                {isAnonymous && (
-                  <>
-                    {/* Apple サインインボタン */}
-                    {Platform.OS === "ios" && (
+                      {/* Google サインインボタン */}
                       <TouchableOpacity
                         style={[styles.row, styles.borderTop]}
                         disabled={isLinking}
-                        onPress={handleAppleSignIn}
+                        onPress={handleGoogleSignIn}
                       >
                         <View style={styles.rowLeft}>
                           <Ionicons
-                            name="logo-apple"
+                            name="logo-google"
                             size={20}
                             color="#1C1C1E"
                           />
-                          <Text style={styles.rowText}>
-                            Appleでデータを保護
-                          </Text>
+                          <Text style={styles.rowText}>Googleでデータを保護</Text>
                         </View>
                         {isLinking ? (
                           <ActivityIndicator size="small" color="#1C1C1E" />
@@ -588,277 +619,252 @@ export default function ConfigModal({
                           />
                         )}
                       </TouchableOpacity>
-                    )}
+                    </>
+                  )}
+                </View>
 
-                    {/* Google サインインボタン */}
-                    <TouchableOpacity
-                      style={[styles.row, styles.borderTop]}
-                      disabled={isLinking}
-                      onPress={handleGoogleSignIn}
-                    >
-                      <View style={styles.rowLeft}>
-                        <Ionicons
-                          name="logo-google"
-                          size={20}
-                          color="#1C1C1E"
-                        />
-                        <Text style={styles.rowText}>Googleでデータを保護</Text>
-                      </View>
-                      {isLinking ? (
-                        <ActivityIndicator size="small" color="#1C1C1E" />
-                      ) : (
-                        <Ionicons
-                          name="chevron-forward"
-                          size={20}
-                          color="#C7C7CC"
-                        />
-                      )}
-                    </TouchableOpacity>
-                  </>
-                )}
-              </View>
-
-              <Text style={[styles.sectionLabel, { marginTop: 20 }]}>
-                SECURITY
-              </Text>
-              <View style={styles.card}>
-                <View style={styles.row}>
-                  <View style={styles.rowLeft}>
-                    <Ionicons
-                      name="finger-print-outline"
-                      size={20}
-                      color="#1C1C1E"
+                <Text style={[styles.sectionLabel, { marginTop: 20 }]}>
+                  SECURITY
+                </Text>
+                <View style={styles.card}>
+                  <View style={styles.row}>
+                    <View style={styles.rowLeft}>
+                      <Ionicons
+                        name="finger-print-outline"
+                        size={20}
+                        color="#1C1C1E"
+                      />
+                      <Text style={styles.rowText}>生体認証ロック</Text>
+                    </View>
+                    <Switch
+                      value={isBiometricEnabled}
+                      onValueChange={handleBiometricToggle}
+                      trackColor={{ false: "#E5E5EA", true: "#34C759" }}
                     />
-                    <Text style={styles.rowText}>生体認証ロック</Text>
                   </View>
-                  <Switch
-                    value={isBiometricEnabled}
-                    onValueChange={handleBiometricToggle}
-                    trackColor={{ false: "#E5E5EA", true: "#34C759" }}
-                  />
-                </View>
-                <View style={[styles.row, styles.borderTop]}>
-                  <View style={styles.rowLeft}>
-                    <Ionicons name="keypad-outline" size={20} color="#1C1C1E" />
-                    <Text style={styles.rowText}>暗証番号ロック</Text>
-                  </View>
-                  <Switch
-                    value={isPinEnabled}
-                    onValueChange={handlePinToggle}
-                    trackColor={{ false: "#E5E5EA", true: "#34C759" }}
-                  />
-                </View>
-              </View>
-
-              <Text style={[styles.sectionLabel, { marginTop: 20 }]}>
-                NOTIFICATIONS
-              </Text>
-              <View style={styles.card}>
-                <View style={styles.row}>
-                  <View style={styles.rowLeft}>
-                    <Ionicons
-                      name="notifications-outline"
-                      size={20}
-                      color="#1C1C1E"
-                    />
-                    <Text style={styles.rowText}>毎日のリマインダー</Text>
-                  </View>
-                  <Switch
-                    value={isNotificationEnabled}
-                    onValueChange={handleToggleSwitch}
-                    trackColor={{ false: "#E5E5EA", true: "#34C759" }}
-                  />
-                </View>
-
-                {isNotificationEnabled && (
                   <View style={[styles.row, styles.borderTop]}>
                     <View style={styles.rowLeft}>
-                      <Ionicons name="time-outline" size={20} color="#8E8E93" />
-                      <Text style={[styles.rowText, { color: "#8E8E93" }]}>
-                        通知時間
-                      </Text>
+                      <Ionicons name="keypad-outline" size={20} color="#1C1C1E" />
+                      <Text style={styles.rowText}>暗証番号ロック</Text>
                     </View>
-
-                    {Platform.OS === "ios" ? (
-                      <DateTimePicker
-                        value={notificationTime}
-                        mode="time"
-                        display="default"
-                        onChange={handleTimeChange}
-                        style={{ width: 90 }}
-                      />
-                    ) : (
-                      <>
-                        <TouchableOpacity
-                          style={styles.timeBtnAndroid}
-                          onPress={() => setShowTimePickerAndroid(true)}
-                        >
-                          <Text style={styles.timeBtnTextAndroid}>
-                            {("0" + notificationTime.getHours()).slice(-2)}:
-                            {("0" + notificationTime.getMinutes()).slice(-2)}
-                          </Text>
-                        </TouchableOpacity>
-                        {showTimePickerAndroid && (
-                          <DateTimePicker
-                            value={notificationTime}
-                            mode="time"
-                            display="default"
-                            onChange={handleTimeChange}
-                          />
-                        )}
-                      </>
-                    )}
+                    <Switch
+                      value={isPinEnabled}
+                      onValueChange={handlePinToggle}
+                      trackColor={{ false: "#E5E5EA", true: "#34C759" }}
+                    />
                   </View>
-                )}
-              </View>
-
-              <Text style={[styles.sectionLabel, { marginTop: 20 }]}>
-                DATA SYNC
-              </Text>
-              <View style={styles.card}>
-                <View style={styles.row}>
-                  <View style={styles.rowLeft}>
-                    <Ionicons name="time-outline" size={20} color="#1C1C1E" />
-                    <Text style={styles.rowText}>最終同期</Text>
-                  </View>
-                  <Text style={styles.timeText}>
-                    {lastSyncedAt ? lastSyncedAt : "未同期"}
-                  </Text>
                 </View>
 
-                <TouchableOpacity
-                  style={[styles.row, styles.borderTop]}
-                  onPress={onBackup}
-                >
-                  <View style={styles.rowLeft}>
-                    <Ionicons
-                      name="cloud-upload-outline"
-                      size={20}
-                      color="#007AFF"
+                <Text style={[styles.sectionLabel, { marginTop: 20 }]}>
+                  NOTIFICATIONS
+                </Text>
+                <View style={styles.card}>
+                  <View style={styles.row}>
+                    <View style={styles.rowLeft}>
+                      <Ionicons
+                        name="notifications-outline"
+                        size={20}
+                        color="#1C1C1E"
+                      />
+                      <Text style={styles.rowText}>毎日のリマインダー</Text>
+                    </View>
+                    <Switch
+                      value={isNotificationEnabled}
+                      onValueChange={handleToggleSwitch}
+                      trackColor={{ false: "#E5E5EA", true: "#34C759" }}
                     />
-                    <Text
-                      style={[
-                        styles.rowText,
-                        { color: "#007AFF", fontWeight: "bold" },
-                      ]}
-                    >
-                      手動でバックアップ
+                  </View>
+
+                  {isNotificationEnabled && (
+                    <View style={[styles.row, styles.borderTop]}>
+                      <View style={styles.rowLeft}>
+                        <Ionicons name="time-outline" size={20} color="#8E8E93" />
+                        <Text style={[styles.rowText, { color: "#8E8E93" }]}>
+                          通知時間
+                        </Text>
+                      </View>
+
+                      {Platform.OS === "ios" ? (
+                        <DateTimePicker
+                          value={notificationTime}
+                          mode="time"
+                          display="default"
+                          onChange={handleTimeChange}
+                          style={{ width: 90 }}
+                        />
+                      ) : (
+                        <>
+                          <TouchableOpacity
+                            style={styles.timeBtnAndroid}
+                            onPress={() => setShowTimePickerAndroid(true)}
+                          >
+                            <Text style={styles.timeBtnTextAndroid}>
+                              {("0" + notificationTime.getHours()).slice(-2)}:
+                              {("0" + notificationTime.getMinutes()).slice(-2)}
+                            </Text>
+                          </TouchableOpacity>
+                          {showTimePickerAndroid && (
+                            <DateTimePicker
+                              value={notificationTime}
+                              mode="time"
+                              display="default"
+                              onChange={handleTimeChange}
+                            />
+                          )}
+                        </>
+                      )}
+                    </View>
+                  )}
+                </View>
+
+                <Text style={[styles.sectionLabel, { marginTop: 20 }]}>
+                  DATA SYNC
+                </Text>
+                <View style={styles.card}>
+                  <View style={styles.row}>
+                    <View style={styles.rowLeft}>
+                      <Ionicons name="time-outline" size={20} color="#1C1C1E" />
+                      <Text style={styles.rowText}>最終同期</Text>
+                    </View>
+                    <Text style={styles.timeText}>
+                      {lastSyncedAt ? lastSyncedAt : "未同期"}
                     </Text>
                   </View>
-                </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={[styles.row, styles.borderTop]}
-                  onPress={onRestore}
-                >
-                  <View style={styles.rowLeft}>
-                    <Ionicons
-                      name="cloud-download-outline"
-                      size={20}
-                      color="#007AFF"
-                    />
-                    <Text
-                      style={[
-                        styles.rowText,
-                        { color: "#007AFF", fontWeight: "bold" },
-                      ]}
-                    >
-                      クラウドからデータを復元
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.row, styles.borderTop]}
-                  onPress={handleExportCSV}
-                >
-                  <View style={styles.rowLeft}>
-                    <Ionicons
-                      name="document-text-outline"
-                      size={20}
-                      color="#1C1C1E"
-                    />
-                    <Text style={styles.rowText}>データをCSVで出力</Text>
-                  </View>
-                  <Ionicons name="share-outline" size={20} color="#C7C7CC" />
-                </TouchableOpacity>
-              </View>
+                  <TouchableOpacity
+                    style={[styles.row, styles.borderTop]}
+                    onPress={onBackup}
+                  >
+                    <View style={styles.rowLeft}>
+                      <Ionicons
+                        name="cloud-upload-outline"
+                        size={20}
+                        color="#007AFF"
+                      />
+                      <Text
+                        style={[
+                          styles.rowText,
+                          { color: "#007AFF", fontWeight: "bold" },
+                        ]}
+                      >
+                        手動でバックアップ
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
 
-              <Text
-                style={[
-                  styles.sectionLabel,
-                  { marginTop: 20, color: "#FF3B30" },
-                ]}
-              >
-                DANGER ZONE
-              </Text>
-              <View
-                style={[
-                  styles.card,
-                  { borderColor: "#FF3B30", borderWidth: 1 },
-                ]}
-              >
-                <TouchableOpacity style={styles.row} onPress={onDeleteAccount}>
-                  <View style={styles.rowLeft}>
-                    <Ionicons name="trash-outline" size={20} color="#FF3B30" />
-                    <Text
-                      style={[
-                        styles.rowText,
-                        { color: "#FF3B30", fontWeight: "bold" },
-                      ]}
-                    >
-                      アカウントとデータを削除
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
+                  <TouchableOpacity
+                    style={[styles.row, styles.borderTop]}
+                    onPress={onRestore}
+                  >
+                    <View style={styles.rowLeft}>
+                      <Ionicons
+                        name="cloud-download-outline"
+                        size={20}
+                        color="#007AFF"
+                      />
+                      <Text
+                        style={[
+                          styles.rowText,
+                          { color: "#007AFF", fontWeight: "bold" },
+                        ]}
+                      >
+                        クラウドからデータを復元
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.row, styles.borderTop]}
+                    onPress={handleExportCSV}
+                  >
+                    <View style={styles.rowLeft}>
+                      <Ionicons
+                        name="document-text-outline"
+                        size={20}
+                        color="#1C1C1E"
+                      />
+                      <Text style={styles.rowText}>データをCSVで出力</Text>
+                    </View>
+                    <Ionicons name="share-outline" size={20} color="#C7C7CC" />
+                  </TouchableOpacity>
+                </View>
 
-              <Text style={[styles.sectionLabel, { marginTop: 20 }]}>
-                LEGAL
-              </Text>
-              <View style={styles.card}>
-                <TouchableOpacity
-                  style={styles.row}
-                  onPress={() =>
-                    Linking.openURL(
-                      "https://www.notion.so/3466f7789c6e806f8880ed9241a38b99?source=copy_link",
-                    )
-                  }
+                <Text
+                  style={[
+                    styles.sectionLabel,
+                    { marginTop: 20, color: "#FF3B30" },
+                  ]}
                 >
-                  <View style={styles.rowLeft}>
-                    <Ionicons
-                      name="document-text-outline"
-                      size={20}
-                      color="#1C1C1E"
-                    />
-                    <Text style={styles.rowText}>利用規約</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.row, styles.borderTop]}
-                  onPress={() =>
-                    Linking.openURL(
-                      "https://www.notion.so/3466f7789c6e80958ff2e31ae7f89e16?source=copy_link",
-                    )
-                  }
+                  DANGER ZONE
+                </Text>
+                <View
+                  style={[
+                    styles.card,
+                    { borderColor: "#FF3B30", borderWidth: 1 },
+                  ]}
                 >
-                  <View style={styles.rowLeft}>
-                    <Ionicons
-                      name="shield-checkmark-outline"
-                      size={20}
-                      color="#1C1C1E"
-                    />
-                    <Text style={styles.rowText}>プライバシーポリシー</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
-                </TouchableOpacity>
-              </View>
+                  <TouchableOpacity style={styles.row} onPress={onDeleteAccount}>
+                    <View style={styles.rowLeft}>
+                      <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+                      <Text
+                        style={[
+                          styles.rowText,
+                          { color: "#FF3B30", fontWeight: "bold" },
+                        ]}
+                      >
+                        アカウントとデータを削除
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
 
-              <Text style={styles.copyright}>Developed by Kanta Hirano</Text>
-            </ScrollView>
-          </View>
-        </TouchableWithoutFeedback>
-      </TouchableOpacity>
+                <Text style={[styles.sectionLabel, { marginTop: 20 }]}>
+                  LEGAL
+                </Text>
+                <View style={styles.card}>
+                  <TouchableOpacity
+                    style={styles.row}
+                    onPress={() =>
+                      Linking.openURL(
+                        "https://www.notion.so/3466f7789c6e806f8880ed9241a38b99?source=copy_link",
+                      )
+                    }
+                  >
+                    <View style={styles.rowLeft}>
+                      <Ionicons
+                        name="document-text-outline"
+                        size={20}
+                        color="#1C1C1E"
+                      />
+                      <Text style={styles.rowText}>利用規約</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.row, styles.borderTop]}
+                    onPress={() =>
+                      Linking.openURL(
+                        "https://www.notion.so/3466f7789c6e80958ff2e31ae7f89e16?source=copy_link",
+                      )
+                    }
+                  >
+                    <View style={styles.rowLeft}>
+                      <Ionicons
+                        name="shield-checkmark-outline"
+                        size={20}
+                        color="#1C1C1E"
+                      />
+                      <Text style={styles.rowText}>プライバシーポリシー</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={styles.copyright}>Developed by Kanta Hirano</Text>
+              </ScrollView>
+            </View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
+      </Modal>
 
       {/* PIN設定用モーダル */}
       {isPinSetupVisible && (
@@ -1131,7 +1137,7 @@ export default function ConfigModal({
           </View>
         </Modal>
       )}
-    </Modal>
+    </>
   );
 }
 

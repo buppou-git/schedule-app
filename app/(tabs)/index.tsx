@@ -217,14 +217,14 @@ export default function Index() {
 
   const handleCopyExternal = (item: ScheduleItem) => {
     // 外部予定特有のデータを剥がす
-    const { externalEventId, color, ...rest } = item; 
-    
+    const { externalEventId, color, ...rest } = item;
+
     const newItem: ScheduleItem = {
       ...(rest as ScheduleItem), // 🌟 rest を ScheduleItem として扱う
       id: `copy-${Date.now()}`,
       isEvent: true, // アプリ内の予定として扱う
     };
-    
+
     setExternalModalVisible(false);
     setSelectedItem(newItem);
     setModalVisible(true);
@@ -233,12 +233,12 @@ export default function Index() {
   const handleHideExternal = (item: ScheduleItem) => {
     Alert.alert("非表示", "この外部予定をアプリから非表示にしますか？", [
       { text: "キャンセル", style: "cancel" },
-      { 
-        text: "非表示にする", 
-        style: "destructive", 
+      {
+        text: "非表示にする",
+        style: "destructive",
         onPress: () => {
           setExternalModalVisible(false);
-          
+
           // 🌟 関数型 (prev) => ... を使わず、現在の scheduleData をコピーして編集する
           const newData = { ...scheduleData };
           const dateKey = selectedDate;
@@ -1852,32 +1852,66 @@ export default function Index() {
                 maxToRenderPerBatch={2}
                 updateCellsBatchingPeriod={30}
                 removeClippedSubviews={true} // 見えない月をメモリから消して軽くする
-                renderHeader={(date) => (
-                  <View
-                    style={[
-                      styles.monthHeaderContainer,
-                      {
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        paddingRight: 15,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[styles.monthformat, { color: currentSolidColor }]}
+                renderHeader={(date) => {
+                  const todayStr = new Date().toISOString().split("T")[0]; // 今日の日付を取得
+
+                  return (
+                    <View
+                      style={[
+                        styles.monthHeaderContainer,
+                        {
+                          flexDirection: "row",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          paddingRight: 15,
+                        },
+                      ]}
                     >
-                      {date.getMonth() + 1}
-                    </Text>
-                    <TouchableOpacity onPress={handleOpenNewModal}>
-                      <Ionicons
-                        name="add-circle"
-                        size={30}
-                        color={currentSolidColor}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                )}
+                      <Text
+                        style={[styles.monthformat, { color: currentSolidColor }]}
+                      >
+                        {date.getMonth() + 1}
+                      </Text>
+
+                      {/* 右側のボタン群 */}
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                        {/* 🌟 追加：「今日に戻る」アイコンボタン */}
+                        <TouchableOpacity
+                          onPress={() => setSelectedDate(todayStr)} // 押したら今日の日付をセット
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 18,
+                            backgroundColor: currentSolidColor + "10", // テーマカラーの超薄い背景(10%)
+                            alignItems: "center",
+                            justifyContent: "center",
+                            borderWidth: 1,
+                            borderColor: currentSolidColor + "30", // テーマカラーの薄いボーダー(30%)
+                            shadowColor: "#000", // かすかに影をつけて立体感を出す
+                            shadowOpacity: 0.05,
+                            shadowRadius: 2,
+                            elevation: 1,
+                          }}
+                        >
+                          <Ionicons
+                            name="calendar-outline" // シンプルなカレンダーアイコン
+                            size={20}
+                            color={currentSolidColor}
+                          />
+                        </TouchableOpacity>
+
+                        {/* 既存の追加ボタン */}
+                        <TouchableOpacity onPress={handleOpenNewModal}>
+                          <Ionicons
+                            name="add-circle"
+                            size={32} // アイコンボタンと並べるため、少し大きく調整（28->32）
+                            color={currentSolidColor}
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                }}
                 horizontal
                 pagingEnabled
                 markedDates={currentMarkedDates}
@@ -2576,21 +2610,23 @@ export default function Index() {
         setHasUnsavedChanges={setHasUnsavedChanges}
       />
       <StatusBar style="auto" />
-      <ConfigModal
-        visible={configModalVisible}
-        onClose={() => {
-          setConfigModalVisible(false);
-          AsyncStorage.getItem("externalCalendarSync").then((val) =>
-            setIsExternalSyncEnabled(val === "true"),
-          );
-        }}
-        lastSyncedAt={lastSyncedAt}
-        onRestore={handleRestore}
-        onBackup={handleManualBackup} // 🌟 追加
-        sharedRooms={sharedRooms} // 🌟 追加
-        onAddSharedRoom={handleAddSharedRoom} // 🌟 追加
-        onDeleteAccount={handleDeleteAccount}
-      />
+      {configModalVisible && (
+        <ConfigModal
+          visible={configModalVisible}
+          onClose={() => {
+            setConfigModalVisible(false);
+            AsyncStorage.getItem("externalCalendarSync").then((val) =>
+              setIsExternalSyncEnabled(val === "true"),
+            );
+          }}
+          lastSyncedAt={lastSyncedAt}
+          onRestore={handleRestore}
+          onBackup={handleManualBackup} // 🌟 追加
+          sharedRooms={sharedRooms} // 🌟 追加
+          onAddSharedRoom={handleAddSharedRoom} // 🌟 追加
+          onDeleteAccount={handleDeleteAccount}
+        />
+      )}
       <SubTaskEditModal
         visible={subTaskModalVisible}
         onClose={() => setSubTaskModalVisible(false)}

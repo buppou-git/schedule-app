@@ -52,6 +52,9 @@ export function useCalendarData(
               const isMatchDay = item.repeatDays?.includes(dayOfWeek);
               const isMatchInterval = diffWeeks % (item.repeatInterval || 1) === 0;
               if (!(isMatchDay && isMatchInterval)) continue;
+            } else {
+              // 🌟 追加：想定外の repeatType が来たら無限ループを防ぐために強制終了！
+              break;
             }
 
             if (currentDate > limitEndDate) break;
@@ -70,7 +73,8 @@ export function useCalendarData(
       });
     });
     return expanded;
-  }, [scheduleData, selectedDate]);
+    // 🌟 修正：selectedDate 全体ではなく「年月」部分だけを監視する
+  }, [scheduleData, selectedDate.substring(0, 7)]);
 
   // 🧠 2. カレンダーのドット（色）を計算するロジック
   const markedDatesBase = useMemo(() => {
