@@ -1,3 +1,4 @@
+import * as JapaneseHolidays from "japanese-holidays";
 import { useMemo } from "react";
 import { ScheduleItem } from "../types";
 
@@ -72,6 +73,46 @@ export function useCalendarData(
         }
       });
     });
+
+    // --- 祝日の自動生成 ---
+    let currentDate = new Date(limitStartDate);
+    while (currentDate <= limitEndDate) {
+      // 🌟 型定義ファイルを作ったので、ここが string | undefined として認識されます
+      const holidayName = JapaneseHolidays.isJPHoliday(currentDate);
+      
+      if (holidayName) {
+        const dateStr = currentDate.toISOString().split("T")[0];
+        if (!expanded[dateStr]) expanded[dateStr] = [];
+        
+        const holidayId = `holiday-${dateStr}`;
+        const exists = expanded[dateStr].some(i => i.id === holidayId);
+        
+        if (!exists) {
+          // 🌟 不足していた型プロパティをすべて埋めてエラーを解消
+          const holidayItem: ScheduleItem = {
+            id: holidayId,
+            title: holidayName,
+            startDate: `${dateStr}T00:00:00`,
+            endDate: `${dateStr}T23:59:59`,
+            isEvent: true,
+            isTodo: false,
+            color: "#FF3B30", // 祝日は赤
+            tag: "祝日",
+            // 🌟 不足していた必須プロパティを追加
+            amount: 0,
+            isDone: false,
+            isExpense: false,
+            subTasks: [],
+            repeatType: undefined,
+          };
+          
+          expanded[dateStr].unshift(holidayItem);
+        }
+      }
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+
     return expanded;
     // 🌟 修正：selectedDate 全体ではなく「年月」部分だけを監視する
   }, [scheduleData, selectedDate.substring(0, 7)]);

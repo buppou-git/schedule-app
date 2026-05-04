@@ -347,8 +347,8 @@ export default function SearchModal({
                   </Text>
                 </TouchableOpacity>
 
-                {/* レイヤーフィルター */}
-                {Object.keys(layerMaster).map((layer) => (
+               {/* レイヤーフィルター */}
+               {Object.keys(layerMaster).map((layer) => (
                   <TouchableOpacity
                     key={layer}
                     style={[
@@ -378,6 +378,35 @@ export default function SearchModal({
                     </Text>
                   </TouchableOpacity>
                 ))}
+
+                {/* 🌟 追加：他のカテゴリと並列で「外部予定」も表示 */}
+                <TouchableOpacity
+                  style={[
+                    styles.chip,
+                    selectedFilters.includes("external") && {
+                      backgroundColor: themeColor,
+                      borderColor: themeColor,
+                    },
+                  ]}
+                  onPress={() => toggleFilter("external")}
+                >
+                  <Ionicons
+                    name="globe-outline" // 外部っぽさを表す地球儀アイコン
+                    size={16}
+                    color={
+                      selectedFilters.includes("external") ? "#FFF" : "#8E8E93"
+                    }
+                    style={{ marginRight: 4 }}
+                  />
+                  <Text
+                    style={[
+                      styles.chipText,
+                      selectedFilters.includes("external") && { color: "#FFF" },
+                    ]}
+                  >
+                    外部予定
+                  </Text>
+                </TouchableOpacity>
               </ScrollView>
 
               <TouchableOpacity

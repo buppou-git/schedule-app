@@ -1894,7 +1894,7 @@ export default function Index() {
                           }}
                         >
                           <Ionicons
-                            name="calendar-outline" // シンプルなカレンダーアイコン
+                            name="return-down-back-outline" // シンプルなカレンダーアイコン
                             size={20}
                             color={currentSolidColor}
                           />
@@ -2589,19 +2589,24 @@ export default function Index() {
           </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       </Modal>
-      <ScheduleModal
-        visible={modalVisible}
-        onClose={() => setModalVisible(false)}
-        selectedDate={selectedDate}
-        selectedItem={selectedItem}
-        activeMode={activeMode}
-        scheduleData={scheduleData}
-        setScheduleData={setScheduleData}
-        layerMaster={layerMaster}
-        tagMaster={tagMaster}
-        setTagMaster={setTagMaster}
-        setHasUnsavedChanges={setHasUnsavedChanges}
-      />
+
+      {/* 🌟 修正：＋ボタンを押した（modalVisibleがtrueの）時だけ、追加画面を生成する！ */}
+      {modalVisible && (
+        <ScheduleModal
+          visible={modalVisible}
+          onClose={() => setModalVisible(false)}
+          selectedDate={selectedDate}
+          selectedItem={selectedItem}
+          activeMode={activeMode}
+          scheduleData={scheduleData}
+          setScheduleData={setScheduleData}
+          layerMaster={layerMaster}
+          tagMaster={tagMaster}
+          setTagMaster={setTagMaster}
+          setHasUnsavedChanges={setHasUnsavedChanges}
+        />
+      )}
+
       <LayerManagementModal
         visible={layerModalVisible}
         onClose={() => setLayerModalVisible(false)}
