@@ -74,6 +74,10 @@ export default function SearchModal({
             if (filter === "money") return isMoney;
             if (filter === "todo") return item.isTodo;
             if (filter === "event") return item.isEvent;
+            
+            // 🌟 追加：外部予定をフィルターで拾えるようにする
+            if (filter === "external") return !!item.externalEventId; 
+            
             return itemTags.some(
               (tag) => tag === filter || tagMaster[tag]?.layer === filter,
             );

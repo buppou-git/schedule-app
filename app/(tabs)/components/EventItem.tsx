@@ -21,19 +21,22 @@ export default function EventItem({
   openEditModal,
   onLongPress,
 }: EventItemProps) {
-  const itemTags =
-    item.tags && item.tags.length > 0 ? item.tags : item.tag ? [item.tag] : [];
+  // 1. まず予定が持っているタグを取得
+  const baseTags = item.tags && item.tags.length > 0 ? item.tags : item.tag ? [item.tag] : [];
 
-  const displayColors = itemTags.map((tag: string) => {
-    const info = tagMaster[tag] || {
-      layer: tag,
-      color: layerMaster[tag] || "#999",
-    };
-    // フィルター（activeTags）が設定されていなければ元の色を、
-    // 設定されていればその色を使用するロジック
-    return activeTags.length === 0
-      ? layerMaster[info.layer] || "#999"
-      : info.color;
+  // 2. 🌟 外部カレンダーなどでタグが空の場合は、「外部予定」という仮のバッジを表示させる
+  const displayTags = baseTags.length > 0 ? baseTags : [(item.category === "外部カレンダー" || item.externalEventId) ? "外部予定" : "予定"];
+
+  // 3. 🌟 カレンダー側と同じ「最強の設計（優先順位）」で色を決める！
+  const displayColors = displayTags.map((tag: string) => {
+    const info = tagMaster[tag] || { layer: tag };
+
+    return (
+      item.color ||                   // ① 予定個別の色（外部カレンダーの赤などはここで一発決定！）
+      tagMaster[tag]?.color ||        // ② タグごとの色
+      layerMaster[info.layer] ||      // ③ レイヤー全体の色
+      "#999"                          // ④ どれもなければグレー
+    );
   });
 
   return (
@@ -45,7 +48,8 @@ export default function EventItem({
       delayLongPress={300}
     >
       <View style={styles.tagContainer}>
-        {itemTags.map((tag: string, idx: number) => (
+        {/* 🌟 map を displayTags に変更 */}
+        {displayTags.map((tag: string, idx: number) => (
           <View
             key={idx}
             style={[styles.tagBadge, { backgroundColor: displayColors[idx] }]}

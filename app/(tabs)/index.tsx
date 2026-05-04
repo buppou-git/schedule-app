@@ -16,6 +16,7 @@ import { useScheduleManager } from "../../hooks/useScheduleManager";
 
 import { ScheduleItem, SubTask } from "../../types";
 
+
 import { useCalendarData } from "../../hooks/useCalendarData";
 import { useNotificationManager } from "../../hooks/useNotificationManager";
 
@@ -65,6 +66,7 @@ import {
 } from "react-native-calendars";
 
 import ConfigModal from "./components/ConfigModal";
+import ExternalEventModal from "./components/ExternalEventModal";
 import LayerManagementModal from "./components/LayerManagementModal";
 import MoneyDashboard from "./components/MoneyDashboard";
 import QuickActionModal from "./components/QuickActionModal";
@@ -209,6 +211,48 @@ export default function Index() {
   const [presets, setPresets] = useState<{ [key: string]: string[] }>({});
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ScheduleItem | null>(null);
+
+  const [externalModalVisible, setExternalModalVisible] = useState(false);
+  const [selectedExternalItem, setSelectedExternalItem] = useState<ScheduleItem | null>(null);
+
+  const handleCopyExternal = (item: ScheduleItem) => {
+    // 外部予定特有のデータを剥がす
+    const { externalEventId, color, ...rest } = item; 
+    
+    const newItem: ScheduleItem = {
+      ...(rest as ScheduleItem), // 🌟 rest を ScheduleItem として扱う
+      id: `copy-${Date.now()}`,
+      isEvent: true, // アプリ内の予定として扱う
+    };
+    
+    setExternalModalVisible(false);
+    setSelectedItem(newItem);
+    setModalVisible(true);
+  };
+
+  const handleHideExternal = (item: ScheduleItem) => {
+    Alert.alert("非表示", "この外部予定をアプリから非表示にしますか？", [
+      { text: "キャンセル", style: "cancel" },
+      { 
+        text: "非表示にする", 
+        style: "destructive", 
+        onPress: () => {
+          setExternalModalVisible(false);
+          
+          // 🌟 関数型 (prev) => ... を使わず、現在の scheduleData をコピーして編集する
+          const newData = { ...scheduleData };
+          const dateKey = selectedDate;
+
+          if (newData[dateKey]) {
+            // i の型を ScheduleItem に明示
+            newData[dateKey] = newData[dateKey].filter((i: ScheduleItem) => i.id !== item.id);
+            setScheduleData(newData);
+          }
+        }
+      }
+    ]);
+  };
+
   const [isMoneySummaryMode, setIsMoneySummaryMode] = useState(false);
 
   const [isAppLocked, setIsAppLocked] = useState(false);
@@ -924,12 +968,12 @@ export default function Index() {
       scheduleData[date].forEach((item) => {
         // 💡 最重要：外部イベントと紐づいている場合は、外部IDをキーにして「上書き」する
         const key = item.externalEventId ? item.externalEventId : item.id;
-        
+
         // 外部予定の上書きデータである場合も、確実に赤色を引き継がせる
         if (item.category === "外部カレンダー" || item.externalEventId) {
           item.color = "#FF2D55";
         }
-        
+
         map.set(key, item);
       });
     });
@@ -939,8 +983,8 @@ export default function Index() {
       Object.keys(roomData).forEach((date) => {
         const map = getMapForDate(date);
         roomData[date].forEach((item) => {
-           const key = item.externalEventId ? item.externalEventId : item.id;
-           map.set(key, item);
+          const key = item.externalEventId ? item.externalEventId : item.id;
+          map.set(key, item);
         });
       });
     });
@@ -952,7 +996,7 @@ export default function Index() {
       result[date] = items.filter((item) => {
         // レイヤー名を判定
         let itemLayer = "共通";
-       
+
         if (item.category === "外部カレンダー" || item.externalEventId) {
           itemLayer = "外部予定";
         } else {
@@ -965,7 +1009,7 @@ export default function Index() {
 
         // 🌟 修正：レイヤー名の判定をした後に、すべて表示のチェックをする！
         if (activeTags.length === 0) return true;
-        
+
         // 選択されたレイヤーリストに含まれる場合のみ表示
         return activeTags.includes(itemLayer);
       });
@@ -1016,8 +1060,15 @@ export default function Index() {
   };
 
   const openEditModal = (item: ScheduleItem) => {
-    setSelectedItem(item);
-    setModalVisible(true);
+    if (item.externalEventId) {
+      // 🌟 外部予定なら専用モーダルを開く
+      setSelectedExternalItem(item);
+      setExternalModalVisible(true);
+    } else {
+      // 普通の予定なら今までの編集モーダルを開く
+      setSelectedItem(item);
+      setModalVisible(true);
+    }
   };
 
   const toggleTodo = (date: string, id: string) => {
@@ -1816,7 +1867,7 @@ export default function Index() {
                     <Text
                       style={[styles.monthformat, { color: currentSolidColor }]}
                     >
-                       {date.getMonth() + 1}
+                      {date.getMonth() + 1}
                     </Text>
                     <TouchableOpacity onPress={handleOpenNewModal}>
                       <Ionicons
@@ -2551,14 +2602,13 @@ export default function Index() {
       <SearchModal
         visible={searchModalVisible}
         onClose={() => setSearchModalVisible(false)}
-        scheduleData={scheduleData}
+        scheduleData={expandedScheduleData} // 🌟 変更：外部予定が含まれる展開済みデータを渡す
         themeColor={currentSolidColor}
-        layerMaster={layerMaster} // 🌟 これ
-        tagMaster={tagMaster} // 🌟 これ
+        layerMaster={layerMaster}
+        tagMaster={tagMaster}
         onItemPress={(item, date) => {
           setSelectedDate(date);
-          setSelectedItem(item);
-          setModalVisible(true);
+          openEditModal(item); // 🌟 変更：さっき書き換えた openEditModal に処理を任せる
         }}
       />
       {/* 🌟 修正：Propsを追加 */}
@@ -2585,6 +2635,18 @@ export default function Index() {
         visible={onboardingVisible}
         onComplete={handleCompleteOnboarding}
       />
+
+
+      <ExternalEventModal
+        visible={externalModalVisible}
+        onClose={() => setExternalModalVisible(false)}
+        item={selectedExternalItem}
+        onCopy={handleCopyExternal}
+        onHide={handleHideExternal}
+        themeColor={currentSolidColor}
+      />
+
+
     </SafeAreaView>
   );
 }
