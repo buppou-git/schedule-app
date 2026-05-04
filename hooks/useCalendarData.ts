@@ -8,7 +8,8 @@ export function useCalendarData(
   activeTags: string[],
   layerMaster: any,
   tagMaster: any,
-  selectedDate: string
+  selectedDate: string,
+  hiddenExternalIds: string[] = []
 ) {
   // 🧠 1. 繰り返し予定を自動生成するロジック（🔥 遅延評価アルゴリズム）
   const expandedScheduleData = useMemo(() => {
@@ -26,7 +27,7 @@ export function useCalendarData(
       if (!expanded[dateStr]) expanded[dateStr] = [];
 
       const processedBaseItems = scheduleData[dateStr]
-        .filter((item) => !item.exceptionDates?.includes(dateStr))
+        .filter((item) => !item.exceptionDates?.includes(dateStr) && !hiddenExternalIds.includes(item.id))
         .map((item) => {
           if (item.repeatType) {
             const isSpecificDone = item.completedDates?.includes(dateStr) || false;

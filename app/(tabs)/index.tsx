@@ -741,6 +741,16 @@ export default function Index() {
     setOnboardingVisible(false);
   };
 
+  // 🌟 追加：非表示にした外部予定のIDを管理するState
+  const [hiddenExternalIds, setHiddenExternalIds] = useState<string[]>([]);
+
+  // 🌟 追加：アプリ起動時に非表示リストを読み込む
+  useEffect(() => {
+    AsyncStorage.getItem("hiddenExternalIds").then((data) => {
+      if (data) setHiddenExternalIds(JSON.parse(data));
+    });
+  }, []);
+
   // 🌟 アカウントとデータを完全に削除する機能
   const handleDeleteAccount = async () => {
     Alert.alert(
@@ -890,7 +900,16 @@ export default function Index() {
     loadData();
   }, [isExternalSyncEnabled]); // 🌟 外部同期が切り替わった時にも再実行されるように依存配列に追加
 
+  // 🌟 追加：起動した直後かどうかを判定するフラグ
+  const isFirstRenderForSync = useRef(true);
+
   useEffect(() => {
+    // 🌟 追加：アプリ起動直後（まだデータが空の時）は、保存処理を強制キャンセル！
+    if (isFirstRenderForSync.current) {
+      isFirstRenderForSync.current = false;
+      return;
+    }
+
     const syncToStorage = async () => {
       try {
         await AsyncStorage.setItem(
@@ -1026,6 +1045,7 @@ export default function Index() {
     layerMaster,
     tagMaster,
     selectedDate,
+    hiddenExternalIds
   );
 
   const currentSolidColor = useMemo(() => {

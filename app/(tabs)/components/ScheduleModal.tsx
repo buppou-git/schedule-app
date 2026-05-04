@@ -1687,165 +1687,178 @@ export default function ScheduleModal({
             onClose();
           }}
         >
-          {/* 🌟 変更: 内側（白い画面）をタップした時は「キーボードを閉じる」だけに留め、画面は閉じないようにブロック */}
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <View
               style={[
                 styles.modalContent,
-                { borderTopWidth: 8, borderTopColor: uiThemeColor },
+                {
+                  borderTopWidth: 8,
+                  borderTopColor: uiThemeColor,
+                  maxHeight: "85%",
+                  height: undefined
+                },
               ]}
             >
               {isSimpleMode ? (
                 // ==========================================
                 // 🟢 【大幅改善】新・簡易追加画面
                 // ==========================================
-                <View style={styles.simpleMainWrapper}>
-                  {/* 1. ドラッグバー */}
-                  <View style={styles.simpleDragBar} />
+                /* 🌟 追加：ScrollView と TouchableWithoutFeedback で包む */
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  contentContainerStyle={{ flexGrow: 1 }}
+                >
+                  <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                    <View style={styles.simpleMainWrapper}>
+                      {/* 1. ドラッグバー */}
+                      <View style={styles.simpleDragBar} />
 
-                  {/* 2. タイトル入力（大部分を占める大きな入力欄） */}
-                  <TextInput
-                    style={styles.simpleHeroInput}
-                    placeholder="予定のタイトルを入力"
-                    placeholderTextColor="#C7C7CC"
-                    autoFocus
-                    value={inputText}
-                    onChangeText={setInputText}
-                    multiline={false}
-                  />
-
-                  {/* 3. 日時・時間設定エリア（カード形式） */}
-                  <View style={styles.simpleDateTimeCard}>
-                    <View style={styles.timeRow}>
-                      {/* 🌟 アイコンの代わりに「開始」の文字を入れて幅を固定 */}
-                      <View style={styles.timeLabelContainer}>
-                        <Text style={[styles.timeLabelText, { color: uiThemeColor }]}>開始</Text>
-                      </View>
-                      <View style={styles.timePickerGroup}>
-                        <ModernDatePicker
-                          value={startDate}
-                          mode="date"
-                          onChange={setStartDate}
-                          themeColor={uiThemeColor}
-                        />
-                        <ModernDatePicker
-                          value={startTime}
-                          mode="time"
-                          onChange={setStartTime}
-                          themeColor={uiThemeColor}
-                        />
-                      </View>
-                    </View>
-                    <View style={styles.timeDivider} />
-                    <View style={styles.timeRow}>
-                      {/* 🌟 「終了」の文字 */}
-                      <View style={styles.timeLabelContainer}>
-                        <Text style={styles.timeLabelText}>終了</Text>
-                      </View>
-                      <View style={styles.timePickerGroup}>
-                        <ModernDatePicker
-                          value={endDate}
-                          mode="date"
-                          onChange={setEndDate}
-                          themeColor={uiThemeColor}
-                        />
-                        <ModernDatePicker
-                          value={endTime}
-                          mode="time"
-                          onChange={setEndTime}
-                          themeColor={uiThemeColor}
-                        />
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* 🌟 4. 追加：カテゴリ（レイヤー）選択エリア */}
-                  <View style={styles.simpleCategorySection}>
-                    <Text style={styles.simpleCategoryTitle}>カテゴリ</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ width: "100%" }}>
-                      {Object.keys(tagMaster).map((layerName) => {
-                        // 以前の最強ロジックと同じく色を取得
-                        const layerColor = tagMaster[layerName]?.color || layerMaster[layerName] || uiThemeColor;
-                        const isSelected = selectedLayer === layerName;
-                        return (
-                          <TouchableOpacity
-                            key={layerName}
-                            style={[
-                              styles.simpleCategoryChip,
-                              isSelected && { backgroundColor: layerColor, borderColor: layerColor }
-                            ]}
-                            onPress={() => setSelectedLayer(layerName)}
-                          >
-                            <Text style={[styles.simpleCategoryChipText, isSelected && { color: "#FFF" }]}>
-                              {layerName}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
-
-                  {/* 4. オプションボタン（ToDo & 金額） */}
-                  <View style={styles.simpleActionRow}>
-                    {/* ToDo切り替えボタン */}
-                    <TouchableOpacity
-                      style={[styles.simpleOptBtn, isTodo && { backgroundColor: "#34C759", borderColor: "#34C759" }]}
-                      onPress={() => setIsTodo(!isTodo)}
-                    >
-                      <Ionicons name="checkbox" size={22} color={isTodo ? "#FFF" : "#8E8E93"} />
-                      <Text style={[styles.simpleOptBtnText, isTodo && { color: "#FFF" }]}>ToDoに追加</Text>
-                    </TouchableOpacity>
-
-                    {/* 金額入力切り替えボタン */}
-                    <TouchableOpacity
-                      style={[styles.simpleOptBtn, isExpense && { backgroundColor: "#FFCC00", borderColor: "#FFCC00" }]}
-                      onPress={() => setIsExpense(!isExpense)}
-                    >
-                      <Ionicons name="wallet" size={22} color={isExpense ? "#FFF" : "#FFCC00"} />
-                      <Text style={[styles.simpleOptBtnText, isExpense && { color: "#FFF" }]}>支出を記録</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* 5. 条件付き金額入力エリア（支出ONの時だけふわっと出す） */}
-                  {isExpense && (
-                    <View style={styles.simpleAmountSection}>
-                      <Text style={styles.amountSymbol}>¥</Text>
+                      {/* 2. タイトル入力（大部分を占める大きな入力欄） */}
                       <TextInput
-                        style={styles.simpleHeroAmountInput}
-                        placeholder="0"
+                        style={styles.simpleHeroInput}
+                        placeholder="予定のタイトルを入力"
                         placeholderTextColor="#C7C7CC"
-                        keyboardType="numeric"
-                        value={inputAmount}
-                        onChangeText={setInputAmount}
+                        autoFocus
+                        value={inputText}
+                        onChangeText={setInputText}
+                        multiline={false}
                       />
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.miniCategoryScroll}>
-                        {["食費", "日用品", "交通費", "交際費", "趣味", "固定費"].map((cat) => (
-                          <TouchableOpacity
-                            key={cat}
-                            style={[styles.miniChip, selectedCategory === cat && { backgroundColor: "#FFCC00" }]}
-                            onPress={() => setSelectedCategory(cat)}
-                          >
-                            <Text style={[styles.miniChipText, selectedCategory === cat && { color: "#FFF" }]}>{cat}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
+
+                      {/* 3. 日時・時間設定エリア（カード形式） */}
+                      <View style={styles.simpleDateTimeCard}>
+                        <View style={styles.timeRow}>
+                          {/* 🌟 アイコンの代わりに「開始」の文字を入れて幅を固定 */}
+                          <View style={styles.timeLabelContainer}>
+                            <Text style={[styles.timeLabelText, { color: uiThemeColor }]}>開始</Text>
+                          </View>
+                          <View style={styles.timePickerGroup}>
+                            <ModernDatePicker
+                              value={startDate}
+                              mode="date"
+                              onChange={setStartDate}
+                              themeColor={uiThemeColor}
+                            />
+                            <ModernDatePicker
+                              value={startTime}
+                              mode="time"
+                              onChange={setStartTime}
+                              themeColor={uiThemeColor}
+                            />
+                          </View>
+                        </View>
+                        <View style={styles.timeDivider} />
+                        <View style={styles.timeRow}>
+                          {/* 🌟 「終了」の文字 */}
+                          <View style={styles.timeLabelContainer}>
+                            <Text style={styles.timeLabelText}>終了</Text>
+                          </View>
+                          <View style={styles.timePickerGroup}>
+                            <ModernDatePicker
+                              value={endDate}
+                              mode="date"
+                              onChange={setEndDate}
+                              themeColor={uiThemeColor}
+                            />
+                            <ModernDatePicker
+                              value={endTime}
+                              mode="time"
+                              onChange={setEndTime}
+                              themeColor={uiThemeColor}
+                            />
+                          </View>
+                        </View>
+                      </View>
+
+                      {/* 🌟 4. 追加：カテゴリ（レイヤー）選択エリア */}
+                      <View style={styles.simpleCategorySection}>
+                        <Text style={styles.simpleCategoryTitle}>カテゴリ</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ width: "100%" }}>
+                          {Object.keys(tagMaster).map((layerName) => {
+                            // 以前の最強ロジックと同じく色を取得
+                            const layerColor = tagMaster[layerName]?.color || layerMaster[layerName] || uiThemeColor;
+                            const isSelected = selectedLayer === layerName;
+                            return (
+                              <TouchableOpacity
+                                key={layerName}
+                                style={[
+                                  styles.simpleCategoryChip,
+                                  isSelected && { backgroundColor: layerColor, borderColor: layerColor }
+                                ]}
+                                onPress={() => setSelectedLayer(layerName)}
+                              >
+                                <Text style={[styles.simpleCategoryChipText, isSelected && { color: "#FFF" }]}>
+                                  {layerName}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </ScrollView>
+                      </View>
+
+                      {/* 4. オプションボタン（ToDo & 金額） */}
+                      <View style={styles.simpleActionRow}>
+                        {/* ToDo切り替えボタン */}
+                        <TouchableOpacity
+                          style={[styles.simpleOptBtn, isTodo && { backgroundColor: "#34C759", borderColor: "#34C759" }]}
+                          onPress={() => setIsTodo(!isTodo)}
+                        >
+                          <Ionicons name="checkbox" size={22} color={isTodo ? "#FFF" : "#8E8E93"} />
+                          <Text style={[styles.simpleOptBtnText, isTodo && { color: "#FFF" }]}>ToDoに追加</Text>
+                        </TouchableOpacity>
+
+                        {/* 金額入力切り替えボタン */}
+                        <TouchableOpacity
+                          style={[styles.simpleOptBtn, isExpense && { backgroundColor: "#FFCC00", borderColor: "#FFCC00" }]}
+                          onPress={() => setIsExpense(!isExpense)}
+                        >
+                          <Ionicons name="wallet" size={22} color={isExpense ? "#FFF" : "#FFCC00"} />
+                          <Text style={[styles.simpleOptBtnText, isExpense && { color: "#FFF" }]}>支出を記録</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* 5. 条件付き金額入力エリア（支出ONの時だけふわっと出す） */}
+                      {isExpense && (
+                        <View style={styles.simpleAmountSection}>
+                          <Text style={styles.amountSymbol}>¥</Text>
+                          <TextInput
+                            style={styles.simpleHeroAmountInput}
+                            placeholder="0"
+                            placeholderTextColor="#C7C7CC"
+                            keyboardType="numeric"
+                            value={inputAmount}
+                            onChangeText={setInputAmount}
+                          />
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.miniCategoryScroll}>
+                            {["食費", "日用品", "交通費", "交際費", "趣味", "固定費"].map((cat) => (
+                              <TouchableOpacity
+                                key={cat}
+                                style={[styles.miniChip, selectedCategory === cat && { backgroundColor: "#FFCC00" }]}
+                                onPress={() => setSelectedCategory(cat)}
+                              >
+                                <Text style={[styles.miniChipText, selectedCategory === cat && { color: "#FFF" }]}>{cat}</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </ScrollView>
+                        </View>
+                      )}
+
+                      {/* 6. 下部アクション */}
+                      <View style={styles.simpleBottomActions}>
+                        <TouchableOpacity style={styles.simpleDetailLink} onPress={() => setIsSimpleMode(false)}>
+                          <Text style={[styles.simpleDetailLinkText, { color: uiThemeColor }]}>詳細設定を表示</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[styles.simpleLargeSaveBtn, { backgroundColor: uiThemeColor }]}
+                          onPress={handleSavePress}
+                        >
+                          <Text style={styles.simpleLargeSaveBtnText}>保存して閉じる</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                  )}
-
-                  {/* 6. 下部アクション */}
-                  <View style={styles.simpleBottomActions}>
-                    <TouchableOpacity style={styles.simpleDetailLink} onPress={() => setIsSimpleMode(false)}>
-                      <Text style={[styles.simpleDetailLinkText, { color: uiThemeColor }]}>詳細設定を表示</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.simpleLargeSaveBtn, { backgroundColor: uiThemeColor }]}
-                      onPress={handleSavePress}
-                    >
-                      <Text style={styles.simpleLargeSaveBtnText}>保存して閉じる</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
+                  </TouchableWithoutFeedback>
+                </ScrollView>
               ) : (
 
                 // ==========================================
@@ -2430,7 +2443,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     padding: 22,
     borderRadius: 25,
-    height: "75%",
+    // 🌟 変更：height を消して、minHeight と maxHeight にする
+    minHeight: "55%",
+    maxHeight: "85%",
   },
   headerRow: {
     flexDirection: "row",
