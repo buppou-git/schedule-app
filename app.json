@@ -7,11 +7,11 @@
     "icon": "./assets/icon.png",
     "scheme": "com.buppou.multicalendar",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.buppou.multicalendar",
-      "googleServicesFile": "./GoogleService-Info.plist",
+      "googleServicesFile": "GoogleService-Info.plist",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleURLTypes": [
@@ -37,6 +37,15 @@
     },
     "plugins": [
       "expo-router",
+
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
+      ],
       [
         "expo-splash-screen",
         {
@@ -68,7 +77,8 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.633661996714-m1eoribajuqgbe5grrv3gpcco27peqrv"
         }
-      ]
+      ],
+      "expo-build-properties"
     ],
     "experiments": {
       "typedRoutes": true

@@ -36,7 +36,7 @@ import PresetSaveModal from "./components/PresetSaveModal";
 
 //広告関係
 import { requestTrackingPermissionsAsync } from "expo-tracking-transparency";
-import { MobileAds } from "react-native-google-mobile-ads";
+import { BannerAd, BannerAdSize, MobileAds, TestIds } from "react-native-google-mobile-ads";
 
 import {
   ActivityIndicator,
@@ -2277,6 +2277,9 @@ export default function Index() {
           </ScrollView>
         </View>
       </View>
+
+
+
       <Modal
         visible={filterModalVisible}
         transparent={true}
@@ -2691,7 +2694,6 @@ export default function Index() {
         />
       )}{" "}
       {/* 🌟 閉じカッコを追加 */}
-      {/*広告用 */}
       <OnboardingModal
         visible={onboardingVisible}
         onComplete={handleCompleteOnboarding}
@@ -2706,6 +2708,16 @@ export default function Index() {
         onHide={handleHideExternal}
         themeColor={currentSolidColor}
       />
+
+      <View style={styles.adContainer}>
+        <BannerAd
+          unitId={TestIds.BANNER}
+          size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+          requestOptions={{
+            requestNonPersonalizedAdsOnly: true,
+          }}
+        />
+      </View>
 
 
     </SafeAreaView>
@@ -3159,4 +3171,5 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 5,
   },
+
 });
