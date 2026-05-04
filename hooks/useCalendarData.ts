@@ -79,7 +79,7 @@ export function useCalendarData(
     let currentDate = new Date(limitStartDate);
     while (currentDate <= limitEndDate) {
       // 🌟 型定義ファイルを作ったので、ここが string | undefined として認識されます
-      const holidayName = JapaneseHolidays.isJPHoliday(currentDate);
+      const holidayName = JapaneseHolidays.isHoliday(currentDate);
       
       if (holidayName) {
         const dateStr = currentDate.toISOString().split("T")[0];
