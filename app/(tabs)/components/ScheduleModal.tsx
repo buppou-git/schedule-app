@@ -469,7 +469,7 @@ export default function ScheduleModal({
 
       isInitialized.current = true;
       setIsReady(true); // 🌟 ここで「準備完了」の合図を出す
-    }, 10); // 👈 10ms後に実行する
+    }, 150);
 
     // 🌟 タイマーの後始末
     return () => clearTimeout(timer);
@@ -483,12 +483,10 @@ export default function ScheduleModal({
       .toLowerCase();
 
   const titleHistory = useMemo(() => {
-    // 🌟 1. 画面の準備ができていない時は計算を完全にスキップする
-    if (!isReady || !visible) return [];
+    // 🌟 修正：ユーザーが文字を入力し始めて（inputText が 1文字以上ある時）初めて計算する
+    if (!isReady || !visible || inputText.length === 0) return [];
 
     const titles = new Set<string>();
-
-    // 🌟 2. すべての過去の予定ではなく、直近「150件」のデータだけを調べる
     const allItems = Object.values(scheduleData).flat() as ScheduleItem[];
     const recentItems = allItems.slice(-150);
 
@@ -497,7 +495,7 @@ export default function ScheduleModal({
     });
 
     return Array.from(titles);
-  }, [scheduleData, isReady, visible]); // 👈 依存配列も忘れずに
+  }, [scheduleData, isReady, visible, inputText]); // 👈 inputText を依存配列に追加
 
   const suggestions = useMemo(() => {
     const s = inputText.trim();

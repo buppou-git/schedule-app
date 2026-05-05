@@ -236,18 +236,17 @@ export default function Index() {
       {
         text: "非表示にする",
         style: "destructive",
-        onPress: () => {
+        onPress: async () => { // 🌟 ここに async を追加！
           setExternalModalVisible(false);
 
-          // 🌟 関数型 (prev) => ... を使わず、現在の scheduleData をコピーして編集する
-          const newData = { ...scheduleData };
-          const dateKey = selectedDate;
+          // 🌟 1. 用意してあった非表示リスト(State)にこの予定のIDを追加する
+          const newHiddenIds = [...hiddenExternalIds, item.id];
+          setHiddenExternalIds(newHiddenIds);
 
-          if (newData[dateKey]) {
-            // i の型を ScheduleItem に明示
-            newData[dateKey] = newData[dateKey].filter((i: ScheduleItem) => i.id !== item.id);
-            setScheduleData(newData);
-          }
+          // 🌟 2. 次回アプリを開いた時も消えたままになるようにローカルストレージに保存！
+          await AsyncStorage.setItem("hiddenExternalIds", JSON.stringify(newHiddenIds));
+
+          // ※ 外部予定は scheduleData にはないので、scheduleDataをいじる処理は削除してOKです！
         }
       }
     ]);
@@ -1602,6 +1601,7 @@ export default function Index() {
       const matchLayer =
         isAllLayers ||
         itemTags.some((tag: string) => {
+          if (tag === "祝日") return true;
           const parentLayer = tagMaster[tag]?.layer || tag;
           return activeTagsSet.has(parentLayer);
         });
@@ -2613,22 +2613,22 @@ export default function Index() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* 🌟 修正：＋ボタンを押した（modalVisibleがtrueの）時だけ、追加画面を生成する！ */}
-      {modalVisible && (
-        <ScheduleModal
-          visible={modalVisible}
-          onClose={() => setModalVisible(false)}
-          selectedDate={selectedDate}
-          selectedItem={selectedItem}
-          activeMode={activeMode}
-          scheduleData={scheduleData}
-          setScheduleData={setScheduleData}
-          layerMaster={layerMaster}
-          tagMaster={tagMaster}
-          setTagMaster={setTagMaster}
-          setHasUnsavedChanges={setHasUnsavedChanges}
-        />
-      )}
+      // index.tsx (1166行目付近〜)
+
+      {/* 🌟 変更：&& を外し、あらかじめ裏側に待機させておく（開くのが爆速になります） */}
+      <ScheduleModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        selectedDate={selectedDate}
+        selectedItem={selectedItem}
+        activeMode={activeMode}
+        scheduleData={scheduleData}
+        setScheduleData={setScheduleData}
+        layerMaster={layerMaster}
+        tagMaster={tagMaster}
+        setTagMaster={setTagMaster}
+        setHasUnsavedChanges={setHasUnsavedChanges}
+      />
 
       <LayerManagementModal
         visible={layerModalVisible}
@@ -2638,23 +2638,23 @@ export default function Index() {
         setHasUnsavedChanges={setHasUnsavedChanges}
       />
       <StatusBar style="auto" />
-      {configModalVisible && (
-        <ConfigModal
-          visible={configModalVisible}
-          onClose={() => {
-            setConfigModalVisible(false);
-            AsyncStorage.getItem("externalCalendarSync").then((val) =>
-              setIsExternalSyncEnabled(val === "true"),
-            );
-          }}
-          lastSyncedAt={lastSyncedAt}
-          onRestore={handleRestore}
-          onBackup={handleManualBackup} // 🌟 追加
-          sharedRooms={sharedRooms} // 🌟 追加
-          onAddSharedRoom={handleAddSharedRoom} // 🌟 追加
-          onDeleteAccount={handleDeleteAccount}
-        />
-      )}
+
+      <ConfigModal
+        visible={configModalVisible}
+        onClose={() => {
+          setConfigModalVisible(false);
+          AsyncStorage.getItem("externalCalendarSync").then((val) =>
+            setIsExternalSyncEnabled(val === "true"),
+          );
+        }}
+        lastSyncedAt={lastSyncedAt}
+        onRestore={handleRestore}
+        onBackup={handleManualBackup}
+        sharedRooms={sharedRooms}
+        onAddSharedRoom={handleAddSharedRoom}
+        onDeleteAccount={handleDeleteAccount}
+      />
+
       <SubTaskEditModal
         visible={subTaskModalVisible}
         onClose={() => setSubTaskModalVisible(false)}
@@ -2663,24 +2663,25 @@ export default function Index() {
         onDelete={handleSubTaskDelete}
         themeColor={currentSolidColor}
       />
+
       <SearchModal
         visible={searchModalVisible}
         onClose={() => setSearchModalVisible(false)}
-        scheduleData={expandedScheduleData} // 🌟 変更：外部予定が含まれる展開済みデータを渡す
+        scheduleData={expandedScheduleData}
         themeColor={currentSolidColor}
         layerMaster={layerMaster}
         tagMaster={tagMaster}
         onItemPress={(item, date) => {
           setSelectedDate(date);
-          openEditModal(item); // 🌟 変更：さっき書き換えた openEditModal に処理を任せる
+          openEditModal(item);
         }}
       />
-      {/* 🌟 修正：Propsを追加 */}
-      {quickActionItem && ( // 🌟 この行を追加（データがある時だけ表示）
+
+      {quickActionItem && (
         <QuickActionModal
           visible={quickActionVisible}
           onClose={() => setQuickActionVisible(false)}
-          item={quickActionItem} // 🌟 nullにならないことが保証されるのでエラーが消える！
+          item={quickActionItem}
           themeColor={currentSolidColor}
           onDelete={handleQuickDelete}
           onEditDetail={(item) => {
@@ -2692,13 +2693,12 @@ export default function Index() {
           layerMaster={layerMaster}
           onMoveOrCopy={handleMoveOrCopy}
         />
-      )}{" "}
-      {/* 🌟 閉じカッコを追加 */}
+      )}
+
       <OnboardingModal
         visible={onboardingVisible}
         onComplete={handleCompleteOnboarding}
       />
-
 
       <ExternalEventModal
         visible={externalModalVisible}

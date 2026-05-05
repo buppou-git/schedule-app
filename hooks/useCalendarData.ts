@@ -147,7 +147,7 @@ export function useCalendarData(
             "#999";                         // ④ どれもなければグレー
 
           // フィルタリング（表示設定）のチェック
-          if (!isAllLayers && !activeTagsSet.has(info.layer)) return;
+          if (!isAllLayers && !activeTagsSet.has(info.layer) && tag !== "祝日") return;
 
           // 決定した色をドットとして追加
           dayDots.add(finalColor);
