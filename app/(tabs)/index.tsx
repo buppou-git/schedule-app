@@ -16,7 +16,6 @@ import { useScheduleManager } from "../../hooks/useScheduleManager";
 
 import { ScheduleItem, SubTask } from "../../types";
 
-
 import { useCalendarData } from "../../hooks/useCalendarData";
 import { useNotificationManager } from "../../hooks/useNotificationManager";
 
@@ -36,7 +35,12 @@ import PresetSaveModal from "./components/PresetSaveModal";
 
 //広告関係
 import { requestTrackingPermissionsAsync } from "expo-tracking-transparency";
-import { BannerAd, BannerAdSize, MobileAds, TestIds } from "react-native-google-mobile-ads";
+import {
+  BannerAd,
+  BannerAdSize,
+  MobileAds,
+  TestIds,
+} from "react-native-google-mobile-ads";
 
 import {
   ActivityIndicator,
@@ -213,7 +217,8 @@ export default function Index() {
   const [selectedItem, setSelectedItem] = useState<ScheduleItem | null>(null);
 
   const [externalModalVisible, setExternalModalVisible] = useState(false);
-  const [selectedExternalItem, setSelectedExternalItem] = useState<ScheduleItem | null>(null);
+  const [selectedExternalItem, setSelectedExternalItem] =
+    useState<ScheduleItem | null>(null);
 
   const handleCopyExternal = (item: ScheduleItem) => {
     // 外部予定特有のデータを剥がす
@@ -236,7 +241,8 @@ export default function Index() {
       {
         text: "非表示にする",
         style: "destructive",
-        onPress: async () => { // 🌟 ここに async を追加！
+        onPress: async () => {
+          // 🌟 ここに async を追加！
           setExternalModalVisible(false);
 
           // 🌟 1. 用意してあった非表示リスト(State)にこの予定のIDを追加する
@@ -244,11 +250,14 @@ export default function Index() {
           setHiddenExternalIds(newHiddenIds);
 
           // 🌟 2. 次回アプリを開いた時も消えたままになるようにローカルストレージに保存！
-          await AsyncStorage.setItem("hiddenExternalIds", JSON.stringify(newHiddenIds));
+          await AsyncStorage.setItem(
+            "hiddenExternalIds",
+            JSON.stringify(newHiddenIds),
+          );
 
           // ※ 外部予定は scheduleData にはないので、scheduleDataをいじる処理は削除してOKです！
-        }
-      }
+        },
+      },
     ]);
   };
 
@@ -329,6 +338,9 @@ export default function Index() {
 
   const [isAppReady, setIsAppReady] = useState(false);
 
+  // サマリーの開閉状態を記憶するフラグ
+  const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
+
   useEffect(() => {
     // アプリ起動から0.1秒だけ待って、UIの準備完了フラグを立てる（これで一気に軽くなる）
     const timer = setTimeout(() => setIsAppReady(true), 100);
@@ -352,7 +364,11 @@ export default function Index() {
     useState("");
   const [editingPresetName, setEditingPresetName] = useState("");
 
-  const calendarKey = useMemo(() => activeMode, [activeMode]);
+  const [calendarResetKey, setCalendarResetKey] = useState(0);
+  const calendarKey = useMemo(
+    () => `${activeMode}-${calendarResetKey}`,
+    [activeMode, calendarResetKey],
+  );
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const [configModalVisible, setConfigModalVisible] = useState(false);
@@ -879,8 +895,6 @@ export default function Index() {
 
         let initialLayers = layers ? JSON.parse(layers) : {};
 
-
-
         if (!onboarded && !scheduleExists) {
           setOnboardingVisible(true);
         } else {
@@ -959,7 +973,6 @@ export default function Index() {
     return () => unsubscribes.forEach((unsub) => unsub());
   }, [sharedRooms]);
 
-
   const displayData = useMemo(() => {
     // 日付をキーに、IDをキーとしたScheduleItemのMapを持つ
     const combinedMap: { [date: string]: Map<string, ScheduleItem> } = {};
@@ -976,7 +989,13 @@ export default function Index() {
       const map = getMapForDate(date);
       externalEvents[date].forEach((item) => {
         const rawId = item.id.replace("ext_", "");
-        map.set(rawId, { ...item, externalEventId: rawId, color: "#FF2D55" });
+        // 🌟 変更：isEvent: true を足すことで「すべて表示」の時に消えなくなります！
+        map.set(rawId, {
+          ...item,
+          externalEventId: rawId,
+          color: "#FF2D55",
+          isEvent: true,
+        });
       });
     });
 
@@ -1019,7 +1038,12 @@ export default function Index() {
           itemLayer = "外部予定";
         } else {
           // アプリ内で作られた、または編集された予定は、本来設定されたレイヤーを維持
-          const itemTags = item.tags && item.tags.length > 0 ? item.tags : (item.tag ? [item.tag] : []);
+          const itemTags =
+            item.tags && item.tags.length > 0
+              ? item.tags
+              : item.tag
+                ? [item.tag]
+                : [];
           if (itemTags.length > 0) {
             itemLayer = tagMaster[itemTags[0]]?.layer || "共通";
           }
@@ -1036,7 +1060,6 @@ export default function Index() {
     return result;
   }, [scheduleData, roomSchedules, externalEvents, activeTags, tagMaster]);
 
-
   const { expandedScheduleData, currentMarkedDates } = useCalendarData(
     displayData,
     activeMode,
@@ -1044,7 +1067,7 @@ export default function Index() {
     layerMaster,
     tagMaster,
     selectedDate,
-    hiddenExternalIds
+    hiddenExternalIds,
   );
 
   const currentSolidColor = useMemo(() => {
@@ -1228,7 +1251,6 @@ export default function Index() {
     if (activeTags.length !== 1) return null; // 1つのレイヤーに絞り込んでいる時だけ発動
 
     const targetLayer = activeTags[0];
-    
 
     const [y, m] = selectedDate.split("-");
     const targetMonthPrefix = `${y}-${m}-`; // 例: "2026-04-"
@@ -1896,16 +1918,28 @@ export default function Index() {
                       ]}
                     >
                       <Text
-                        style={[styles.monthformat, { color: currentSolidColor }]}
+                        style={[
+                          styles.monthformat,
+                          { color: currentSolidColor },
+                        ]}
                       >
                         {date.getMonth() + 1}
                       </Text>
 
                       {/* 右側のボタン群 */}
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 10,
+                        }}
+                      >
                         {/* 🌟 追加：「今日に戻る」アイコンボタン */}
                         <TouchableOpacity
-                          onPress={() => setSelectedDate(todayStr)} // 押したら今日の日付をセット
+                          onPress={() => {
+                            setSelectedDate(todayStr); // 今日の日付をセット
+                            setCalendarResetKey((prev) => prev + 1); // 🌟 追加：カレンダーを強制リフレッシュして定位置に戻す！
+                          }}
                           style={{
                             width: 36,
                             height: 36,
@@ -1998,108 +2032,133 @@ export default function Index() {
 
               {(activeMode === "todo" ||
                 (activeMode === "money" && !isMoneySummaryMode)) && (
-                  <View style={styles.weekCalendarWrapper}>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        paddingRight: 20,
-                      }}
-                    >
-                      <Text style={styles.monthLabel}>
-                        {parseInt(selectedDate.split("-")[1])}月
-                      </Text>
-                      <TouchableOpacity onPress={handleOpenNewModal}>
-                        <Ionicons
-                          name="add-circle"
-                          size={30}
-                          color={currentSolidColor}
-                        />
-                      </TouchableOpacity>
-                    </View>
-                    <CalendarProvider
-                      date={selectedDate}
-                      onDateChanged={setSelectedDate}
-                    >
-                      <WeekCalendar
-                        firstDay={1}
-                        markedDates={currentMarkedDates}
-                        theme={{
-                          calendarBackground: "transparent",
-                          todayTextColor: currentSolidColor,
-                          selectedDayBackgroundColor: currentSolidColor,
-                        }}
+                <View style={styles.weekCalendarWrapper}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      paddingRight: 20,
+                    }}
+                  >
+                    <Text style={styles.monthLabel}>
+                      {parseInt(selectedDate.split("-")[1])}月
+                    </Text>
+                    <TouchableOpacity onPress={handleOpenNewModal}>
+                      <Ionicons
+                        name="add-circle"
+                        size={30}
+                        color={currentSolidColor}
                       />
-                    </CalendarProvider>
+                    </TouchableOpacity>
                   </View>
-                )}
+                  <CalendarProvider
+                    date={selectedDate}
+                    onDateChanged={setSelectedDate}
+                  >
+                    <WeekCalendar
+                      firstDay={1}
+                      markedDates={currentMarkedDates}
+                      theme={{
+                        calendarBackground: "transparent",
+                        todayTextColor: currentSolidColor,
+                        selectedDayBackgroundColor: currentSolidColor,
+                      }}
+                    />
+                  </CalendarProvider>
+                </View>
+              )}
             </>
           )}
 
           {activeMode === "calendar" && layerSummary && (
-            <View
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setIsSummaryExpanded(!isSummaryExpanded);
+              }}
               style={[
                 styles.summaryCard,
                 {
                   backgroundColor: currentBgColor,
                   borderColor: currentSolidColor + "40",
-                  marginHorizontal: 15, // 横幅をリストに合わせる
-                  marginTop: 10, // カレンダーとの隙間
-                  marginBottom: 0, // 下のリストとの隙間はリスト側に任せる
+                  marginHorizontal: 15,
+                  marginTop: 10,
                 },
               ]}
             >
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  marginBottom: 8,
-                }}
-              >
-                <Ionicons
-                  name="analytics"
-                  size={16}
-                  color={currentSolidColor}
-                />
-                <Text
+              {/* 🌟 ヘッダー部分（常に表示される） */}
+              <View style={styles.summaryHeader}>
+                <View
                   style={{
-                    fontSize: 12,
-                    fontWeight: "800",
-                    color: currentSolidColor,
-                    marginLeft: 6,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    flex: 1,
                   }}
                 >
-                  {parseInt(selectedDate.split("-")[1])}月の「
-                  {layerSummary.targetLayer}」サマリー
-                </Text>
-              </View>
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "flex-end",
-                }}
-              >
-                <Text
-                  style={{ fontSize: 13, color: "#1C1C1E", fontWeight: "600" }}
-                >
-                  関連予定:{" "}
-                  <Text style={{ fontSize: 18, fontWeight: "900" }}>
-                    {layerSummary.eventCount}
-                  </Text>{" "}
-                  件
-                </Text>
-                <Text
-                  style={{ fontSize: 13, color: "#1C1C1E", fontWeight: "600" }}
-                >
-                  支出合計:{" "}
-                  <Text style={{ fontSize: 18, fontWeight: "900" }}>
+                  <Ionicons
+                    name="analytics"
+                    size={16}
+                    color={currentSolidColor}
+                  />
+                  <Text
+                    style={[
+                      styles.summaryHeaderText,
+                      { color: currentSolidColor },
+                    ]}
+                  >
+                    {parseInt(selectedDate.split("-")[1])}月のサマリー
+                  </Text>
+                </View>
+
+                {/* 🌟 閉じてる時は合計額だけ右端にチラ見せ */}
+                {!isSummaryExpanded && (
+                  <Text
+                    style={[
+                      styles.summaryTotalMini,
+                      { color: currentSolidColor },
+                    ]}
+                  >
                     ¥{layerSummary.totalExpense.toLocaleString()}
                   </Text>
-                </Text>
+                )}
+
+                <Ionicons
+                  name={isSummaryExpanded ? "chevron-up" : "chevron-down"}
+                  size={18}
+                  color={currentSolidColor}
+                />
               </View>
-            </View>
+
+              {/* 🌟 詳細部分（開いた時だけ表示される） */}
+              {isSummaryExpanded && (
+                <View style={styles.summaryDetailContainer}>
+                  <View style={styles.summaryDivider} />
+                  <View style={styles.summaryRow}>
+                    <View style={styles.summaryItem}>
+                      <Text style={styles.summaryLabel}>対象レイヤー</Text>
+                      <Text style={styles.summaryValue}>
+                        {layerSummary.targetLayer}
+                      </Text>
+                    </View>
+                    <View style={styles.summaryItem}>
+                      <Text style={styles.summaryLabel}>関連予定</Text>
+                      <Text style={styles.summaryValue}>
+                        {layerSummary.eventCount}
+                        <Text style={styles.unit}>件</Text>
+                      </Text>
+                    </View>
+                    <View style={styles.summaryItem}>
+                      <Text style={styles.summaryLabel}>支出合計</Text>
+                      <Text style={[styles.summaryValue, { color: "#FF3B30" }]}>
+                        ¥{layerSummary.totalExpense.toLocaleString()}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+            </TouchableOpacity>
           )}
 
           <ScrollView
@@ -2273,10 +2332,7 @@ export default function Index() {
                       layerMaster={layerMaster}
                       formatEventTime={formatEventTime}
                       openEditModal={openEditModal}
-                      onLongPress={(item) => {
-                        setQuickActionItem(item);
-                        setQuickActionVisible(true);
-                      }}
+                      onLongPress={stableLongPress}
                     />
                   ))}
                 </View>
@@ -2285,9 +2341,6 @@ export default function Index() {
           </ScrollView>
         </View>
       </View>
-
-
-
       <Modal
         visible={filterModalVisible}
         transparent={true}
@@ -2406,13 +2459,13 @@ export default function Index() {
                         styles.gridCard,
                         tempActiveTags.includes("外部予定")
                           ? {
-                            backgroundColor: "#FF2D55",
-                            borderColor: "#FF2D55",
-                          }
+                              backgroundColor: "#FF2D55",
+                              borderColor: "#FF2D55",
+                            }
                           : [
-                            styles.gridCardGhost,
-                            { borderColor: "#FF2D5540" },
-                          ],
+                              styles.gridCardGhost,
+                              { borderColor: "#FF2D5540" },
+                            ],
                       ]}
                       onPress={() => toggleTempTag("外部予定")}
                     >
@@ -2462,13 +2515,13 @@ export default function Index() {
                           styles.gridCard,
                           isSelected
                             ? {
-                              backgroundColor: layerMaster[layer],
-                              borderColor: layerMaster[layer],
-                            }
+                                backgroundColor: layerMaster[layer],
+                                borderColor: layerMaster[layer],
+                              }
                             : [
-                              styles.gridCardGhost,
-                              { borderColor: layerMaster[layer] + "40" },
-                            ],
+                                styles.gridCardGhost,
+                                { borderColor: layerMaster[layer] + "40" },
+                              ],
                         ]}
                         onPress={() => toggleTempTag(layer)}
                       >
@@ -2620,9 +2673,7 @@ export default function Index() {
           </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       </Modal>
-
       // index.tsx (1166行目付近〜)
-
       {/* 🌟 変更：&& を外し、あらかじめ裏側に待機させておく（開くのが爆速になります） */}
       <ScheduleModal
         visible={modalVisible}
@@ -2637,7 +2688,6 @@ export default function Index() {
         setTagMaster={setTagMaster}
         setHasUnsavedChanges={setHasUnsavedChanges}
       />
-
       <LayerManagementModal
         visible={layerModalVisible}
         onClose={() => setLayerModalVisible(false)}
@@ -2646,7 +2696,6 @@ export default function Index() {
         setHasUnsavedChanges={setHasUnsavedChanges}
       />
       <StatusBar style="auto" />
-
       <ConfigModal
         visible={configModalVisible}
         onClose={() => {
@@ -2662,7 +2711,6 @@ export default function Index() {
         onAddSharedRoom={handleAddSharedRoom}
         onDeleteAccount={handleDeleteAccount}
       />
-
       <SubTaskEditModal
         visible={subTaskModalVisible}
         onClose={() => setSubTaskModalVisible(false)}
@@ -2671,7 +2719,6 @@ export default function Index() {
         onDelete={handleSubTaskDelete}
         themeColor={currentSolidColor}
       />
-
       <SearchModal
         visible={searchModalVisible}
         onClose={() => setSearchModalVisible(false)}
@@ -2684,7 +2731,6 @@ export default function Index() {
           openEditModal(item);
         }}
       />
-
       {quickActionItem && (
         <QuickActionModal
           visible={quickActionVisible}
@@ -2702,12 +2748,10 @@ export default function Index() {
           onMoveOrCopy={handleMoveOrCopy}
         />
       )}
-
       <OnboardingModal
         visible={onboardingVisible}
         onComplete={handleCompleteOnboarding}
       />
-
       <ExternalEventModal
         visible={externalModalVisible}
         onClose={() => setExternalModalVisible(false)}
@@ -2718,11 +2762,13 @@ export default function Index() {
           const newData = { ...scheduleData };
           const dateKey = selectedDate;
           if (!newData[dateKey]) newData[dateKey] = [];
-          
+
           // 既存の上書きデータがあれば削除して新しく追加
           const rawId = item.id.replace("ext_", "");
-          newData[dateKey] = newData[dateKey].filter(i => i.externalEventId !== rawId && i.id !== item.id);
-          
+          newData[dateKey] = newData[dateKey].filter(
+            (i) => i.externalEventId !== rawId && i.id !== item.id,
+          );
+
           newData[dateKey].push({
             ...item,
             id: `ext_ovr_${Date.now()}`,
@@ -2730,16 +2776,17 @@ export default function Index() {
             amount,
             category,
             isExpense: amount > 0,
-            color: "#FF2D55" // 赤で保存
+            isEvent: true, // 🌟 必須：「予定」として認識させる
+            tags: ["外部予定"], // 🌟 これを追加することで DailyExpense 側に確実に反映される！
+            color: "#FF2D55",
           });
-          
+
           setScheduleData(newData);
           setHasUnsavedChanges(true);
           setExternalModalVisible(false);
           Alert.alert("保存完了", "支出情報を予定に紐付けました。");
         }}
       />
-
       <View style={styles.adContainer}>
         <BannerAd
           unitId={TestIds.BANNER}
@@ -2749,8 +2796,6 @@ export default function Index() {
           }}
         />
       </View>
-
-
     </SafeAreaView>
   );
 }
@@ -3202,5 +3247,51 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 5,
   },
-
+  summaryHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  summaryHeaderText: {
+    fontSize: 12,
+    fontWeight: "800",
+    marginLeft: 6,
+    letterSpacing: 0.5,
+  },
+  summaryTotalMini: {
+    fontSize: 14,
+    fontWeight: "900",
+    marginRight: 8,
+  },
+  summaryDetailContainer: {
+    marginTop: 12,
+  },
+  summaryDivider: {
+    height: 1,
+    backgroundColor: "#00000010",
+    marginBottom: 12,
+  },
+  summaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  summaryItem: {
+    alignItems: "flex-start",
+  },
+  summaryLabel: {
+    fontSize: 9,
+    fontWeight: "bold",
+    color: "#8E8E93",
+    marginBottom: 4,
+  },
+  summaryValue: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#1C1C1E",
+  },
+  unit: {
+    fontSize: 10,
+    fontWeight: "bold",
+    marginLeft: 2,
+  },
 });

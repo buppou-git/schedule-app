@@ -330,6 +330,7 @@ export default function ScheduleModal({
     if (!visible) {
       setIsReady(false);
       isInitialized.current = false;
+      setIsSimpleMode(true); // 🌟 これを追加！閉じるたびに確実に簡易画面に戻す
       return;
     }
 
@@ -741,21 +742,21 @@ export default function ScheduleModal({
     const startForExport = isAllDay
       ? startDate
       : new Date(
-        startDate.getFullYear(),
-        startDate.getMonth(),
-        startDate.getDate(),
-        startTime.getHours(),
-        startTime.getMinutes(),
-      );
+          startDate.getFullYear(),
+          startDate.getMonth(),
+          startDate.getDate(),
+          startTime.getHours(),
+          startTime.getMinutes(),
+        );
     const endForExport = isAllDay
       ? endDate
       : new Date(
-        endDate.getFullYear(),
-        endDate.getMonth(),
-        endDate.getDate(),
-        endTime.getHours(),
-        endTime.getMinutes(),
-      );
+          endDate.getFullYear(),
+          endDate.getMonth(),
+          endDate.getDate(),
+          endTime.getHours(),
+          endTime.getMinutes(),
+        );
 
     // 🌟 戻り値のIDを受け取り、既存のIDがあれば渡す
     const returnedId = await exportToStandardCalendar(
@@ -797,7 +798,7 @@ export default function ScheduleModal({
     if (selectedItem.externalEventId) {
       try {
         await Calendar.deleteEventAsync(selectedItem.externalEventId);
-      } catch (e) { }
+      } catch (e) {}
     }
 
     const newData = { ...scheduleData };
@@ -935,11 +936,11 @@ export default function ScheduleModal({
               onPress={() =>
                 setRepeatType(
                   opt.value as
-                  | "none"
-                  | "daily"
-                  | "weekly"
-                  | "monthly"
-                  | "custom",
+                    | "none"
+                    | "daily"
+                    | "weekly"
+                    | "monthly"
+                    | "custom",
                 )
               }
             >
@@ -1657,7 +1658,7 @@ export default function ScheduleModal({
                   borderTopWidth: 8,
                   borderTopColor: uiThemeColor,
                   maxHeight: "85%",
-                  height: undefined
+                  height: undefined,
                 },
               ]}
             >
@@ -1692,7 +1693,14 @@ export default function ScheduleModal({
                         <View style={styles.timeRow}>
                           {/* 🌟 アイコンの代わりに「開始」の文字を入れて幅を固定 */}
                           <View style={styles.timeLabelContainer}>
-                            <Text style={[styles.timeLabelText, { color: uiThemeColor }]}>開始</Text>
+                            <Text
+                              style={[
+                                styles.timeLabelText,
+                                { color: uiThemeColor },
+                              ]}
+                            >
+                              開始
+                            </Text>
                           </View>
                           <View style={styles.timePickerGroup}>
                             <ModernDatePicker
@@ -1735,21 +1743,36 @@ export default function ScheduleModal({
                       {/* 🌟 4. 追加：カテゴリ（レイヤー）選択エリア */}
                       <View style={styles.simpleCategorySection}>
                         <Text style={styles.simpleCategoryTitle}>カテゴリ</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ width: "100%" }}>
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          style={{ width: "100%" }}
+                        >
                           {Object.keys(tagMaster).map((layerName) => {
                             // 以前の最強ロジックと同じく色を取得
-                            const layerColor = tagMaster[layerName]?.color || layerMaster[layerName] || uiThemeColor;
+                            const layerColor =
+                              tagMaster[layerName]?.color ||
+                              layerMaster[layerName] ||
+                              uiThemeColor;
                             const isSelected = selectedLayer === layerName;
                             return (
                               <TouchableOpacity
                                 key={layerName}
                                 style={[
                                   styles.simpleCategoryChip,
-                                  isSelected && { backgroundColor: layerColor, borderColor: layerColor }
+                                  isSelected && {
+                                    backgroundColor: layerColor,
+                                    borderColor: layerColor,
+                                  },
                                 ]}
                                 onPress={() => setSelectedLayer(layerName)}
                               >
-                                <Text style={[styles.simpleCategoryChipText, isSelected && { color: "#FFF" }]}>
+                                <Text
+                                  style={[
+                                    styles.simpleCategoryChipText,
+                                    isSelected && { color: "#FFF" },
+                                  ]}
+                                >
                                   {layerName}
                                 </Text>
                               </TouchableOpacity>
@@ -1762,20 +1785,54 @@ export default function ScheduleModal({
                       <View style={styles.simpleActionRow}>
                         {/* ToDo切り替えボタン */}
                         <TouchableOpacity
-                          style={[styles.simpleOptBtn, isTodo && { backgroundColor: "#34C759", borderColor: "#34C759" }]}
+                          style={[
+                            styles.simpleOptBtn,
+                            isTodo && {
+                              backgroundColor: "#34C759",
+                              borderColor: "#34C759",
+                            },
+                          ]}
                           onPress={() => setIsTodo(!isTodo)}
                         >
-                          <Ionicons name="checkbox" size={22} color={isTodo ? "#FFF" : "#8E8E93"} />
-                          <Text style={[styles.simpleOptBtnText, isTodo && { color: "#FFF" }]}>ToDoに追加</Text>
+                          <Ionicons
+                            name="checkbox"
+                            size={22}
+                            color={isTodo ? "#FFF" : "#8E8E93"}
+                          />
+                          <Text
+                            style={[
+                              styles.simpleOptBtnText,
+                              isTodo && { color: "#FFF" },
+                            ]}
+                          >
+                            ToDoに追加
+                          </Text>
                         </TouchableOpacity>
 
                         {/* 金額入力切り替えボタン */}
                         <TouchableOpacity
-                          style={[styles.simpleOptBtn, isExpense && { backgroundColor: "#FFCC00", borderColor: "#FFCC00" }]}
+                          style={[
+                            styles.simpleOptBtn,
+                            isExpense && {
+                              backgroundColor: "#FFCC00",
+                              borderColor: "#FFCC00",
+                            },
+                          ]}
                           onPress={() => setIsExpense(!isExpense)}
                         >
-                          <Ionicons name="wallet" size={22} color={isExpense ? "#FFF" : "#FFCC00"} />
-                          <Text style={[styles.simpleOptBtnText, isExpense && { color: "#FFF" }]}>支出を記録</Text>
+                          <Ionicons
+                            name="wallet"
+                            size={22}
+                            color={isExpense ? "#FFF" : "#FFCC00"}
+                          />
+                          <Text
+                            style={[
+                              styles.simpleOptBtnText,
+                              isExpense && { color: "#FFF" },
+                            ]}
+                          >
+                            支出を記録
+                          </Text>
                         </TouchableOpacity>
                       </View>
 
@@ -1791,14 +1848,39 @@ export default function ScheduleModal({
                             value={inputAmount}
                             onChangeText={setInputAmount}
                           />
-                          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.miniCategoryScroll}>
-                            {["食費", "日用品", "交通費", "交際費", "趣味", "固定費"].map((cat) => (
+                          <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            style={styles.miniCategoryScroll}
+                          >
+                            {[
+                              "食費",
+                              "日用品",
+                              "交通費",
+                              "交際費",
+                              "趣味",
+                              "固定費",
+                            ].map((cat) => (
                               <TouchableOpacity
                                 key={cat}
-                                style={[styles.miniChip, selectedCategory === cat && { backgroundColor: "#FFCC00" }]}
+                                style={[
+                                  styles.miniChip,
+                                  selectedCategory === cat && {
+                                    backgroundColor: "#FFCC00",
+                                  },
+                                ]}
                                 onPress={() => setSelectedCategory(cat)}
                               >
-                                <Text style={[styles.miniChipText, selectedCategory === cat && { color: "#FFF" }]}>{cat}</Text>
+                                <Text
+                                  style={[
+                                    styles.miniChipText,
+                                    selectedCategory === cat && {
+                                      color: "#FFF",
+                                    },
+                                  ]}
+                                >
+                                  {cat}
+                                </Text>
                               </TouchableOpacity>
                             ))}
                           </ScrollView>
@@ -1807,28 +1889,40 @@ export default function ScheduleModal({
 
                       {/* 6. 下部アクション */}
                       <View style={styles.simpleBottomActions}>
-                        <TouchableOpacity style={styles.simpleDetailLink} onPress={() => setIsSimpleMode(false)}>
-                          <Text style={[styles.simpleDetailLinkText, { color: uiThemeColor }]}>詳細設定を表示</Text>
+                        <TouchableOpacity
+                          style={styles.simpleDetailLink}
+                          onPress={() => setIsSimpleMode(false)}
+                        >
+                          <Text
+                            style={[
+                              styles.simpleDetailLinkText,
+                              { color: uiThemeColor },
+                            ]}
+                          >
+                            詳細設定を表示
+                          </Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                          style={[styles.simpleLargeSaveBtn, { backgroundColor: uiThemeColor }]}
+                          style={[
+                            styles.simpleLargeSaveBtn,
+                            { backgroundColor: uiThemeColor },
+                          ]}
                           onPress={handleSavePress}
                         >
-                          <Text style={styles.simpleLargeSaveBtnText}>保存して閉じる</Text>
+                          <Text style={styles.simpleLargeSaveBtnText}>
+                            保存して閉じる
+                          </Text>
                         </TouchableOpacity>
                       </View>
                     </View>
                   </TouchableWithoutFeedback>
                 </ScrollView>
               ) : (
-
                 // ==========================================
                 // 🔵 B. 詳細画面（今までの ScrollView など）
                 // ==========================================
                 <>
-
-
                   {!isReady ? (
                     <View style={{ flex: 1, justifyContent: "center" }}>
                       <ActivityIndicator size="large" color={uiThemeColor} />
@@ -1840,7 +1934,9 @@ export default function ScheduleModal({
                       keyboardDismissMode="on-drag"
                     >
                       <View style={styles.headerRow}>
-                        <Text style={[styles.modalTitle, { color: uiThemeColor }]}>
+                        <Text
+                          style={[styles.modalTitle, { color: uiThemeColor }]}
+                        >
                           {selectedItem ? "予定を編集" : "新規作成"}
                         </Text>
                         <Text style={styles.dateBadge}>{selectedDate}</Text>
@@ -1951,19 +2047,19 @@ export default function ScheduleModal({
 
                             {(isAllDay
                               ? [
-                                { label: "当日の朝(7:00)", value: "morning" },
-                                { label: "前日", value: "dayBefore" },
-                                { label: "2日前", value: "2daysBefore" },
-                                { label: "カスタム", value: "custom" },
-                              ]
+                                  { label: "当日の朝(7:00)", value: "morning" },
+                                  { label: "前日", value: "dayBefore" },
+                                  { label: "2日前", value: "2daysBefore" },
+                                  { label: "カスタム", value: "custom" },
+                                ]
                               : [
-                                { label: "ちょうど", value: "exact" },
-                                { label: "10分前", value: "10min" },
-                                { label: "30分前", value: "30min" },
-                                { label: "1時間前", value: "1hour" },
-                                { label: "当日の朝", value: "morning" },
-                                { label: "カスタム", value: "custom" },
-                              ]
+                                  { label: "ちょうど", value: "exact" },
+                                  { label: "10分前", value: "10min" },
+                                  { label: "30分前", value: "30min" },
+                                  { label: "1時間前", value: "1hour" },
+                                  { label: "当日の朝", value: "morning" },
+                                  { label: "カスタム", value: "custom" },
+                                ]
                             ).map((opt) => {
                               const isSelected = selectedReminders.includes(
                                 opt.value,
@@ -1993,7 +2089,9 @@ export default function ScheduleModal({
                                   onPress={() =>
                                     setSelectedReminders((prev) => {
                                       if (prev.includes(opt.value)) {
-                                        return prev.filter((v) => v !== opt.value);
+                                        return prev.filter(
+                                          (v) => v !== opt.value,
+                                        );
                                       } else {
                                         if (
                                           opt.value === "custom" &&
@@ -2138,16 +2236,24 @@ export default function ScheduleModal({
                           <Switch
                             value={isEvent}
                             onValueChange={setIsEvent}
-                            trackColor={{ false: "#C7C7CC", true: uiThemeColor }}
+                            trackColor={{
+                              false: "#C7C7CC",
+                              true: uiThemeColor,
+                            }}
                             ios_backgroundColor="#E5E5EA"
                           />
                         </View>
                         <View style={styles.switchRow}>
-                          <Text style={styles.switchLabel}>ToDoリストに表示</Text>
+                          <Text style={styles.switchLabel}>
+                            ToDoリストに表示
+                          </Text>
                           <Switch
                             value={isTodo}
                             onValueChange={setIsTodo}
-                            trackColor={{ false: "#C7C7CC", true: uiThemeColor }}
+                            trackColor={{
+                              false: "#C7C7CC",
+                              true: uiThemeColor,
+                            }}
                             ios_backgroundColor="#E5E5EA"
                           />
                         </View>
@@ -2156,7 +2262,10 @@ export default function ScheduleModal({
                           <Switch
                             value={isExpense}
                             onValueChange={setIsExpense}
-                            trackColor={{ false: "#C7C7CC", true: uiThemeColor }}
+                            trackColor={{
+                              false: "#C7C7CC",
+                              true: uiThemeColor,
+                            }}
                             ios_backgroundColor="#E5E5EA"
                           />
                         </View>
@@ -2193,7 +2302,9 @@ export default function ScheduleModal({
                                   <Text
                                     style={[
                                       styles.layerChipText,
-                                      selectedCategory === cat && { color: "#fff" },
+                                      selectedCategory === cat && {
+                                        color: "#fff",
+                                      },
                                     ]}
                                   >
                                     {cat}
@@ -2389,7 +2500,6 @@ export default function ScheduleModal({
         )}
       </KeyboardAvoidingView>
     </Modal>
-
   );
 }
 
