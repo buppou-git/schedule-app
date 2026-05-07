@@ -1228,7 +1228,7 @@ export default function Index() {
     if (activeTags.length !== 1) return null; // 1つのレイヤーに絞り込んでいる時だけ発動
 
     const targetLayer = activeTags[0];
-    if (targetLayer === "外部予定") return null; // 外部予定はお金の計算がないので除外
+    
 
     const [y, m] = selectedDate.split("-");
     const targetMonthPrefix = `${y}-${m}-`; // 例: "2026-04-"
