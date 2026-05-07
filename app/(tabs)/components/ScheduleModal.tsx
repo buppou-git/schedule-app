@@ -18,6 +18,7 @@ import { db } from "../../../firebaseConfig";
 import {
   ActivityIndicator,
   Alert,
+  InteractionManager,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -178,6 +179,7 @@ export default function ScheduleModal({
   const [inputText, setInputText] = useState("");
   const [inputAmount, setInputAmount] = useState("");
   const [isReady, setIsReady] = useState(false);
+  const isInitialized = useRef(false);
   const [selectedLayer, setSelectedLayer] = useState("");
   const [tagInput, setTagInput] = useState("");
   const [tagColor, setTagColor] = useState("#007AFF");
@@ -323,42 +325,6 @@ export default function ScheduleModal({
   // 🌟 追加：簡易モードの判定フラグ
   const [isSimpleMode, setIsSimpleMode] = useState(true);
 
-  // 🌟 追加：開いた時に、親画面のモードに合わせて初期化する
-  useEffect(() => {
-    if (visible) {
-      if (selectedItem) {
-        // 既存の予定を編集する時は詳細画面からスタート
-        setIsSimpleMode(false);
-      } else {
-        // 新規作成時は簡易画面からスタート
-        setIsSimpleMode(true);
-        // カレンダー・ToDo・家計簿のどの画面から開いたかに合わせてタブを自動選択
-        if (activeMode === "todo") {
-          setIsTodo(true); setIsEvent(false); setIsExpense(false);
-        } else if (activeMode === "money") {
-          setIsExpense(true); setIsTodo(false); setIsEvent(false);
-        } else {
-          setIsEvent(true); setIsTodo(false); setIsExpense(false);
-        }
-      }
-    }
-  }, [visible, selectedItem, activeMode]);
-
-  useEffect(() => {
-    const load = async () => {
-      const [q, r] = await Promise.all([
-        AsyncStorage.getItem("quickMainTagsData"),
-        AsyncStorage.getItem("readingMasterData"),
-      ]);
-      if (q) setQuickMainTags(JSON.parse(q));
-      if (r) setReadingMaster(JSON.parse(r));
-    };
-    if (visible) load();
-  }, [visible]);
-
-  // 🌟 1. 画面の初期化が完了したかを記憶するフラグ
-  const isInitialized = useRef(false);
-
   useEffect(() => {
     // 画面が閉じている時はリセット
     if (!visible) {
@@ -369,9 +335,8 @@ export default function ScheduleModal({
 
     if (isInitialized.current) return;
 
-    // 🌟 2. 画面がスライドしてくるアニメーションを優先するため、
-    // 　　  中身の重い処理（準備）を「10ミリ秒」だけ遅らせて実行する
-    const timer = setTimeout(() => {
+    // 🌟 InteractionManager を使って、アニメーション終了後に中身を描画する
+    const task = InteractionManager.runAfterInteractions(() => {
       const layers = Object.keys(layerMaster);
       const def = layers.length > 0 ? layers[0] : "生活";
 
@@ -469,10 +434,10 @@ export default function ScheduleModal({
 
       isInitialized.current = true;
       setIsReady(true); // 🌟 ここで「準備完了」の合図を出す
-    }, 150);
+    });
 
-    // 🌟 タイマーの後始末
-    return () => clearTimeout(timer);
+    // 🌟 task (InteractionManager) の後始末
+    return () => task.cancel();
   }, [visible, selectedItem, activeMode, layerMaster, selectedDate, tagMaster]);
 
   const toHiragana = (str: string) =>
@@ -1667,9 +1632,8 @@ export default function ScheduleModal({
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType="none"
       transparent={true}
-      onShow={() => setIsReady(true)}
       onRequestClose={onClose} // 🌟 追加: Androidの戻るボタンで閉じる対応
     >
       <KeyboardAvoidingView
