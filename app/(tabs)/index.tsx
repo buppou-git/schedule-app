@@ -1683,8 +1683,15 @@ export default function Index() {
   const stableOpenEditModal = useStableCallback(openEditModal);
   const stableFormatEventTime = useStableCallback(formatEventTime);
   const stableLongPress = useStableCallback((item: ScheduleItem) => {
-    setQuickActionItem(item);
-    setQuickActionVisible(true);
+    // 🌟 修正：externalEventId があるかどうかで、外部予定かを判定する！
+    if (item.externalEventId) {
+      setSelectedExternalItem(item);
+      setExternalModalVisible(true);
+    } else {
+      // 外部予定以外は、今まで通りクイック入力モーダルを開く
+      setQuickActionItem(item);
+      setQuickActionVisible(true);
+    }
   });
 
   if (isAppLocked) {
@@ -1873,7 +1880,8 @@ export default function Index() {
                 updateCellsBatchingPeriod={30}
                 removeClippedSubviews={true} // 見えない月をメモリから消して軽くする
                 renderHeader={(date) => {
-                  const todayStr = new Date().toISOString().split("T")[0]; // 今日の日付を取得
+                  // 🌟 修正：時差でズレないように、ファイル上部で定義されている getTodayString を使う！
+                  const todayStr = getTodayString();
 
                   return (
                     <View
@@ -2706,7 +2714,30 @@ export default function Index() {
         item={selectedExternalItem}
         onCopy={handleCopyExternal}
         onHide={handleHideExternal}
-        themeColor={currentSolidColor}
+        onSaveExpense={(item, amount, category) => {
+          const newData = { ...scheduleData };
+          const dateKey = selectedDate;
+          if (!newData[dateKey]) newData[dateKey] = [];
+          
+          // 既存の上書きデータがあれば削除して新しく追加
+          const rawId = item.id.replace("ext_", "");
+          newData[dateKey] = newData[dateKey].filter(i => i.externalEventId !== rawId && i.id !== item.id);
+          
+          newData[dateKey].push({
+            ...item,
+            id: `ext_ovr_${Date.now()}`,
+            externalEventId: rawId,
+            amount,
+            category,
+            isExpense: amount > 0,
+            color: "#FF2D55" // 赤で保存
+          });
+          
+          setScheduleData(newData);
+          setHasUnsavedChanges(true);
+          setExternalModalVisible(false);
+          Alert.alert("保存完了", "支出情報を予定に紐付けました。");
+        }}
       />
 
       <View style={styles.adContainer}>

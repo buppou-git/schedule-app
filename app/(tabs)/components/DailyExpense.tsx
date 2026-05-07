@@ -408,10 +408,13 @@ export default function DailyExpense({
                     onPress={() => handleOpenEdit(i, selectedDate)}
                   >
                     <View style={styles.dailyItemInfo}>
-                      <View
+                    <View
                         style={[
                           styles.dailyItemDot,
-                          { backgroundColor: isIncome ? "#8E8E93" : i.color },
+                          { 
+                            // 🌟 外部予定(externalEventIdがある)なら必ず赤、それ以外は設定色
+                            backgroundColor: isIncome ? "#8E8E93" : (i.externalEventId ? "#FF2D55" : i.color) 
+                          },
                         ]}
                       />
                       <View style={{ flex: 1 }}>
@@ -419,7 +422,7 @@ export default function DailyExpense({
                           style={{
                             fontWeight: "bold",
                             fontSize: 11,
-                            color: isIncome ? "#8E8E93" : themeColor,
+                            color: isIncome ? "#8E8E93" : (i.externalEventId ? "#FF2D55" : themeColor),
                           }}
                           numberOfLines={1}
                         >
