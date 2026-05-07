@@ -96,8 +96,10 @@ export function useDailyItems(
 
     items.forEach((item: ScheduleItem) => {
       const itemTags = item.tags && item.tags.length > 0 ? item.tags : item.tag ? [item.tag] : [];
+      const isExternal = item.category === "外部カレンダー" || !!item.externalEventId;
       const matchLayer =
         isAllLayers ||
+        (isExternal && activeTagsSet.has("外部予定")) ||
         itemTags.some((tag: string) => {
           if (tag === "祝日") return true;
           const parentLayer = tagMaster[tag]?.layer || tag;

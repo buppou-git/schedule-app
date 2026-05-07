@@ -884,6 +884,11 @@ const { isAppLocked, pinForUnlock, setPinForUnlock, handleAuthenticate, authenti
   };
 
   const openEditModal = (item: ScheduleItem) => {
+
+    if (item.tag === "祝日" || item.category === "祝日") {
+      return;
+    }
+
     if (item.externalEventId) {
       // 🌟 外部予定なら専用モーダルを開く
       setSelectedExternalItem(item);
@@ -1393,6 +1398,12 @@ const { isAppLocked, pinForUnlock, setPinForUnlock, handleAuthenticate, authenti
   const stableOpenEditModal = useStableCallback(openEditModal);
   const stableFormatEventTime = useStableCallback(formatEventTime);
   const stableLongPress = useStableCallback((item: ScheduleItem) => {
+
+
+    if (item.tag === "祝日" || item.category === "祝日") {
+      return;
+    }
+
     // 🌟 修正：externalEventId があるかどうかで、外部予定かを判定する！
     if (item.externalEventId) {
       setSelectedExternalItem(item);
@@ -2375,9 +2386,9 @@ const { isAppLocked, pinForUnlock, setPinForUnlock, handleAuthenticate, authenti
             ...item,
             id: `ext_ovr_${Date.now()}`,
             externalEventId: rawId,
-            amount,
+            amount: Number(amount),
             category,
-            isExpense: amount > 0,
+            isExpense: Number(amount) > 0,
             isEvent: true, // 🌟 必須：「予定」として認識させる
             tags: ["外部予定"], // 🌟 これを追加することで DailyExpense 側に確実に反映される！
             color: "#FF2D55",

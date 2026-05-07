@@ -52,11 +52,15 @@ export default function ExternalEventModal({ visible, onClose, item, onCopy, onH
                         {/* 🌟 金額入力セクション */}
                         <View style={styles.expenseSection}>
                             <Text style={styles.label}>支出金額</Text>
-                            <View style={styles.amountInputRow}>
-                                <Text style={styles.currency}>¥</Text>
+                            {/* 🌟 修正：入力欄の下線を赤（EXTERNAL_COLOR）に変更 */}
+                            <View style={[styles.amountInputRow, { borderBottomColor: EXTERNAL_COLOR }]}>
+                                {/* 🌟 修正：¥マークを赤に変更 */}
+                                <Text style={[styles.currency, { color: EXTERNAL_COLOR }]}>¥</Text>
                                 <TextInput
-                                    style={styles.amountInput}
+                                    /* 🌟 修正：入力された数字も赤に変更 */
+                                    style={[styles.amountInput, { color: EXTERNAL_COLOR }]}
                                     placeholder="0"
+                                    placeholderTextColor="#FF2D5560" // プレースホルダー（0）も薄い赤に
                                     keyboardType="numeric"
                                     value={amount}
                                     onChangeText={setAmount}
