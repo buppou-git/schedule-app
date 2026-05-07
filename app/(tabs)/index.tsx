@@ -12,7 +12,12 @@ import React, {
   useRef,
   useState,
 } from "react";
+
+import { useAppLock } from "../../hooks/useAppLock";
+import { useCloudSync } from "../../hooks/useCloudSync";
+import { useDailyItems, useDisplayData } from "../../hooks/useDataProcessors";
 import { useScheduleManager } from "../../hooks/useScheduleManager";
+import AppLockScreen from "./components/AppLockScreen";
 
 import { ScheduleItem, SubTask } from "../../types";
 
@@ -20,7 +25,7 @@ import { useCalendarData } from "../../hooks/useCalendarData";
 import { useNotificationManager } from "../../hooks/useNotificationManager";
 
 import { signInAnonymously } from "firebase/auth";
-import { collection, doc, onSnapshot, setDoc } from "firebase/firestore";
+import { doc, setDoc } from "firebase/firestore";
 import { AppState } from "react-native";
 import { auth, db } from "../../firebaseConfig";
 
@@ -60,7 +65,6 @@ import {
 } from "react-native";
 
 import CryptoJS from "crypto-js";
-import * as LocalAuthentication from "expo-local-authentication";
 import * as SecureStore from "expo-secure-store";
 
 import {
@@ -174,9 +178,9 @@ export default function Index() {
     [layerName: string]: string;
   }>({});
 
-  const [roomSchedules, setRoomSchedules] = useState<{
-    [roomId: string]: { [date: string]: ScheduleItem[] };
-  }>({});
+  const { roomSchedules, safeDebouncedSync } = useCloudSync(sharedRooms);
+
+const { isAppLocked, pinForUnlock, setPinForUnlock, handleAuthenticate, authenticatePin } = useAppLock();
 
   const [sharedScheduleData, setSharedScheduleData] = useState<{
     [key: string]: ScheduleItem[];
@@ -263,74 +267,7 @@ export default function Index() {
 
   const [isMoneySummaryMode, setIsMoneySummaryMode] = useState(false);
 
-  const [isAppLocked, setIsAppLocked] = useState(false);
-  const [pinForUnlock, setPinForUnlock] = useState("");
-
-  const handleAuthenticate = async () => {
-    const useBio = await AsyncStorage.getItem("useBiometricLock");
-    const usePin = await AsyncStorage.getItem("usePinLock");
-
-    if (useBio !== "true" && usePin !== "true") {
-      setIsAppLocked(false);
-      return;
-    }
-
-    if (useBio === "true") {
-      const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: "認証してUniCalを開く",
-        fallbackLabel: "パスコードを入力",
-      });
-      if (result.success) {
-        setIsAppLocked(false);
-        setPinForUnlock("");
-        return;
-      }
-    }
-
-    if (usePin === "true") {
-      setIsAppLocked(true);
-    } else {
-      setIsAppLocked(false);
-    }
-  };
-
-  const authenticatePin = async (pin: string) => {
-    const savedPin = await SecureStore.getItemAsync("app_pin_code");
-    if (pin === savedPin) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setIsAppLocked(false);
-      setPinForUnlock("");
-    } else {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("エラー", "暗証番号が違います");
-      setPinForUnlock("");
-    }
-  };
-
-  const appState = useRef(AppState.currentState);
-
-  useEffect(() => {
-    handleAuthenticate(); // 初回起動時
-
-    const subscription = AppState.addEventListener("change", (nextAppState) => {
-      // 🌟 修正：完全に「バックグラウンド（裏側）」から戻ってきた時だけ認証する
-      if (appState.current === "background" && nextAppState === "active") {
-        handleAuthenticate();
-      }
-      // 🌟 アプリがバックグラウンドに行った時にロックをかける
-      else if (nextAppState === "background") {
-        AsyncStorage.getItem("useBiometricLock").then((val) => {
-          if (val === "true") setIsAppLocked(true);
-        });
-        AsyncStorage.getItem("usePinLock").then((val) => {
-          if (val === "true") setIsAppLocked(true);
-        });
-      }
-      appState.current = nextAppState; // 状態を更新
-    });
-
-    return () => subscription.remove();
-  }, []);
+ 
 
   const [activeTags, setActiveTags] = useState<string[]>([]);
 
@@ -473,50 +410,9 @@ export default function Index() {
     return itemTags.some((tag) => Object.keys(sharedRooms).includes(tag));
   };
 
-  const handleSaveItem = async (newItem: ScheduleItem, targetDate?: string) => {
-    if (isSharedItem(newItem)) {
-      try {
-        const itemTags = newItem.tags || (newItem.tag ? [newItem.tag] : []);
-        const sharedLayerName = itemTags.find((tag) =>
-          Object.keys(sharedRooms).includes(tag),
-        );
-        if (!sharedLayerName) return;
 
-        const targetRoomId = sharedRooms[sharedLayerName];
-        const { doc, collection, setDoc } = await import("firebase/firestore");
-        const schedulesRef = collection(db, "rooms", targetRoomId, "schedules");
-        const docRef = newItem.id
-          ? doc(schedulesRef, newItem.id)
-          : doc(schedulesRef);
 
-        await setDoc(docRef, {
-          ...newItem,
-          id: docRef.id,
-          date: targetDate || selectedDate, // 🌟 どの日付でも対応できるように進化！
-          updatedAt: new Date().toISOString(),
-        });
-      } catch (e) {
-        console.error("共有保存エラー:", e);
-      }
-    }
-  };
-
-  // 🌟 追加：通信を節約する「デバウンス（遅延）同期」関数
-  const syncTimeoutRef = useRef<{
-    [key: string]: ReturnType<typeof setTimeout>;
-  }>({});
-  const debouncedSyncSharedItem = (item: ScheduleItem, date: string) => {
-    if (!isSharedItem(item)) return; // 共有アイテムじゃなければ何もしない
-
-    if (syncTimeoutRef.current[item.id]) {
-      clearTimeout(syncTimeoutRef.current[item.id]); // 前のタイマーをキャンセル
-    }
-    // 1秒間操作がなければクラウドに送信する
-    syncTimeoutRef.current[item.id] = setTimeout(() => {
-      handleSaveItem(item, date);
-      delete syncTimeoutRef.current[item.id];
-    }, 1000);
-  };
+ 
 
   const filteredData = useMemo(() => {
     const filtered: { [date: string]: ScheduleItem[] } = {};
@@ -939,126 +835,8 @@ export default function Index() {
     syncToStorage();
   }, [layerMaster, tagMaster, presets, activeTags]);
 
-  // 🌟 変更：複数ルームのリアルタイム同期を並行管理
-  useEffect(() => {
-    const roomIds = Object.values(sharedRooms);
-    if (roomIds.length === 0) {
-      setRoomSchedules({});
-      return;
-    }
 
-    // 参加しているすべてのルームIDに対して監視(onSnapshot)を張る
-    const unsubscribes = roomIds.map((roomId) => {
-      return onSnapshot(
-        collection(db, "rooms", roomId, "schedules"),
-        (snapshot) => {
-          const itemsByDate: { [date: string]: ScheduleItem[] } = {};
-          snapshot.forEach((docSnap) => {
-            const data = docSnap.data();
-            if (data.date) {
-              if (!itemsByDate[data.date]) itemsByDate[data.date] = [];
-              itemsByDate[data.date].push({
-                id: docSnap.id,
-                ...data,
-              } as ScheduleItem);
-            }
-          });
-          // ルームごとにデータを分けて保存
-          setRoomSchedules((prev) => ({ ...prev, [roomId]: itemsByDate }));
-        },
-        (error) => console.error(`Room ${roomId} sync error:`, error),
-      );
-    });
-
-    return () => unsubscribes.forEach((unsub) => unsub());
-  }, [sharedRooms]);
-
-  const displayData = useMemo(() => {
-    // 日付をキーに、IDをキーとしたScheduleItemのMapを持つ
-    const combinedMap: { [date: string]: Map<string, ScheduleItem> } = {};
-
-    // Mapを初期化・取得するヘルパー
-    const getMapForDate = (date: string) => {
-      if (!combinedMap[date]) combinedMap[date] = new Map();
-      return combinedMap[date];
-    };
-
-    // 🌟 1. まず、外部カレンダー（ベースデータ）を Map に配置する
-    // 💡 登録の時点で、最初から color: "#FF2D55" を持たせて完全に赤にする！
-    Object.keys(externalEvents).forEach((date) => {
-      const map = getMapForDate(date);
-      externalEvents[date].forEach((item) => {
-        const rawId = item.id.replace("ext_", "");
-        // 🌟 変更：isEvent: true を足すことで「すべて表示」の時に消えなくなります！
-        map.set(rawId, {
-          ...item,
-          externalEventId: rawId,
-          color: "#FF2D55",
-          isEvent: true,
-        });
-      });
-    });
-
-    // 🌟 2. 次に、ローカル（アプリ内）データをマージ（上書き）する
-    Object.keys(scheduleData).forEach((date) => {
-      const map = getMapForDate(date);
-      scheduleData[date].forEach((item) => {
-        // 💡 最重要：外部イベントと紐づいている場合は、外部IDをキーにして「上書き」する
-        const key = item.externalEventId ? item.externalEventId : item.id;
-
-        // 外部予定の上書きデータである場合も、確実に赤色を引き継がせる
-        if (item.category === "外部カレンダー" || item.externalEventId) {
-          item.color = "#FF2D55";
-        }
-
-        map.set(key, item);
-      });
-    });
-
-    // 🌟 3. 共有データをさらにマージ
-    Object.values(roomSchedules).forEach((roomData) => {
-      Object.keys(roomData).forEach((date) => {
-        const map = getMapForDate(date);
-        roomData[date].forEach((item) => {
-          const key = item.externalEventId ? item.externalEventId : item.id;
-          map.set(key, item);
-        });
-      });
-    });
-
-    // 🌟 4. 最後に Map から Array に変換してフィルタリング
-    const result: { [date: string]: ScheduleItem[] } = {};
-    Object.keys(combinedMap).forEach((date) => {
-      const items = Array.from(combinedMap[date].values());
-      result[date] = items.filter((item) => {
-        // レイヤー名を判定
-        let itemLayer = "共通";
-
-        if (item.category === "外部カレンダー" || item.externalEventId) {
-          itemLayer = "外部予定";
-        } else {
-          // アプリ内で作られた、または編集された予定は、本来設定されたレイヤーを維持
-          const itemTags =
-            item.tags && item.tags.length > 0
-              ? item.tags
-              : item.tag
-                ? [item.tag]
-                : [];
-          if (itemTags.length > 0) {
-            itemLayer = tagMaster[itemTags[0]]?.layer || "共通";
-          }
-        }
-
-        // 🌟 修正：レイヤー名の判定をした後に、すべて表示のチェックをする！
-        if (activeTags.length === 0) return true;
-
-        // 選択されたレイヤーリストに含まれる場合のみ表示
-        return activeTags.includes(itemLayer);
-      });
-    });
-
-    return result;
-  }, [scheduleData, roomSchedules, externalEvents, activeTags, tagMaster]);
+  const displayData = useDisplayData(scheduleData, externalEvents, roomSchedules, activeTags, tagMaster);
 
   const { expandedScheduleData, currentMarkedDates } = useCalendarData(
     displayData,
@@ -1068,6 +846,10 @@ export default function Index() {
     tagMaster,
     selectedDate,
     hiddenExternalIds,
+  );
+
+  const { dayTasks, upcomingTasks, dayEvents } = useDailyItems(
+    expandedScheduleData, displayData, selectedDate, activeTags, activeMode, tagMaster
   );
 
   const currentSolidColor = useMemo(() => {
@@ -1149,7 +931,7 @@ export default function Index() {
     } else {
       targetItem.isDone = !targetItem.isDone;
     }
-    debouncedSyncSharedItem(targetItem, originalDate);
+    safeDebouncedSync(targetItem, originalDate);
 
     setScheduleData(newData);
     setHasUnsavedChanges(true);
@@ -1236,7 +1018,7 @@ export default function Index() {
         };
 
         // 🌟 追加：共有タスクなら裏で同期！
-        debouncedSyncSharedItem(updatedParentItem, targetDate);
+        safeDebouncedSync(updatedParentItem, targetDate);
 
         return updatedParentItem;
       }
@@ -1439,7 +1221,7 @@ export default function Index() {
 
     // 共有タスクなら裏で同期
     if (updatedItem) {
-      debouncedSyncSharedItem(updatedItem, targetDate);
+      safeDebouncedSync(updatedItem, targetDate);
     }
 
     setScheduleData(newData);
@@ -1605,100 +1387,6 @@ export default function Index() {
     }
   };
 
-  const { dayTasks, upcomingTasks, dayEvents } = useMemo(() => {
-    const items = expandedScheduleData[selectedDate] || [];
-    const isAllLayers = activeTags.length === 0;
-    const activeTagsSet = new Set(activeTags);
-
-    const dTasks: ScheduleItem[] = [];
-    const dEvents: ScheduleItem[] = [];
-
-    items.forEach((item: ScheduleItem) => {
-      const itemTags =
-        item.tags && item.tags.length > 0
-          ? item.tags
-          : item.tag
-            ? [item.tag]
-            : [];
-      const matchLayer =
-        isAllLayers ||
-        itemTags.some((tag: string) => {
-          if (tag === "祝日") return true;
-          const parentLayer = tagMaster[tag]?.layer || tag;
-          return activeTagsSet.has(parentLayer);
-        });
-      if (matchLayer) {
-        if (item.isTodo) dTasks.push(item);
-        if (item.isEvent) dEvents.push(item);
-      }
-    });
-
-    const uTasks: (ScheduleItem & { date: string })[] = [];
-    const dayTaskIds = new Set(dTasks.map((t) => t.id));
-    const addedUpcomingIds = new Set<string>();
-
-    if (activeMode === "todo") {
-      const sortedDates = Object.keys(expandedScheduleData).sort();
-      sortedDates.forEach((date) => {
-        if (date > selectedDate) {
-          (displayData[date] || []).forEach((task) => {
-            if (
-              task.isTodo &&
-              !task.isDone &&
-              !task.repeatType &&
-              !dayTaskIds.has(task.id) &&
-              !addedUpcomingIds.has(task.id)
-            ) {
-              const itemTags =
-                task.tags && task.tags.length > 0
-                  ? task.tags
-                  : task.tag
-                    ? [task.tag]
-                    : [];
-              if (
-                isAllLayers ||
-                itemTags.some((tag) => {
-                  const parentLayer = tagMaster[tag]?.layer || tag;
-                  return activeTagsSet.has(parentLayer);
-                })
-              ) {
-                uTasks.push({ ...task, date });
-                addedUpcomingIds.add(task.id);
-              }
-            }
-          });
-        }
-      });
-    }
-    const sortByTime = (a: ScheduleItem, b: ScheduleItem) => {
-      // 終日の予定は一番上に持ってくる
-      if (a.isAllDay && !b.isAllDay) return -1;
-      if (!a.isAllDay && b.isAllDay) return 1;
-
-      // 時間が設定されていない場合は一番下に
-      const timeA = a.startTime || "24:00";
-      const timeB = b.startTime || "24:00";
-      return timeA.localeCompare(timeB);
-    };
-
-    dTasks.sort(sortByTime);
-    dEvents.sort(sortByTime);
-
-    // 今後の予定（upcomingTasks）は、まず日付順にしてから時間順にする
-    uTasks.sort((a, b) => {
-      if (a.date !== b.date) return a.date.localeCompare(b.date);
-      return sortByTime(a, b);
-    });
-
-    return { dayTasks: dTasks, upcomingTasks: uTasks, dayEvents: dEvents };
-  }, [
-    expandedScheduleData,
-    selectedDate,
-    activeTags,
-    activeMode,
-    tagMaster,
-    displayData,
-  ]);
 
   const stableToggleTodo = useStableCallback(toggleTodo);
   const stableToggleSubTodo = useStableCallback(toggleSubTodo);
@@ -1718,99 +1406,13 @@ export default function Index() {
 
   if (isAppLocked) {
     return (
-      <View
-        style={[
-          styles.container,
-          {
-            justifyContent: "center",
-            alignItems: "center",
-            backgroundColor: "#F2F2F7",
-          },
-        ]}
-      >
-        <View
-          style={{
-            backgroundColor: "#FFF",
-            padding: 30,
-            borderRadius: 30,
-            alignItems: "center",
-            width: "80%",
-            shadowColor: "#000",
-            shadowOpacity: 0.05,
-            shadowRadius: 10,
-          }}
-        >
-          <Ionicons name="lock-closed" size={50} color={currentSolidColor} />
-          <Text
-            style={{
-              marginTop: 15,
-              fontSize: 18,
-              fontWeight: "800",
-              color: "#1C1C1E",
-            }}
-          >
-            UniCal Locked
-          </Text>
-          <Text
-            style={{
-              fontSize: 12,
-              color: "#8E8E93",
-              marginBottom: 25,
-              marginTop: 5,
-            }}
-          >
-            パスコードを入力してください
-          </Text>
-
-          <View style={styles.pinInputWrapper}>
-            <TextInput
-              style={styles.hiddenTextInput}
-              keyboardType="number-pad"
-              maxLength={4}
-              secureTextEntry
-              autoFocus
-              value={pinForUnlock}
-              onChangeText={(text) => {
-                setPinForUnlock(text);
-                if (text.length === 4) {
-                  authenticatePin(text);
-                }
-              }}
-            />
-
-            <View style={styles.pinDisplayContainer}>
-              {[...Array(4)].map((_, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.pinBox,
-                    pinForUnlock.length === i && styles.pinBoxFocused,
-                  ]}
-                >
-                  {pinForUnlock.length > i && (
-                    <Text style={styles.pinDot}>●</Text>
-                  )}
-                </View>
-              ))}
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={{ marginTop: 25, padding: 10 }}
-            onPress={handleAuthenticate}
-          >
-            <Text
-              style={{
-                color: currentSolidColor,
-                fontWeight: "700",
-                fontSize: 14,
-              }}
-            >
-              生体認証を使用する
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      <AppLockScreen
+        currentSolidColor={currentSolidColor}
+        pinForUnlock={pinForUnlock}
+        setPinForUnlock={setPinForUnlock}
+        authenticatePin={authenticatePin}
+        handleAuthenticate={handleAuthenticate}
+      />
     );
   }
 
