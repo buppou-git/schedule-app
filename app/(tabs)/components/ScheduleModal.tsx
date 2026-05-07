@@ -742,21 +742,21 @@ export default function ScheduleModal({
     const startForExport = isAllDay
       ? startDate
       : new Date(
-          startDate.getFullYear(),
-          startDate.getMonth(),
-          startDate.getDate(),
-          startTime.getHours(),
-          startTime.getMinutes(),
-        );
+        startDate.getFullYear(),
+        startDate.getMonth(),
+        startDate.getDate(),
+        startTime.getHours(),
+        startTime.getMinutes(),
+      );
     const endForExport = isAllDay
       ? endDate
       : new Date(
-          endDate.getFullYear(),
-          endDate.getMonth(),
-          endDate.getDate(),
-          endTime.getHours(),
-          endTime.getMinutes(),
-        );
+        endDate.getFullYear(),
+        endDate.getMonth(),
+        endDate.getDate(),
+        endTime.getHours(),
+        endTime.getMinutes(),
+      );
 
     // 🌟 戻り値のIDを受け取り、既存のIDがあれば渡す
     const returnedId = await exportToStandardCalendar(
@@ -798,7 +798,7 @@ export default function ScheduleModal({
     if (selectedItem.externalEventId) {
       try {
         await Calendar.deleteEventAsync(selectedItem.externalEventId);
-      } catch (e) {}
+      } catch (e) { }
     }
 
     const newData = { ...scheduleData };
@@ -936,11 +936,11 @@ export default function ScheduleModal({
               onPress={() =>
                 setRepeatType(
                   opt.value as
-                    | "none"
-                    | "daily"
-                    | "weekly"
-                    | "monthly"
-                    | "custom",
+                  | "none"
+                  | "daily"
+                  | "weekly"
+                  | "monthly"
+                  | "custom",
                 )
               }
             >
@@ -1740,7 +1740,7 @@ export default function ScheduleModal({
                         </View>
                       </View>
 
-                      {/* 🌟 4. 追加：カテゴリ（レイヤー）選択エリア */}
+                      {/* 🌟 4. カテゴリ（レイヤー）選択エリア */}
                       <View style={styles.simpleCategorySection}>
                         <Text style={styles.simpleCategoryTitle}>カテゴリ</Text>
                         <ScrollView
@@ -1748,36 +1748,46 @@ export default function ScheduleModal({
                           showsHorizontalScrollIndicator={false}
                           style={{ width: "100%" }}
                         >
-                          {Object.keys(tagMaster).map((layerName) => {
-                            // 以前の最強ロジックと同じく色を取得
-                            const layerColor =
-                              tagMaster[layerName]?.color ||
-                              layerMaster[layerName] ||
-                              uiThemeColor;
-                            const isSelected = selectedLayer === layerName;
-                            return (
-                              <TouchableOpacity
-                                key={layerName}
-                                style={[
-                                  styles.simpleCategoryChip,
-                                  isSelected && {
-                                    backgroundColor: layerColor,
-                                    borderColor: layerColor,
-                                  },
-                                ]}
-                                onPress={() => setSelectedLayer(layerName)}
-                              >
-                                <Text
+                          {Object.keys(tagMaster)
+                            .filter((name) => name !== "祝日" && name !== "外部予定") // 🌟 祝日は選択不要なので除外
+                            .map((tagName) => {
+                              // 🌟 タグの色を取得（設定がない場合はテーマカラー）
+                              const tagInfo = tagMaster[tagName];
+                              const tagColor = tagInfo?.color || uiThemeColor;
+
+                              // 🌟 修正：変数名を `selectedLayer` に変更！
+                              const isSelected = selectedLayer === tagName;
+
+                              return (
+                                <TouchableOpacity
+                                  key={tagName}
+                                  activeOpacity={0.7}
                                   style={[
-                                    styles.simpleCategoryChipText,
-                                    isSelected && { color: "#FFF" },
+                                    styles.simpleCategoryChip,
+                                    { borderColor: tagColor + "40" },
+                                    isSelected && {
+                                      backgroundColor: tagColor,
+                                      borderColor: tagColor,
+                                    },
                                   ]}
+                                  onPress={() => {
+                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                    // 🌟 修正：正しく `setSelectedLayer` を呼び出す
+                                    setSelectedLayer(tagName);
+                                  }}
                                 >
-                                  {layerName}
-                                </Text>
-                              </TouchableOpacity>
-                            );
-                          })}
+                                  <Text
+                                    style={[
+                                      styles.simpleCategoryChipText,
+                                      { color: tagColor },
+                                      isSelected && { color: "#FFF" },
+                                    ]}
+                                  >
+                                    {tagName}
+                                  </Text>
+                                </TouchableOpacity>
+                              );
+                            })}
                         </ScrollView>
                       </View>
 
@@ -2047,19 +2057,19 @@ export default function ScheduleModal({
 
                             {(isAllDay
                               ? [
-                                  { label: "当日の朝(7:00)", value: "morning" },
-                                  { label: "前日", value: "dayBefore" },
-                                  { label: "2日前", value: "2daysBefore" },
-                                  { label: "カスタム", value: "custom" },
-                                ]
+                                { label: "当日の朝(7:00)", value: "morning" },
+                                { label: "前日", value: "dayBefore" },
+                                { label: "2日前", value: "2daysBefore" },
+                                { label: "カスタム", value: "custom" },
+                              ]
                               : [
-                                  { label: "ちょうど", value: "exact" },
-                                  { label: "10分前", value: "10min" },
-                                  { label: "30分前", value: "30min" },
-                                  { label: "1時間前", value: "1hour" },
-                                  { label: "当日の朝", value: "morning" },
-                                  { label: "カスタム", value: "custom" },
-                                ]
+                                { label: "ちょうど", value: "exact" },
+                                { label: "10分前", value: "10min" },
+                                { label: "30分前", value: "30min" },
+                                { label: "1時間前", value: "1hour" },
+                                { label: "当日の朝", value: "morning" },
+                                { label: "カスタム", value: "custom" },
+                              ]
                             ).map((opt) => {
                               const isSelected = selectedReminders.includes(
                                 opt.value,
