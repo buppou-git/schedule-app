@@ -3,7 +3,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Calendar from "expo-calendar";
 import * as Haptics from "expo-haptics";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 // 🌟 通知の脳みそをインポート
 import { useNotificationManager } from "../../../hooks/useNotificationManager";
@@ -198,10 +204,10 @@ export default function ScheduleModal({
     endTime: new Date(),
   });
 
-  // 🌟 formDataの一部だけをサクッと更新するための魔法の関数
-  const updateForm = (updates: Partial<typeof formData>) => {
+  // 🌟 関数自体をメモ化して、子コンポーネントの無駄な再描画を防ぐ
+  const updateForm = useCallback((updates: Partial<typeof formData>) => {
     setFormData((prev) => ({ ...prev, ...updates }));
-  };
+  }, []);
 
   // =========================================================
   // 🌟 特殊な処理が必要なStateやUI管理用のStateは独立して残す
