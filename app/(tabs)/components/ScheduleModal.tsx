@@ -176,35 +176,43 @@ export default function ScheduleModal({
   setTagMaster,
   setHasUnsavedChanges,
 }: ScheduleModalProps) {
-  const [inputText, setInputText] = useState("");
-  const [inputAmount, setInputAmount] = useState("");
+  // =========================================================
+  // 🌟 改善：バラバラだった入力用Stateを1つの「formData」に統合！
+  // =========================================================
+  const [formData, setFormData] = useState({
+    title: "",
+    amount: "",
+    isEvent: true,
+    isTodo: false,
+    isExpense: false,
+    tag: "",
+    tagColor: "#007AFF",
+    category: "食費",
+    isAllDay: true,
+    repeatType: "none" as "none" | "daily" | "weekly" | "monthly" | "custom",
+    repeatDays: [] as number[],
+    repeatInterval: 1,
+    startDate: new Date(),
+    endDate: new Date(),
+    startTime: new Date(),
+    endTime: new Date(),
+  });
+
+  // 🌟 formDataの一部だけをサクッと更新するための魔法の関数
+  const updateForm = (updates: Partial<typeof formData>) => {
+    setFormData((prev) => ({ ...prev, ...updates }));
+  };
+
+  // =========================================================
+  // 🌟 特殊な処理が必要なStateやUI管理用のStateは独立して残す
+  // =========================================================
   const [isReady, setIsReady] = useState(false);
   const isInitialized = useRef(false);
   const [selectedLayer, setSelectedLayer] = useState("");
-  const [tagInput, setTagInput] = useState("");
-  const [tagColor, setTagColor] = useState("#007AFF");
-  const [selectedCategory, setSelectedCategory] = useState("食費");
-
   const [initialSnapshot, setInitialSnapshot] = useState<string>("");
 
-  const [repeatType, setRepeatType] = useState<
-    "none" | "daily" | "weekly" | "monthly" | "custom"
-  >("none");
-  const [repeatDays, setRepeatDays] = useState<number[]>([]);
-  const [repeatInterval, setRepeatInterval] = useState(1);
-
-  const [isAllDay, setIsAllDay] = useState(true);
-  const [startDate, setStartDate] = useState(new Date());
-  const [endDate, setEndDate] = useState(new Date());
-  const [startTime, setStartTime] = useState(new Date());
-  const [endTime, setEndTime] = useState(new Date());
   const [isCreatingNewTag, setIsCreatingNewTag] = useState(false);
-
-  // 🌟 追加：属性の色を選択するStateとカラーパレット
   const [newTagColor, setNewTagColor] = useState("");
-  const [isEvent, setIsEvent] = useState(true);
-  const [isTodo, setIsTodo] = useState(false);
-  const [isExpense, setIsExpense] = useState(false);
   const [showSubTasks, setShowSubTasks] = useState(false);
   const [subTasks, setSubTasks] = useState<SubTask[]>([]);
   const [quickMainTags, setQuickMainTags] = useState<{
@@ -212,6 +220,7 @@ export default function ScheduleModal({
   }>({
     ALL_LAYERS: ["食費", "交通", "日用品", "交際費", "趣味", "その他"],
   });
+
   const [readingMaster, setReadingMaster] = useState<{
     [title: string]: string;
   }>({});
@@ -256,10 +265,10 @@ export default function ScheduleModal({
     setQuickMainTags(newTags);
     await AsyncStorage.setItem("quickMainTagsData", JSON.stringify(newTags));
     if (
-      selectedCategory ===
+      formData.category ===
       quickMainTags[editingLayerForQuick]?.[editingTagIndex]
     ) {
-      setSelectedCategory(tempQuickTagText.trim());
+      updateForm({ category: tempQuickTagText.trim() });
     }
     setEditQuickTagModal(false);
   };
@@ -281,8 +290,8 @@ export default function ScheduleModal({
       const oldLayer = newTagMaster[editingSubTagOriginalName].layer;
       delete newTagMaster[editingSubTagOriginalName];
       newTagMaster[trimmed] = { layer: oldLayer, color: editingSubTagColor };
-      if (tagInput === editingSubTagOriginalName) setTagInput(trimmed);
-    } else {
+      if (formData.tag === editingSubTagOriginalName)
+        updateForm({ tag: trimmed });
       newTagMaster[trimmed].color = editingSubTagColor;
     }
     setTagMaster?.(newTagMaster);
@@ -307,7 +316,8 @@ export default function ScheduleModal({
               "tagMasterData",
               JSON.stringify(newTagMaster),
             );
-            if (tagInput === editingSubTagOriginalName) setTagInput("");
+            if (formData.tag === editingSubTagOriginalName)
+              updateForm({ tag: "" });
             setEditSubTagModalVisible(false);
           },
         },
@@ -342,38 +352,43 @@ export default function ScheduleModal({
       const def = layers.length > 0 ? layers[0] : "生活";
 
       if (selectedItem) {
-        setInputText(selectedItem.title || "");
-        setInputAmount(
-          selectedItem.amount > 0 ? selectedItem.amount.toString() : "",
-        );
-        setIsEvent(selectedItem.isEvent ?? true);
-        setIsTodo(selectedItem.isTodo ?? false);
-        setIsExpense(selectedItem.isExpense ?? false);
-        setTagInput(selectedItem.tag || "");
-        setTagColor(selectedItem.color || "#007AFF");
+        // 🌟 先に時間のパース（変換）だけやっておく
+        const parsedStartTime = new Date();
+        if (selectedItem.startTime) {
+          const [h, m] = selectedItem.startTime.split(":").map(Number);
+          parsedStartTime.setHours(h, m, 0, 0);
+        }
+        const parsedEndTime = new Date();
+        if (selectedItem.endTime) {
+          const [h, m] = selectedItem.endTime.split(":").map(Number);
+          parsedEndTime.setHours(h, m, 0, 0);
+        }
 
+        // 🌟 1撃で15個の値をセット！
+        updateForm({
+          title: selectedItem.title || "",
+          amount: selectedItem.amount > 0 ? selectedItem.amount.toString() : "",
+          isEvent: selectedItem.isEvent ?? true,
+          isTodo: selectedItem.isTodo ?? false,
+          isExpense: selectedItem.isExpense ?? false,
+          tag: selectedItem.tag || "",
+          tagColor: selectedItem.color || "#007AFF",
+          category: selectedItem.category || "食費",
+          isAllDay: selectedItem.isAllDay ?? true,
+          repeatType: selectedItem.repeatType || "none",
+          repeatDays: selectedItem.repeatDays || [],
+          repeatInterval: selectedItem.repeatInterval || 1,
+          startDate: new Date(selectedItem.startDate || selectedDate),
+          endDate: new Date(selectedItem.endDate || selectedDate),
+          startTime: parsedStartTime,
+          endTime: parsedEndTime,
+        });
+
+        // 👇 formData 以外の「独立したState」を初期化
         const savedLayer =
           tagMaster?.[selectedItem.tag || ""]?.layer ||
           (layerMaster[selectedItem.tag || ""] ? selectedItem.tag : def);
         setSelectedLayer(savedLayer || def);
-
-        setSelectedCategory(selectedItem.category || "食費");
-        setIsAllDay(selectedItem.isAllDay ?? true);
-        setStartDate(new Date(selectedItem.startDate || selectedDate));
-        setEndDate(new Date(selectedItem.endDate || selectedDate));
-
-        if (selectedItem.startTime) {
-          const [h, m] = selectedItem.startTime.split(":").map(Number);
-          const d = new Date();
-          d.setHours(h, m, 0, 0);
-          setStartTime(d);
-        }
-        if (selectedItem.endTime) {
-          const [h, m] = selectedItem.endTime.split(":").map(Number);
-          const d = new Date();
-          d.setHours(h, m, 0, 0);
-          setEndTime(d);
-        }
 
         const hasOldNotification =
           selectedItem.notificationIds &&
@@ -389,11 +404,9 @@ export default function ScheduleModal({
         } else {
           setCustomReminderTimes([]);
         }
-        setRepeatType(selectedItem.repeatType || "none");
-        setRepeatDays(selectedItem.repeatDays || []);
-        setRepeatInterval(selectedItem.repeatInterval || 1);
         setNewTagColor("");
 
+        // 🌟 復活：サブタスクとスナップショットの処理！
         const savedSubTasks = selectedItem.subTasks || [];
         setSubTasks(savedSubTasks);
         setShowSubTasks(savedSubTasks.length > 0);
@@ -408,26 +421,33 @@ export default function ScheduleModal({
         });
         setInitialSnapshot(snapshot);
       } else {
-        setInputText("");
-        setTagInput("");
-        setTagColor(layerMaster[def] || "#007AFF");
-        setInputAmount("");
-        setIsEvent(activeMode === "calendar");
-        setIsTodo(activeMode === "todo");
-        setIsExpense(activeMode === "money");
+        // ==========================================
+        // 🌟 新規作成時（elseの中身）も一撃でリセット！
+        // ==========================================
+        updateForm({
+          title: "",
+          amount: "",
+          isEvent: activeMode === "calendar",
+          isTodo: activeMode === "todo",
+          isExpense: activeMode === "money",
+          tag: "",
+          tagColor: layerMaster[def] || "#007AFF",
+          category: "食費",
+          isAllDay: true,
+          repeatType: "none",
+          repeatDays: [],
+          repeatInterval: 1,
+          startDate: new Date(selectedDate),
+          endDate: new Date(selectedDate),
+          startTime: new Date(),
+          endTime: new Date(new Date().getTime() + 60 * 60 * 1000),
+        });
+
+        // 👇 残りの特殊な子たちを初期化
         setSelectedLayer(def);
-        setSelectedCategory("食費");
-        setIsAllDay(true);
-        setStartDate(new Date(selectedDate));
-        setEndDate(new Date(selectedDate));
-        const now = new Date();
-        setStartTime(now);
-        setEndTime(new Date(now.getTime() + 60 * 60 * 1000));
         setSelectedReminders([]);
         setCustomReminderTimes([]);
-        setRepeatType("none");
         setNewTagColor("");
-
         setSubTasks([]);
         setShowSubTasks(false);
       }
@@ -439,7 +459,8 @@ export default function ScheduleModal({
 
     // 🌟 task (InteractionManager) の後始末
     return () => task.cancel();
-  }, [visible, selectedItem, activeMode, layerMaster, selectedDate, tagMaster]);
+    // 🌟 改善3: 激重の原因だった layerMaster と tagMaster を監視対象から外す！
+  }, [visible, selectedItem, activeMode, selectedDate]);
 
   const toHiragana = (str: string) =>
     str
@@ -448,10 +469,9 @@ export default function ScheduleModal({
       )
       .toLowerCase();
 
-  const titleHistory = useMemo(() => {
-    // 🌟 修正：ユーザーが文字を入力し始めて（inputText が 1文字以上ある時）初めて計算する
-    if (!isReady || !visible || inputText.length === 0) return [];
-
+  // 🌟 改善1: 全予定の読み込みは「モーダルを開いた時（visibleがtrueになった時）」の1回だけに制限！
+  const allTitles = useMemo(() => {
+    if (!visible) return [];
     const titles = new Set<string>();
     const allItems = Object.values(scheduleData).flat() as ScheduleItem[];
     const recentItems = allItems.slice(-150);
@@ -459,20 +479,20 @@ export default function ScheduleModal({
     recentItems.forEach((i) => {
       if (i.title) titles.add(i.title);
     });
-
     return Array.from(titles);
-  }, [scheduleData, isReady, visible, inputText]); // 👈 inputText を依存配列に追加
+  }, [scheduleData, visible]); // 👈 inputText を依存から外した（超重要）
 
+  // 🌟 改善2: 文字を打つたびに走るのは、抽出済みの allTitles からの「絞り込み」だけ！
   const suggestions = useMemo(() => {
-    const s = inputText.trim();
-    if (!s) return [];
+    const s = formData.title.trim();
+    if (!s || !isReady) return [];
     const r = toHiragana(s);
-    return titleHistory
+    return allTitles
       .filter(
         (t) => (readingMaster[t] || toHiragana(t)).startsWith(r) && t !== s,
       )
       .slice(0, 5);
-  }, [inputText, titleHistory, readingMaster]);
+  }, [formData.title, allTitles, readingMaster, isReady]);
 
   const currentQuickTags = useMemo(
     () =>
@@ -489,25 +509,26 @@ export default function ScheduleModal({
   );
 
   const handleSavePress = () => {
-    if (!inputText) return Alert.alert("エラー", "タイトルを入力してください");
+    if (!formData.title)
+      return Alert.alert("エラー", "タイトルを入力してください");
 
     if (selectedItem) {
       const currentSnapshot = JSON.stringify({
-        title: inputText,
-        amount: parseInt(inputAmount) || 0,
-        isEvent: isEvent,
-        isTodo: isTodo,
-        isExpense: isExpense,
-        tag: tagInput.trim(),
-        category: selectedCategory,
-        isAllDay: isAllDay,
-        startDate: startDate.toISOString().split("T")[0],
-        endDate: endDate.toISOString().split("T")[0],
-        startTime: isAllDay ? "" : formatTime(startTime),
-        endTime: isAllDay ? "" : formatTime(endTime),
-        repeatType: repeatType,
-        repeatDays: repeatDays,
-        repeatInterval: repeatInterval,
+        title: formData.title,
+        amount: parseInt(formData.amount) || 0,
+        isEvent: formData.isEvent,
+        isTodo: formData.isTodo,
+        isExpense: formData.isExpense,
+        tag: formData.tag.trim(),
+        category: formData.category,
+        isAllDay: formData.isAllDay,
+        startDate: formData.startDate.toISOString().split("T")[0],
+        endDate: formData.endDate.toISOString().split("T")[0],
+        startTime: formData.isAllDay ? "" : formatTime(formData.startTime),
+        endTime: formData.isAllDay ? "" : formatTime(formData.endTime),
+        repeatType: formData.repeatType,
+        repeatDays: formData.repeatDays,
+        repeatInterval: formData.repeatInterval,
         reminderOptions: selectedReminders,
         subTasksData: subTasks.map((t) => `${t.title}_${t.isDone}`).join(","),
       });
@@ -534,26 +555,27 @@ export default function ScheduleModal({
   };
 
   const executeSave = async (mode: "normal" | "all" | "single") => {
-    if (!inputText) return Alert.alert("エラー", "タイトルを入力してください");
+    if (!formData.title)
+      return Alert.alert("エラー", "タイトルを入力してください");
     const r = {
       ...readingMaster,
-      [inputText.trim()]: toHiragana(inputText.trim()),
+      [formData.title.trim()]: toHiragana(formData.title.trim()),
     };
     setReadingMaster(r);
     AsyncStorage.setItem("readingMasterData", JSON.stringify(r));
 
-    const finalTag = tagInput.trim() || selectedLayer;
+    const finalTag = formData.tag.trim() || selectedLayer;
 
     let finalColor = uiThemeColor;
-    if (tagInput.trim()) {
-      const existingTag = tagMaster[tagInput.trim()];
+    if (formData.tag.trim()) {
+      const existingTag = tagMaster[formData.tag.trim()];
       if (existingTag) {
         finalColor = existingTag.color;
       } else {
         finalColor = newTagColor || uiThemeColor;
         const m = {
           ...tagMaster,
-          [tagInput.trim()]: { layer: selectedLayer, color: finalColor },
+          [formData.tag.trim()]: { layer: selectedLayer, color: finalColor },
         };
         setTagMaster?.(m);
         AsyncStorage.setItem("tagMasterData", JSON.stringify(m));
@@ -573,8 +595,8 @@ export default function ScheduleModal({
     if (selectedReminders.length > 0) {
       for (const option of selectedReminders) {
         if (option === "custom") continue;
-        let triggerDate = new Date(startDate);
-        if (isAllDay) {
+        let triggerDate = new Date(formData.startDate);
+        if (formData.isAllDay) {
           if (option === "morning") triggerDate.setHours(7, 0, 0, 0);
           else if (option === "dayBefore") {
             triggerDate.setDate(triggerDate.getDate() - 1);
@@ -585,8 +607,8 @@ export default function ScheduleModal({
           }
         } else {
           triggerDate.setHours(
-            startTime.getHours(),
-            startTime.getMinutes(),
+            formData.startTime.getHours(),
+            formData.startTime.getMinutes(),
             0,
             0,
           );
@@ -604,7 +626,10 @@ export default function ScheduleModal({
         }
 
         if (triggerDate > new Date()) {
-          const id = await scheduleItemNotification(inputText, triggerDate);
+          const id = await scheduleItemNotification(
+            formData.title,
+            triggerDate,
+          );
           if (id) finalNotificationIds.push(id);
         }
       }
@@ -612,7 +637,10 @@ export default function ScheduleModal({
       if (selectedReminders.includes("custom")) {
         for (const customTime of customReminderTimes) {
           if (customTime > new Date()) {
-            const id = await scheduleItemNotification(inputText, customTime);
+            const id = await scheduleItemNotification(
+              formData.title,
+              customTime,
+            );
             if (id) finalNotificationIds.push(id);
           }
         }
@@ -648,33 +676,35 @@ export default function ScheduleModal({
       }),
     );
 
-    // 🌟 自動完了の判定ロジック（お金の記録を除外）
     const pureTodos = updatedSubTasks.filter(
       (t) => !t.isExpense && !t.isIncome,
     );
     const allDone = pureTodos.length > 0 && pureTodos.every((t) => t.isDone);
 
     const newData = { ...scheduleData };
-    const sStr = startDate.toISOString().split("T")[0];
+    const sStr = formData.startDate.toISOString().split("T")[0];
     const itemData = {
-      title: inputText,
+      title: formData.title,
       tag: finalTag,
       tags: [finalTag],
-      amount: parseInt(inputAmount) || 0,
-      isEvent,
-      isTodo,
-      isExpense,
-      isDone: allDone ? true : selectedItem ? selectedItem.isDone : false, // 🌟 完了状態をここで確定
+      amount: parseInt(formData.amount) || 0,
+      isEvent: formData.isEvent,
+      isTodo: formData.isTodo,
+      isExpense: formData.isExpense,
+      isDone: allDone ? true : selectedItem ? selectedItem.isDone : false,
       color: finalColor,
-      category: isExpense ? selectedCategory : undefined,
-      repeatType: repeatType !== "none" ? repeatType : undefined,
-      repeatDays: repeatType === "custom" ? repeatDays : undefined,
-      repeatInterval: repeatType === "custom" ? repeatInterval : undefined,
-      isAllDay,
+      category: formData.isExpense ? formData.category : undefined,
+      repeatType:
+        formData.repeatType !== "none" ? formData.repeatType : undefined,
+      repeatDays:
+        formData.repeatType === "custom" ? formData.repeatDays : undefined,
+      repeatInterval:
+        formData.repeatType === "custom" ? formData.repeatInterval : undefined,
+      isAllDay: formData.isAllDay,
       startDate: sStr,
-      endDate: endDate.toISOString().split("T")[0],
-      startTime: isAllDay ? undefined : formatTime(startTime),
-      endTime: isAllDay ? undefined : formatTime(endTime),
+      endDate: formData.endDate.toISOString().split("T")[0],
+      startTime: formData.isAllDay ? undefined : formatTime(formData.startTime),
+      endTime: formData.isAllDay ? undefined : formatTime(formData.endTime),
       notificationIds: finalNotificationIds,
       reminderOptions: selectedReminders,
       customReminderTimes: customReminderTimes.map((d) => d.toISOString()),
@@ -730,7 +760,6 @@ export default function ScheduleModal({
           newData[sStr].push({ ...selectedItem, ...itemData });
         }
       } else {
-        // 🌟 新規保存：isDone: false を削除（itemDataに入っているためエラーを回避）
         if (!newData[sStr]) newData[sStr] = [];
         newData[sStr].push({
           id: Date.now().toString(),
@@ -739,35 +768,33 @@ export default function ScheduleModal({
       }
     }
 
-    const startForExport = isAllDay
-      ? startDate
+    const startForExport = formData.isAllDay
+      ? formData.startDate
       : new Date(
-        startDate.getFullYear(),
-        startDate.getMonth(),
-        startDate.getDate(),
-        startTime.getHours(),
-        startTime.getMinutes(),
-      );
-    const endForExport = isAllDay
-      ? endDate
+          formData.startDate.getFullYear(),
+          formData.startDate.getMonth(),
+          formData.startDate.getDate(),
+          formData.startTime.getHours(),
+          formData.startTime.getMinutes(),
+        );
+    const endForExport = formData.isAllDay
+      ? formData.endDate
       : new Date(
-        endDate.getFullYear(),
-        endDate.getMonth(),
-        endDate.getDate(),
-        endTime.getHours(),
-        endTime.getMinutes(),
-      );
+          formData.endDate.getFullYear(),
+          formData.endDate.getMonth(),
+          formData.endDate.getDate(),
+          formData.endTime.getHours(),
+          formData.endTime.getMinutes(),
+        );
 
-    // 🌟 戻り値のIDを受け取り、既存のIDがあれば渡す
     const returnedId = await exportToStandardCalendar(
-      inputText,
+      formData.title,
       startForExport,
       endForExport,
-      isAllDay,
+      formData.isAllDay,
       selectedItem?.externalEventId,
     );
 
-    // 🌟 先ほど newData にプッシュしたアイテムにIDを記録する
     if (returnedId && newData[sStr] && newData[sStr].length > 0) {
       newData[sStr][newData[sStr].length - 1].externalEventId = returnedId;
     }
@@ -778,7 +805,6 @@ export default function ScheduleModal({
       setHasUnsavedChanges(true);
     }, 300);
   };
-
   const handleDeletePress = () => {
     if (selectedItem && selectedItem.repeatType) {
       Alert.alert("繰り返しの削除", "この予定をどのように削除しますか？", [
@@ -798,7 +824,7 @@ export default function ScheduleModal({
     if (selectedItem.externalEventId) {
       try {
         await Calendar.deleteEventAsync(selectedItem.externalEventId);
-      } catch (e) { }
+      } catch (e) {}
     }
 
     const newData = { ...scheduleData };
@@ -858,16 +884,16 @@ export default function ScheduleModal({
           <View style={styles.timePreviewRow}>
             <Ionicons name="time" size={14} color={uiThemeColor} />
             <Text style={[styles.timePreviewText, { color: uiThemeColor }]}>
-              {isAllDay
+              {formData.isAllDay
                 ? "終日"
-                : `${formatTime(startTime)} 〜 ${formatTime(endTime)}`}
+                : `${formatTime(formData.startTime)} 〜 ${formatTime(formData.endTime)}`}
             </Text>
           </View>
           <View style={styles.switchRow}>
             <Text style={styles.switchLabel}>終日</Text>
             <Switch
-              value={isAllDay}
-              onValueChange={setIsAllDay}
+              value={formData.isAllDay}
+              onValueChange={(v) => updateForm({ isAllDay: v })}
               trackColor={{ false: "#C7C7CC", true: uiThemeColor }}
               ios_backgroundColor="#E5E5EA"
             />
@@ -877,17 +903,17 @@ export default function ScheduleModal({
               <Text style={styles.timeLabel}>開始</Text>
               <View style={{ flexDirection: "row", gap: 8 }}>
                 <ModernDatePicker
-                  value={startDate}
+                  value={formData.startDate}
                   mode="date"
-                  onChange={setStartDate}
+                  onChange={(d) => updateForm({ startDate: d })}
                   themeColor={uiThemeColor}
                   icon="calendar-outline"
                 />
-                {!isAllDay && (
+                {!formData.isAllDay && (
                   <ModernDatePicker
-                    value={startTime}
+                    value={formData.startTime}
                     mode="time"
-                    onChange={setStartTime}
+                    onChange={(d) => updateForm({ startTime: d })}
                     themeColor={uiThemeColor}
                     icon="time-outline"
                   />
@@ -898,17 +924,17 @@ export default function ScheduleModal({
               <Text style={styles.timeLabel}>終了</Text>
               <View style={{ flexDirection: "row", gap: 8 }}>
                 <ModernDatePicker
-                  value={endDate}
+                  value={formData.endDate}
                   mode="date"
-                  onChange={setEndDate}
+                  onChange={(d) => updateForm({ endDate: d })}
                   themeColor={uiThemeColor}
                   icon="calendar-outline"
                 />
-                {!isAllDay && (
+                {!formData.isAllDay && (
                   <ModernDatePicker
-                    value={endTime}
+                    value={formData.endTime}
                     mode="time"
-                    onChange={setEndTime}
+                    onChange={(d) => updateForm({ endTime: d })}
                     themeColor={uiThemeColor}
                     icon="time-outline"
                   />
@@ -931,23 +957,16 @@ export default function ScheduleModal({
               key={opt.value}
               style={[
                 styles.layerChip,
-                repeatType === opt.value && { backgroundColor: uiThemeColor },
+                formData.repeatType === opt.value && {
+                  backgroundColor: uiThemeColor,
+                },
               ]}
-              onPress={() =>
-                setRepeatType(
-                  opt.value as
-                  | "none"
-                  | "daily"
-                  | "weekly"
-                  | "monthly"
-                  | "custom",
-                )
-              }
+              onPress={() => updateForm({ repeatType: opt.value as any })}
             >
               <Text
                 style={[
                   styles.layerChipText,
-                  repeatType === opt.value && { color: "#fff" },
+                  formData.repeatType === opt.value && { color: "#fff" },
                 ]}
               >
                 {opt.label}
@@ -955,7 +974,8 @@ export default function ScheduleModal({
             </TouchableOpacity>
           ))}
         </View>
-        {repeatType === "custom" && (
+
+        {formData.repeatType === "custom" && (
           <View style={styles.customRepeatArea}>
             <View
               style={{
@@ -965,7 +985,9 @@ export default function ScheduleModal({
               }}
             >
               <Text style={styles.miniLabel}>曜日の選択</Text>
-              <TouchableOpacity onPress={() => setRepeatDays([1, 2, 3, 4, 5])}>
+              <TouchableOpacity
+                onPress={() => updateForm({ repeatDays: [1, 2, 3, 4, 5] })}
+              >
                 <Text
                   style={{
                     fontSize: 11,
@@ -979,7 +1001,7 @@ export default function ScheduleModal({
             </View>
             <View style={styles.daySelectorRow}>
               {["日", "月", "火", "水", "木", "金", "土"].map((day, idx) => {
-                const isSelected = repeatDays.includes(idx);
+                const isSelected = formData.repeatDays.includes(idx);
                 return (
                   <TouchableOpacity
                     key={idx}
@@ -991,11 +1013,11 @@ export default function ScheduleModal({
                       },
                     ]}
                     onPress={() => {
-                      setRepeatDays((prev) =>
-                        prev.includes(idx)
-                          ? prev.filter((d) => d !== idx)
-                          : [...prev, idx],
-                      );
+                      const prev = formData.repeatDays;
+                      const next = prev.includes(idx)
+                        ? prev.filter((d) => d !== idx)
+                        : [...prev, idx];
+                      updateForm({ repeatDays: next });
                     }}
                   >
                     <Text
@@ -1015,8 +1037,10 @@ export default function ScheduleModal({
                 <TextInput
                   style={styles.intervalInput}
                   keyboardType="numeric"
-                  value={repeatInterval.toString()}
-                  onChangeText={(t) => setRepeatInterval(parseInt(t) || 1)}
+                  value={formData.repeatInterval.toString()}
+                  onChangeText={(t) =>
+                    updateForm({ repeatInterval: parseInt(t) || 1 })
+                  }
                 />
                 <Text
                   style={{ fontSize: 14, fontWeight: "bold", color: "#1C1C1E" }}
@@ -1064,7 +1088,7 @@ export default function ScheduleModal({
                 const nextState = !isCreatingNewTag;
                 setIsCreatingNewTag(nextState);
                 if (!nextState) {
-                  setTagInput("");
+                  updateForm({ tag: "" }); // 🌟 ここを書き換え
                   setNewTagColor("");
                 }
               }}
@@ -1091,8 +1115,8 @@ export default function ScheduleModal({
                 ]}
                 placeholder="新しい属性..."
                 placeholderTextColor={(newTagColor || uiThemeColor) + "70"}
-                value={tagInput}
-                onChangeText={setTagInput}
+                value={formData.tag} // 🌟 ここを書き換え
+                onChangeText={(t) => updateForm({ tag: t })} // 🌟 ここを書き換え
                 autoFocus
               />
             )}
@@ -1103,7 +1127,7 @@ export default function ScheduleModal({
                 <TouchableOpacity
                   key={t}
                   onPress={() => {
-                    setTagInput(t);
+                    updateForm({ tag: t }); // 🌟 ここを書き換え
                     setIsCreatingNewTag(false);
                     setNewTagColor(""); // 既存のを選ぶ時はカラーをリセット
                   }}
@@ -1112,7 +1136,8 @@ export default function ScheduleModal({
                   } // 🌟 追加：長押しで編集
                   style={[
                     styles.tagChip,
-                    tagInput === t && {
+                    formData.tag === t && {
+                      // 🌟 ここを書き換え
                       backgroundColor: tagMaster[t].color,
                       borderColor: tagMaster[t].color,
                     },
@@ -1121,7 +1146,7 @@ export default function ScheduleModal({
                   <Text
                     style={[
                       styles.tagText,
-                      tagInput === t && { color: "#fff" },
+                      formData.tag === t && { color: "#fff" }, // 🌟 ここを書き換え
                     ]}
                   >
                     {t}
@@ -1166,21 +1191,13 @@ export default function ScheduleModal({
     );
   }, [
     isReady,
-    isAllDay,
-    startDate,
-    endDate,
-    startTime,
-    endTime,
+    formData, // 🌟 これ1つで全部カバーできるようになりました！
     uiThemeColor,
     layerMaster,
     selectedLayer,
     tagMaster,
-    tagInput,
     isCreatingNewTag,
     newTagColor,
-    repeatType,
-    repeatDays,
-    repeatInterval,
   ]);
 
   const subTaskSection = useMemo(() => {
@@ -1545,7 +1562,7 @@ export default function ScheduleModal({
                   },
                 ]}
                 onPress={() => {
-                  setIsTodo(true);
+                  updateForm({ isTodo: true }); // 🌟 旧: setIsTodo(true)
                   // 🌟 追加した瞬間の日付を date (スタート日) として自動保持
                   setSubTasks([
                     ...subTasks,
@@ -1587,7 +1604,7 @@ export default function ScheduleModal({
                   },
                 ]}
                 onPress={() => {
-                  setIsExpense(true);
+                  updateForm({ isExpense: true }); // 🌟 旧: setIsExpense(true)
                   setSubTasks([
                     ...subTasks,
                     {
@@ -1625,7 +1642,7 @@ export default function ScheduleModal({
     showSubTasks,
     subTasks,
     uiThemeColor,
-    selectedCategory,
+    formData.category, // 🌟 旧: selectedCategory
     selectedDate,
     currentQuickTags,
   ]);
@@ -1666,7 +1683,6 @@ export default function ScheduleModal({
                 // ==========================================
                 // 🟢 【大幅改善】新・簡易追加画面
                 // ==========================================
-                /* 🌟 追加：ScrollView と TouchableWithoutFeedback で包む */
                 <ScrollView
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
@@ -1683,15 +1699,14 @@ export default function ScheduleModal({
                         placeholder="予定のタイトルを入力"
                         placeholderTextColor="#C7C7CC"
                         autoFocus
-                        value={inputText}
-                        onChangeText={setInputText}
+                        value={formData.title} // 🌟
+                        onChangeText={(t) => updateForm({ title: t })} // 🌟
                         multiline={false}
                       />
 
                       {/* 3. 日時・時間設定エリア（カード形式） */}
                       <View style={styles.simpleDateTimeCard}>
                         <View style={styles.timeRow}>
-                          {/* 🌟 アイコンの代わりに「開始」の文字を入れて幅を固定 */}
                           <View style={styles.timeLabelContainer}>
                             <Text
                               style={[
@@ -1704,15 +1719,15 @@ export default function ScheduleModal({
                           </View>
                           <View style={styles.timePickerGroup}>
                             <ModernDatePicker
-                              value={startDate}
+                              value={formData.startDate} // 🌟
                               mode="date"
-                              onChange={setStartDate}
+                              onChange={(d) => updateForm({ startDate: d })} // 🌟
                               themeColor={uiThemeColor}
                             />
                             <ModernDatePicker
-                              value={startTime}
+                              value={formData.startTime} // 🌟
                               mode="time"
-                              onChange={setStartTime}
+                              onChange={(d) => updateForm({ startTime: d })} // 🌟
                               themeColor={uiThemeColor}
                             />
                           </View>
@@ -1725,15 +1740,15 @@ export default function ScheduleModal({
                           </View>
                           <View style={styles.timePickerGroup}>
                             <ModernDatePicker
-                              value={endDate}
+                              value={formData.endDate} // 🌟
                               mode="date"
-                              onChange={setEndDate}
+                              onChange={(d) => updateForm({ endDate: d })} // 🌟
                               themeColor={uiThemeColor}
                             />
                             <ModernDatePicker
-                              value={endTime}
+                              value={formData.endTime} // 🌟
                               mode="time"
-                              onChange={setEndTime}
+                              onChange={(d) => updateForm({ endTime: d })} // 🌟
                               themeColor={uiThemeColor}
                             />
                           </View>
@@ -1749,7 +1764,9 @@ export default function ScheduleModal({
                           style={{ width: "100%" }}
                         >
                           {Object.keys(tagMaster)
-                            .filter((name) => name !== "祝日" && name !== "外部予定") // 🌟 祝日は選択不要なので除外
+                            .filter(
+                              (name) => name !== "祝日" && name !== "外部予定",
+                            ) // 🌟 祝日は選択不要なので除外
                             .map((tagName) => {
                               // 🌟 タグの色を取得（設定がない場合はテーマカラー）
                               const tagInfo = tagMaster[tagName];
@@ -1771,7 +1788,9 @@ export default function ScheduleModal({
                                     },
                                   ]}
                                   onPress={() => {
-                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                    Haptics.impactAsync(
+                                      Haptics.ImpactFeedbackStyle.Light,
+                                    );
                                     // 🌟 修正：正しく `setSelectedLayer` を呼び出す
                                     setSelectedLayer(tagName);
                                   }}
@@ -1797,22 +1816,24 @@ export default function ScheduleModal({
                         <TouchableOpacity
                           style={[
                             styles.simpleOptBtn,
-                            isTodo && {
+                            formData.isTodo && {
                               backgroundColor: "#34C759",
                               borderColor: "#34C759",
                             },
                           ]}
-                          onPress={() => setIsTodo(!isTodo)}
+                          onPress={() =>
+                            updateForm({ isTodo: !formData.isTodo })
+                          } // 🌟
                         >
                           <Ionicons
                             name="checkbox"
                             size={22}
-                            color={isTodo ? "#FFF" : "#8E8E93"}
+                            color={formData.isTodo ? "#FFF" : "#8E8E93"}
                           />
                           <Text
                             style={[
                               styles.simpleOptBtnText,
-                              isTodo && { color: "#FFF" },
+                              formData.isTodo && { color: "#FFF" },
                             ]}
                           >
                             ToDoに追加
@@ -1823,22 +1844,24 @@ export default function ScheduleModal({
                         <TouchableOpacity
                           style={[
                             styles.simpleOptBtn,
-                            isExpense && {
+                            formData.isExpense && {
                               backgroundColor: "#FFCC00",
                               borderColor: "#FFCC00",
                             },
                           ]}
-                          onPress={() => setIsExpense(!isExpense)}
+                          onPress={() =>
+                            updateForm({ isExpense: !formData.isExpense })
+                          } // 🌟
                         >
                           <Ionicons
                             name="wallet"
                             size={22}
-                            color={isExpense ? "#FFF" : "#FFCC00"}
+                            color={formData.isExpense ? "#FFF" : "#FFCC00"}
                           />
                           <Text
                             style={[
                               styles.simpleOptBtnText,
-                              isExpense && { color: "#FFF" },
+                              formData.isExpense && { color: "#FFF" },
                             ]}
                           >
                             支出を記録
@@ -1847,7 +1870,7 @@ export default function ScheduleModal({
                       </View>
 
                       {/* 5. 条件付き金額入力エリア（支出ONの時だけふわっと出す） */}
-                      {isExpense && (
+                      {formData.isExpense && (
                         <View style={styles.simpleAmountSection}>
                           <Text style={styles.amountSymbol}>¥</Text>
                           <TextInput
@@ -1855,8 +1878,8 @@ export default function ScheduleModal({
                             placeholder="0"
                             placeholderTextColor="#C7C7CC"
                             keyboardType="numeric"
-                            value={inputAmount}
-                            onChangeText={setInputAmount}
+                            value={formData.amount} // 🌟
+                            onChangeText={(t) => updateForm({ amount: t })} // 🌟
                           />
                           <ScrollView
                             horizontal
@@ -1875,16 +1898,18 @@ export default function ScheduleModal({
                                 key={cat}
                                 style={[
                                   styles.miniChip,
-                                  selectedCategory === cat && {
+                                  formData.category === cat && {
+                                    // 🌟
                                     backgroundColor: "#FFCC00",
                                   },
                                 ]}
-                                onPress={() => setSelectedCategory(cat)}
+                                onPress={() => updateForm({ category: cat })} // 🌟
                               >
                                 <Text
                                   style={[
                                     styles.miniChipText,
-                                    selectedCategory === cat && {
+                                    formData.category === cat && {
+                                      // 🌟
                                       color: "#FFF",
                                     },
                                   ]}
@@ -1955,8 +1980,8 @@ export default function ScheduleModal({
                         style={styles.mainInput}
                         placeholder="予定のタイトル"
                         placeholderTextColor="#AEAEB2"
-                        value={inputText}
-                        onChangeText={setInputText}
+                        value={formData.title} // 🌟
+                        onChangeText={(t) => updateForm({ title: t })} // 🌟
                       />
 
                       {suggestions.length > 0 && (
@@ -1969,7 +1994,7 @@ export default function ScheduleModal({
                               <TouchableOpacity
                                 key={i}
                                 style={styles.suggestionBadge}
-                                onPress={() => setInputText(s)}
+                                onPress={() => updateForm({ title: s })} // 🌟
                               >
                                 <Text style={styles.suggestionText}>{s}</Text>
                               </TouchableOpacity>
@@ -2055,21 +2080,21 @@ export default function ScheduleModal({
                               </Text>
                             </TouchableOpacity>
 
-                            {(isAllDay
+                            {(formData.isAllDay // 🌟
                               ? [
-                                { label: "当日の朝(7:00)", value: "morning" },
-                                { label: "前日", value: "dayBefore" },
-                                { label: "2日前", value: "2daysBefore" },
-                                { label: "カスタム", value: "custom" },
-                              ]
+                                  { label: "当日の朝(7:00)", value: "morning" },
+                                  { label: "前日", value: "dayBefore" },
+                                  { label: "2日前", value: "2daysBefore" },
+                                  { label: "カスタム", value: "custom" },
+                                ]
                               : [
-                                { label: "ちょうど", value: "exact" },
-                                { label: "10分前", value: "10min" },
-                                { label: "30分前", value: "30min" },
-                                { label: "1時間前", value: "1hour" },
-                                { label: "当日の朝", value: "morning" },
-                                { label: "カスタム", value: "custom" },
-                              ]
+                                  { label: "ちょうど", value: "exact" },
+                                  { label: "10分前", value: "10min" },
+                                  { label: "30分前", value: "30min" },
+                                  { label: "1時間前", value: "1hour" },
+                                  { label: "当日の朝", value: "morning" },
+                                  { label: "カスタム", value: "custom" },
+                                ]
                             ).map((opt) => {
                               const isSelected = selectedReminders.includes(
                                 opt.value,
@@ -2244,8 +2269,8 @@ export default function ScheduleModal({
                         <View style={styles.switchRow}>
                           <Text style={styles.switchLabel}>予定として表示</Text>
                           <Switch
-                            value={isEvent}
-                            onValueChange={setIsEvent}
+                            value={formData.isEvent} // 🌟
+                            onValueChange={(v) => updateForm({ isEvent: v })} // 🌟
                             trackColor={{
                               false: "#C7C7CC",
                               true: uiThemeColor,
@@ -2258,8 +2283,8 @@ export default function ScheduleModal({
                             ToDoリストに表示
                           </Text>
                           <Switch
-                            value={isTodo}
-                            onValueChange={setIsTodo}
+                            value={formData.isTodo} // 🌟
+                            onValueChange={(v) => updateForm({ isTodo: v })} // 🌟
                             trackColor={{
                               false: "#C7C7CC",
                               true: uiThemeColor,
@@ -2270,8 +2295,8 @@ export default function ScheduleModal({
                         <View style={styles.switchRow}>
                           <Text style={styles.switchLabel}>支出を記録</Text>
                           <Switch
-                            value={isExpense}
-                            onValueChange={setIsExpense}
+                            value={formData.isExpense} // 🌟
+                            onValueChange={(v) => updateForm({ isExpense: v })} // 🌟
                             trackColor={{
                               false: "#C7C7CC",
                               true: uiThemeColor,
@@ -2280,15 +2305,15 @@ export default function ScheduleModal({
                           />
                         </View>
 
-                        {isExpense && (
+                        {formData.isExpense && ( // 🌟
                           <View>
                             <TextInput
                               style={styles.input}
                               placeholder="金額 (¥)"
                               placeholderTextColor="#AEAEB2"
                               keyboardType="numeric"
-                              value={inputAmount}
-                              onChangeText={setInputAmount}
+                              value={formData.amount} // 🌟
+                              onChangeText={(t) => updateForm({ amount: t })} // 🌟
                             />
                             <View
                               style={{
@@ -2303,16 +2328,18 @@ export default function ScheduleModal({
                                   key={cat}
                                   style={[
                                     styles.layerChip,
-                                    selectedCategory === cat && {
+                                    formData.category === cat && {
+                                      // 🌟
                                       backgroundColor: uiThemeColor,
                                     },
                                   ]}
-                                  onPress={() => setSelectedCategory(cat)}
+                                  onPress={() => updateForm({ category: cat })} // 🌟
                                 >
                                   <Text
                                     style={[
                                       styles.layerChipText,
-                                      selectedCategory === cat && {
+                                      formData.category === cat && {
+                                        // 🌟
                                         color: "#fff",
                                       },
                                     ]}
