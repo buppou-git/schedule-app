@@ -73,7 +73,7 @@ import {
   WeekCalendar,
 } from "react-native-calendars";
 
-import ConfigModal from "./components/ConfigModal";
+import ConfigModal from "./components/ConfigModal/ConfigModal";
 import ExternalEventModal from "./components/ExternalEventModal";
 import LayerManagementModal from "./components/LayerManagementModal";
 import MoneyDashboard from "./components/MoneyDashboard";
