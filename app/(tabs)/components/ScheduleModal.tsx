@@ -169,6 +169,401 @@ const ModernDatePicker = ({
   );
 };
 
+// ==========================================
+// 🌟 独立コンポーネント①：時間設定セクション
+// ==========================================
+interface TimeSectionProps {
+  isAllDay: boolean;
+  startDate: Date;
+  startTime: Date;
+  endDate: Date;
+  endTime: Date;
+  uiThemeColor: string;
+  updateForm: (updates: any) => void;
+}
+
+// 🌟 React.memo で包むことで、「自分に関係ない変更（タイトルの入力など）」を完全に無視するようになります！
+const TimeSection = React.memo(
+  ({
+    isAllDay,
+    startDate,
+    startTime,
+    endDate,
+    endTime,
+    uiThemeColor,
+    updateForm,
+  }: TimeSectionProps) => {
+    return (
+      <View style={styles.timeSection}>
+        <View style={styles.timePreviewRow}>
+          <Ionicons name="time" size={14} color={uiThemeColor} />
+          <Text style={[styles.timePreviewText, { color: uiThemeColor }]}>
+            {isAllDay
+              ? "終日"
+              : `${formatTime(startTime)} 〜 ${formatTime(endTime)}`}
+          </Text>
+        </View>
+        <View style={styles.switchRow}>
+          <Text style={styles.switchLabel}>終日</Text>
+          <Switch
+            value={isAllDay}
+            onValueChange={(v) => updateForm({ isAllDay: v })}
+            trackColor={{ false: "#C7C7CC", true: uiThemeColor }}
+            ios_backgroundColor="#E5E5EA"
+          />
+        </View>
+        <View style={styles.timePickerContainer}>
+          <View style={styles.timeRow}>
+            <Text style={styles.timeLabel}>開始</Text>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <ModernDatePicker
+                value={startDate}
+                mode="date"
+                onChange={(d) => updateForm({ startDate: d })}
+                themeColor={uiThemeColor}
+                icon="calendar-outline"
+              />
+              {!isAllDay && (
+                <ModernDatePicker
+                  value={startTime}
+                  mode="time"
+                  onChange={(d) => updateForm({ startTime: d })}
+                  themeColor={uiThemeColor}
+                  icon="time-outline"
+                />
+              )}
+            </View>
+          </View>
+          <View style={[styles.timeRow, { marginTop: 16 }]}>
+            <Text style={styles.timeLabel}>終了</Text>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <ModernDatePicker
+                value={endDate}
+                mode="date"
+                onChange={(d) => updateForm({ endDate: d })}
+                themeColor={uiThemeColor}
+                icon="calendar-outline"
+              />
+              {!isAllDay && (
+                <ModernDatePicker
+                  value={endTime}
+                  mode="time"
+                  onChange={(d) => updateForm({ endTime: d })}
+                  themeColor={uiThemeColor}
+                  icon="time-outline"
+                />
+              )}
+            </View>
+          </View>
+        </View>
+      </View>
+    );
+  },
+);
+
+// ==========================================
+// 🌟 独立コンポーネント②：繰り返し設定セクション
+// ==========================================
+interface RepeatSectionProps {
+  repeatType: string;
+  repeatDays: number[];
+  repeatInterval: number;
+  uiThemeColor: string;
+  updateForm: (updates: any) => void;
+}
+
+const RepeatSection = React.memo(
+  ({
+    repeatType,
+    repeatDays,
+    repeatInterval,
+    uiThemeColor,
+    updateForm,
+  }: RepeatSectionProps) => {
+    return (
+      <View>
+        <Text style={styles.label}>繰り返し</Text>
+        <View style={styles.layerContainer}>
+          {[
+            { label: "なし", value: "none" },
+            { label: "毎日", value: "daily" },
+            { label: "毎週", value: "weekly" },
+            { label: "毎月", value: "monthly" },
+            { label: "カスタム", value: "custom" },
+          ].map((opt) => (
+            <TouchableOpacity
+              key={opt.value}
+              style={[
+                styles.layerChip,
+                repeatType === opt.value && { backgroundColor: uiThemeColor },
+              ]}
+              onPress={() => updateForm({ repeatType: opt.value as any })}
+            >
+              <Text
+                style={[
+                  styles.layerChipText,
+                  repeatType === opt.value && { color: "#fff" },
+                ]}
+              >
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {repeatType === "custom" && (
+          <View style={styles.customRepeatArea}>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                marginBottom: 12,
+              }}
+            >
+              <Text style={styles.miniLabel}>曜日の選択</Text>
+              <TouchableOpacity
+                onPress={() => updateForm({ repeatDays: [1, 2, 3, 4, 5] })}
+              >
+                <Text
+                  style={{
+                    fontSize: 11,
+                    color: uiThemeColor,
+                    fontWeight: "bold",
+                  }}
+                >
+                  平日のみ選択
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.daySelectorRow}>
+              {["日", "月", "火", "水", "木", "金", "土"].map((day, idx) => {
+                const isSelected = repeatDays.includes(idx);
+                return (
+                  <TouchableOpacity
+                    key={idx}
+                    style={[
+                      styles.dayCircle,
+                      isSelected && {
+                        backgroundColor: uiThemeColor,
+                        borderColor: uiThemeColor,
+                      },
+                    ]}
+                    onPress={() => {
+                      const prev = repeatDays;
+                      const next = prev.includes(idx)
+                        ? prev.filter((d) => d !== idx)
+                        : [...prev, idx];
+                      updateForm({ repeatDays: next });
+                    }}
+                  >
+                    <Text
+                      style={[styles.dayText, isSelected && { color: "#FFF" }]}
+                    >
+                      {day}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <View style={styles.intervalRow}>
+              <Text style={styles.miniLabel}>繰り返しの間隔:</Text>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+              >
+                <TextInput
+                  style={styles.intervalInput}
+                  keyboardType="numeric"
+                  value={repeatInterval.toString()}
+                  onChangeText={(t) =>
+                    updateForm({ repeatInterval: parseInt(t) || 1 })
+                  }
+                />
+                <Text
+                  style={{ fontSize: 14, fontWeight: "bold", color: "#1C1C1E" }}
+                >
+                  週間ごと
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  },
+);
+
+// ==========================================
+// 🌟 独立コンポーネント③：カテゴリと属性（タグ）セクション
+// ==========================================
+interface TagSectionProps {
+  selectedLayer: string;
+  setSelectedLayer: (l: string) => void;
+  layerMaster: any;
+  tagMaster: any;
+  formDataTag: string;
+  uiThemeColor: string;
+  updateForm: (updates: any) => void;
+  isCreatingNewTag: boolean;
+  setIsCreatingNewTag: (val: boolean) => void;
+  newTagColor: string;
+  setNewTagColor: (val: string) => void;
+  handleLongPressSubTag: (tagName: string, color: string) => void;
+}
+
+const TagSection = React.memo(
+  ({
+    selectedLayer,
+    setSelectedLayer,
+    layerMaster,
+    tagMaster,
+    formDataTag,
+    uiThemeColor,
+    updateForm,
+    isCreatingNewTag,
+    setIsCreatingNewTag,
+    newTagColor,
+    setNewTagColor,
+    handleLongPressSubTag,
+  }: TagSectionProps) => {
+    return (
+      <View>
+        <Text style={styles.label}>カレンダーの種類</Text>
+        <View style={styles.layerContainer}>
+          {Object.keys(layerMaster).map((l) => (
+            <TouchableOpacity
+              key={l}
+              style={[
+                styles.layerChip,
+                selectedLayer === l && { backgroundColor: layerMaster[l] },
+              ]}
+              onPress={() => setSelectedLayer(l)}
+            >
+              <Text
+                style={[
+                  styles.layerChipText,
+                  selectedLayer === l && { color: "#fff" },
+                ]}
+              >
+                {l}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={styles.tagSection}>
+          <Text style={styles.label}>属性（任意）</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ alignItems: "center" }}
+          >
+            <TouchableOpacity
+              onPress={() => {
+                const nextState = !isCreatingNewTag;
+                setIsCreatingNewTag(nextState);
+                if (!nextState) {
+                  updateForm({ tag: "" });
+                  setNewTagColor("");
+                }
+              }}
+              style={[
+                styles.addTagCircle,
+                isCreatingNewTag && { backgroundColor: uiThemeColor },
+              ]}
+            >
+              <Ionicons
+                name={isCreatingNewTag ? "close" : "add"}
+                size={22}
+                color={isCreatingNewTag ? "#fff" : uiThemeColor}
+              />
+            </TouchableOpacity>
+
+            {isCreatingNewTag && (
+              <TextInput
+                style={[
+                  styles.newTagInput,
+                  {
+                    borderColor: newTagColor || uiThemeColor,
+                    color: newTagColor || uiThemeColor,
+                  },
+                ]}
+                placeholder="新しい属性..."
+                placeholderTextColor={(newTagColor || uiThemeColor) + "70"}
+                value={formDataTag}
+                onChangeText={(t) => updateForm({ tag: t })}
+                autoFocus
+              />
+            )}
+
+            {Object.keys(tagMaster)
+              .filter((t) => tagMaster[t].layer === selectedLayer)
+              .map((t) => (
+                <TouchableOpacity
+                  key={t}
+                  onPress={() => {
+                    updateForm({ tag: t });
+                    setIsCreatingNewTag(false);
+                    setNewTagColor("");
+                  }}
+                  onLongPress={() =>
+                    handleLongPressSubTag(t, tagMaster[t].color)
+                  }
+                  style={[
+                    styles.tagChip,
+                    formDataTag === t && {
+                      backgroundColor: tagMaster[t].color,
+                      borderColor: tagMaster[t].color,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.tagText,
+                      formDataTag === t && { color: "#fff" },
+                    ]}
+                  >
+                    {t}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+          </ScrollView>
+
+          {isCreatingNewTag && (
+            <View style={{ marginTop: 12 }}>
+              <Text style={styles.label}>カラーを選択（任意）</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ paddingBottom: 5 }}
+              >
+                {PRESET_COLORS.map((color) => (
+                  <TouchableOpacity
+                    key={color}
+                    style={[
+                      {
+                        width: 28,
+                        height: 28,
+                        borderRadius: 14,
+                        backgroundColor: color,
+                        marginRight: 10,
+                      },
+                      newTagColor === color && {
+                        borderWidth: 3,
+                        borderColor: "#1C1C1E",
+                      },
+                    ]}
+                    onPress={() => setNewTagColor(color)}
+                  />
+                ))}
+              </ScrollView>
+            </View>
+          )}
+        </View>
+      </View>
+    );
+  },
+);
+
 export default function ScheduleModal({
   visible,
   onClose,
@@ -886,318 +1281,55 @@ export default function ScheduleModal({
     if (!isReady) return <View style={{ minHeight: 200 }} />;
     return (
       <View>
-        <View style={styles.timeSection}>
-          <View style={styles.timePreviewRow}>
-            <Ionicons name="time" size={14} color={uiThemeColor} />
-            <Text style={[styles.timePreviewText, { color: uiThemeColor }]}>
-              {formData.isAllDay
-                ? "終日"
-                : `${formatTime(formData.startTime)} 〜 ${formatTime(formData.endTime)}`}
-            </Text>
-          </View>
-          <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>終日</Text>
-            <Switch
-              value={formData.isAllDay}
-              onValueChange={(v) => updateForm({ isAllDay: v })}
-              trackColor={{ false: "#C7C7CC", true: uiThemeColor }}
-              ios_backgroundColor="#E5E5EA"
-            />
-          </View>
-          <View style={styles.timePickerContainer}>
-            <View style={styles.timeRow}>
-              <Text style={styles.timeLabel}>開始</Text>
-              <View style={{ flexDirection: "row", gap: 8 }}>
-                <ModernDatePicker
-                  value={formData.startDate}
-                  mode="date"
-                  onChange={(d) => updateForm({ startDate: d })}
-                  themeColor={uiThemeColor}
-                  icon="calendar-outline"
-                />
-                {!formData.isAllDay && (
-                  <ModernDatePicker
-                    value={formData.startTime}
-                    mode="time"
-                    onChange={(d) => updateForm({ startTime: d })}
-                    themeColor={uiThemeColor}
-                    icon="time-outline"
-                  />
-                )}
-              </View>
-            </View>
-            <View style={[styles.timeRow, { marginTop: 16 }]}>
-              <Text style={styles.timeLabel}>終了</Text>
-              <View style={{ flexDirection: "row", gap: 8 }}>
-                <ModernDatePicker
-                  value={formData.endDate}
-                  mode="date"
-                  onChange={(d) => updateForm({ endDate: d })}
-                  themeColor={uiThemeColor}
-                  icon="calendar-outline"
-                />
-                {!formData.isAllDay && (
-                  <ModernDatePicker
-                    value={formData.endTime}
-                    mode="time"
-                    onChange={(d) => updateForm({ endTime: d })}
-                    themeColor={uiThemeColor}
-                    icon="time-outline"
-                  />
-                )}
-              </View>
-            </View>
-          </View>
-        </View>
+        {/* 🌟 部品①：時間設定 */}
+        <TimeSection
+          isAllDay={formData.isAllDay}
+          startDate={formData.startDate}
+          startTime={formData.startTime}
+          endDate={formData.endDate}
+          endTime={formData.endTime}
+          uiThemeColor={uiThemeColor}
+          updateForm={updateForm}
+        />
 
-        <Text style={styles.label}>繰り返し</Text>
-        <View style={styles.layerContainer}>
-          {[
-            { label: "なし", value: "none" },
-            { label: "毎日", value: "daily" },
-            { label: "毎週", value: "weekly" },
-            { label: "毎月", value: "monthly" },
-            { label: "カスタム", value: "custom" },
-          ].map((opt) => (
-            <TouchableOpacity
-              key={opt.value}
-              style={[
-                styles.layerChip,
-                formData.repeatType === opt.value && {
-                  backgroundColor: uiThemeColor,
-                },
-              ]}
-              onPress={() => updateForm({ repeatType: opt.value as any })}
-            >
-              <Text
-                style={[
-                  styles.layerChipText,
-                  formData.repeatType === opt.value && { color: "#fff" },
-                ]}
-              >
-                {opt.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {/* 🌟 部品②：繰り返し設定 */}
+        <RepeatSection
+          repeatType={formData.repeatType}
+          repeatDays={formData.repeatDays}
+          repeatInterval={formData.repeatInterval}
+          uiThemeColor={uiThemeColor}
+          updateForm={updateForm}
+        />
 
-        {formData.repeatType === "custom" && (
-          <View style={styles.customRepeatArea}>
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                marginBottom: 12,
-              }}
-            >
-              <Text style={styles.miniLabel}>曜日の選択</Text>
-              <TouchableOpacity
-                onPress={() => updateForm({ repeatDays: [1, 2, 3, 4, 5] })}
-              >
-                <Text
-                  style={{
-                    fontSize: 11,
-                    color: uiThemeColor,
-                    fontWeight: "bold",
-                  }}
-                >
-                  平日のみ選択
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.daySelectorRow}>
-              {["日", "月", "火", "水", "木", "金", "土"].map((day, idx) => {
-                const isSelected = formData.repeatDays.includes(idx);
-                return (
-                  <TouchableOpacity
-                    key={idx}
-                    style={[
-                      styles.dayCircle,
-                      isSelected && {
-                        backgroundColor: uiThemeColor,
-                        borderColor: uiThemeColor,
-                      },
-                    ]}
-                    onPress={() => {
-                      const prev = formData.repeatDays;
-                      const next = prev.includes(idx)
-                        ? prev.filter((d) => d !== idx)
-                        : [...prev, idx];
-                      updateForm({ repeatDays: next });
-                    }}
-                  >
-                    <Text
-                      style={[styles.dayText, isSelected && { color: "#FFF" }]}
-                    >
-                      {day}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            <View style={styles.intervalRow}>
-              <Text style={styles.miniLabel}>繰り返しの間隔:</Text>
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-              >
-                <TextInput
-                  style={styles.intervalInput}
-                  keyboardType="numeric"
-                  value={formData.repeatInterval.toString()}
-                  onChangeText={(t) =>
-                    updateForm({ repeatInterval: parseInt(t) || 1 })
-                  }
-                />
-                <Text
-                  style={{ fontSize: 14, fontWeight: "bold", color: "#1C1C1E" }}
-                >
-                  週間ごと
-                </Text>
-              </View>
-            </View>
-          </View>
-        )}
-
-        <Text style={styles.label}>カレンダーの種類</Text>
-        <View style={styles.layerContainer}>
-          {Object.keys(layerMaster).map((l) => (
-            <TouchableOpacity
-              key={l}
-              style={[
-                styles.layerChip,
-                selectedLayer === l && { backgroundColor: layerMaster[l] },
-              ]}
-              onPress={() => setSelectedLayer(l)}
-            >
-              <Text
-                style={[
-                  styles.layerChipText,
-                  selectedLayer === l && { color: "#fff" },
-                ]}
-              >
-                {l}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* 🌟 属性とカラーパレットのセクション */}
-        <View style={styles.tagSection}>
-          <Text style={styles.label}>属性（任意）</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ alignItems: "center" }}
-          >
-            <TouchableOpacity
-              onPress={() => {
-                const nextState = !isCreatingNewTag;
-                setIsCreatingNewTag(nextState);
-                if (!nextState) {
-                  updateForm({ tag: "" }); // 🌟 ここを書き換え
-                  setNewTagColor("");
-                }
-              }}
-              style={[
-                styles.addTagCircle,
-                isCreatingNewTag && { backgroundColor: uiThemeColor },
-              ]}
-            >
-              <Ionicons
-                name={isCreatingNewTag ? "close" : "add"}
-                size={22}
-                color={isCreatingNewTag ? "#fff" : uiThemeColor}
-              />
-            </TouchableOpacity>
-
-            {isCreatingNewTag && (
-              <TextInput
-                style={[
-                  styles.newTagInput,
-                  {
-                    borderColor: newTagColor || uiThemeColor,
-                    color: newTagColor || uiThemeColor,
-                  },
-                ]}
-                placeholder="新しい属性..."
-                placeholderTextColor={(newTagColor || uiThemeColor) + "70"}
-                value={formData.tag} // 🌟 ここを書き換え
-                onChangeText={(t) => updateForm({ tag: t })} // 🌟 ここを書き換え
-                autoFocus
-              />
-            )}
-
-            {Object.keys(tagMaster)
-              .filter((t) => tagMaster[t].layer === selectedLayer)
-              .map((t) => (
-                <TouchableOpacity
-                  key={t}
-                  onPress={() => {
-                    updateForm({ tag: t }); // 🌟 ここを書き換え
-                    setIsCreatingNewTag(false);
-                    setNewTagColor(""); // 既存のを選ぶ時はカラーをリセット
-                  }}
-                  onLongPress={() =>
-                    handleLongPressSubTag(t, tagMaster[t].color)
-                  } // 🌟 追加：長押しで編集
-                  style={[
-                    styles.tagChip,
-                    formData.tag === t && {
-                      // 🌟 ここを書き換え
-                      backgroundColor: tagMaster[t].color,
-                      borderColor: tagMaster[t].color,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.tagText,
-                      formData.tag === t && { color: "#fff" }, // 🌟 ここを書き換え
-                    ]}
-                  >
-                    {t}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-          </ScrollView>
-
-          {/* 🌟 色選択パレット（新規作成時のみ表示） */}
-          {isCreatingNewTag && (
-            <View style={{ marginTop: 12 }}>
-              <Text style={styles.label}>カラーを選択（任意）</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={{ paddingBottom: 5 }}
-              >
-                {PRESET_COLORS.map((color) => (
-                  <TouchableOpacity
-                    key={color}
-                    style={[
-                      {
-                        width: 28,
-                        height: 28,
-                        borderRadius: 14,
-                        backgroundColor: color,
-                        marginRight: 10,
-                      },
-                      newTagColor === color && {
-                        borderWidth: 3,
-                        borderColor: "#1C1C1E",
-                      },
-                    ]}
-                    onPress={() => setNewTagColor(color)}
-                  />
-                ))}
-              </ScrollView>
-            </View>
-          )}
-        </View>
+        {/* 🌟 部品③：カテゴリとタグ */}
+        <TagSection
+          selectedLayer={selectedLayer}
+          setSelectedLayer={setSelectedLayer}
+          layerMaster={layerMaster}
+          tagMaster={tagMaster}
+          formDataTag={formData.tag}
+          uiThemeColor={uiThemeColor}
+          updateForm={updateForm}
+          isCreatingNewTag={isCreatingNewTag}
+          setIsCreatingNewTag={setIsCreatingNewTag}
+          newTagColor={newTagColor}
+          setNewTagColor={setNewTagColor}
+          handleLongPressSubTag={handleLongPressSubTag}
+        />
       </View>
     );
   }, [
     isReady,
-    formData, // 🌟 これ1つで全部カバーできるようになりました！
+    // 👇 ここから下は、部品の「どれかの値」が変わった時だけ再計算するルールです
+    formData.isAllDay,
+    formData.startDate,
+    formData.startTime,
+    formData.endDate,
+    formData.endTime,
+    formData.repeatType,
+    formData.repeatDays,
+    formData.repeatInterval,
+    formData.tag,
     uiThemeColor,
     layerMaster,
     selectedLayer,
