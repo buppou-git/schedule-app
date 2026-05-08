@@ -78,7 +78,7 @@ import ExternalEventModal from "./components/ExternalEventModal";
 import LayerManagementModal from "./components/LayerManagementModal";
 import MoneyDashboard from "./components/MoneyDashboard";
 import QuickActionModal from "./components/QuickActionModal";
-import ScheduleModal from "./components/ScheduleModal";
+import ScheduleModal from "./components/ScheduleModal/ScheduleModal";
 import SearchModal from "./components/SearchModal"; // 🌟 これを追加
 import SubTaskEditModal from "./components/SubTaskEditModal";
 import TabBar from "./components/TabBar";
@@ -180,7 +180,13 @@ export default function Index() {
 
   const { roomSchedules, safeDebouncedSync } = useCloudSync(sharedRooms);
 
-const { isAppLocked, pinForUnlock, setPinForUnlock, handleAuthenticate, authenticatePin } = useAppLock();
+  const {
+    isAppLocked,
+    pinForUnlock,
+    setPinForUnlock,
+    handleAuthenticate,
+    authenticatePin,
+  } = useAppLock();
 
   const [sharedScheduleData, setSharedScheduleData] = useState<{
     [key: string]: ScheduleItem[];
@@ -266,8 +272,6 @@ const { isAppLocked, pinForUnlock, setPinForUnlock, handleAuthenticate, authenti
   };
 
   const [isMoneySummaryMode, setIsMoneySummaryMode] = useState(false);
-
- 
 
   const [activeTags, setActiveTags] = useState<string[]>([]);
 
@@ -409,10 +413,6 @@ const { isAppLocked, pinForUnlock, setPinForUnlock, handleAuthenticate, authenti
     const itemTags = item.tags || (item.tag ? [item.tag] : []);
     return itemTags.some((tag) => Object.keys(sharedRooms).includes(tag));
   };
-
-
-
- 
 
   const filteredData = useMemo(() => {
     const filtered: { [date: string]: ScheduleItem[] } = {};
@@ -835,8 +835,13 @@ const { isAppLocked, pinForUnlock, setPinForUnlock, handleAuthenticate, authenti
     syncToStorage();
   }, [layerMaster, tagMaster, presets, activeTags]);
 
-
-  const displayData = useDisplayData(scheduleData, externalEvents, roomSchedules, activeTags, tagMaster);
+  const displayData = useDisplayData(
+    scheduleData,
+    externalEvents,
+    roomSchedules,
+    activeTags,
+    tagMaster,
+  );
 
   const { expandedScheduleData, currentMarkedDates } = useCalendarData(
     displayData,
@@ -849,7 +854,12 @@ const { isAppLocked, pinForUnlock, setPinForUnlock, handleAuthenticate, authenti
   );
 
   const { dayTasks, upcomingTasks, dayEvents } = useDailyItems(
-    expandedScheduleData, displayData, selectedDate, activeTags, activeMode, tagMaster
+    expandedScheduleData,
+    displayData,
+    selectedDate,
+    activeTags,
+    activeMode,
+    tagMaster,
   );
 
   const currentSolidColor = useMemo(() => {
@@ -884,7 +894,6 @@ const { isAppLocked, pinForUnlock, setPinForUnlock, handleAuthenticate, authenti
   };
 
   const openEditModal = (item: ScheduleItem) => {
-
     if (item.tag === "祝日" || item.category === "祝日") {
       return;
     }
@@ -1392,14 +1401,11 @@ const { isAppLocked, pinForUnlock, setPinForUnlock, handleAuthenticate, authenti
     }
   };
 
-
   const stableToggleTodo = useStableCallback(toggleTodo);
   const stableToggleSubTodo = useStableCallback(toggleSubTodo);
   const stableOpenEditModal = useStableCallback(openEditModal);
   const stableFormatEventTime = useStableCallback(formatEventTime);
   const stableLongPress = useStableCallback((item: ScheduleItem) => {
-
-
     if (item.tag === "祝日" || item.category === "祝日") {
       return;
     }
