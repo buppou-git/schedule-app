@@ -13,6 +13,7 @@ import React, {
   useState,
 } from "react";
 
+
 import { useAppLock } from "../../hooks/useAppLock";
 import { useCloudSync } from "../../hooks/useCloudSync";
 import { useDailyItems, useDisplayData } from "../../hooks/useDataProcessors";
@@ -29,8 +30,6 @@ import { doc, setDoc } from "firebase/firestore";
 import { AppState } from "react-native";
 import { auth, db } from "../../firebaseConfig";
 
-import EventItem from "./components/EventItem";
-import TodoItem from "./components/TodoItem";
 
 import { useAppStore } from "../../store/useAppStore";
 
@@ -74,6 +73,7 @@ import {
 } from "react-native-calendars";
 
 import ConfigModal from "./components/ConfigModal/ConfigModal";
+import { EventDashboard } from "./components/EventDashboard";
 import ExternalEventModal from "./components/ExternalEventModal";
 import LayerManagementModal from "./components/LayerManagementModal";
 import MoneyDashboard from "./components/MoneyDashboard";
@@ -82,6 +82,7 @@ import ScheduleModal from "./components/ScheduleModal/ScheduleModal";
 import SearchModal from "./components/SearchModal"; // 🌟 これを追加
 import SubTaskEditModal from "./components/SubTaskEditModal";
 import TabBar from "./components/TabBar";
+import { TodoDashboard } from "./components/TodoDashboard";
 
 import { useExternalCalendar } from "../../hooks/useExternalCalendar";
 
@@ -1651,42 +1652,42 @@ export default function Index() {
 
               {(activeMode === "todo" ||
                 (activeMode === "money" && !isMoneySummaryMode)) && (
-                <View style={styles.weekCalendarWrapper}>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      paddingRight: 20,
-                    }}
-                  >
-                    <Text style={styles.monthLabel}>
-                      {parseInt(selectedDate.split("-")[1])}月
-                    </Text>
-                    <TouchableOpacity onPress={handleOpenNewModal}>
-                      <Ionicons
-                        name="add-circle"
-                        size={30}
-                        color={currentSolidColor}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                  <CalendarProvider
-                    date={selectedDate}
-                    onDateChanged={setSelectedDate}
-                  >
-                    <WeekCalendar
-                      firstDay={1}
-                      markedDates={currentMarkedDates}
-                      theme={{
-                        calendarBackground: "transparent",
-                        todayTextColor: currentSolidColor,
-                        selectedDayBackgroundColor: currentSolidColor,
+                  <View style={styles.weekCalendarWrapper}>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        paddingRight: 20,
                       }}
-                    />
-                  </CalendarProvider>
-                </View>
-              )}
+                    >
+                      <Text style={styles.monthLabel}>
+                        {parseInt(selectedDate.split("-")[1])}月
+                      </Text>
+                      <TouchableOpacity onPress={handleOpenNewModal}>
+                        <Ionicons
+                          name="add-circle"
+                          size={30}
+                          color={currentSolidColor}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                    <CalendarProvider
+                      date={selectedDate}
+                      onDateChanged={setSelectedDate}
+                    >
+                      <WeekCalendar
+                        firstDay={1}
+                        markedDates={currentMarkedDates}
+                        theme={{
+                          calendarBackground: "transparent",
+                          todayTextColor: currentSolidColor,
+                          selectedDayBackgroundColor: currentSolidColor,
+                        }}
+                      />
+                    </CalendarProvider>
+                  </View>
+                )}
             </>
           )}
 
@@ -1780,184 +1781,60 @@ export default function Index() {
             </TouchableOpacity>
           )}
 
-          <ScrollView
-            style={styles.scheduleList}
-            contentContainerStyle={{ paddingBottom: 120 }}
-            removeClippedSubviews={false}
-            scrollEventThrottle={16}
-            keyboardShouldPersistTaps="handled"
-          >
-            {(() => {
-              if (activeMode === "money") {
-                return (
-                  <MoneyDashboard
-                    selectedDate={selectedDate}
-                    activeTags={activeTags}
-                    setHasUnsavedChanges={setHasUnsavedChanges}
-                    isSummaryMode={isMoneySummaryMode}
-                  />
-                );
-              }
+          {/* 🌟 構造改革：ToDoモード（独立してFlatListの恩恵を受ける！） */}
+          {activeMode === "todo" && (
+            <View style={{ flex: 1 }}>
+              <TodoDashboard
+                dayTasks={dayTasks}
+                upcomingTasks={upcomingTasks}
+                selectedDate={selectedDate}
+                currentSolidColor={currentSolidColor}
+                formatEventTime={stableFormatEventTime}
+                openEditModal={stableOpenEditModal}
+                toggleTodo={stableToggleTodo}
+                toggleSubTodo={stableToggleSubTodo}
+                setEditingSubTaskInfo={setEditingSubTaskInfo}
+                setSubTaskModalVisible={setSubTaskModalVisible}
+                onLongPress={stableLongPress}
+                calculateStreak={calculateStreak}
+              />
+            </View>
+          )}
 
-              if (activeMode === "todo") {
-                const [y, m, d] = selectedDate.split("-");
-                const totalDayTasks = dayTasks.length;
-                const completedDayTasks = dayTasks.filter(
-                  (t) => t.isDone,
-                ).length;
-                const progress =
-                  totalDayTasks > 0 ? completedDayTasks / totalDayTasks : 0;
+          {/* 🌟 構造改革：カレンダーモード（これも独立させてFlatListの恩恵を受ける！） */}
+          {activeMode === "calendar" && (
+            <View style={{ flex: 1 }}>
+              <EventDashboard
+                dayEvents={dayEvents}
+                selectedDate={selectedDate}
+                currentSolidColor={currentSolidColor}
+                activeTags={activeTags}
+                tagMaster={tagMaster}
+                layerMaster={layerMaster}
+                formatEventTime={stableFormatEventTime}
+                openEditModal={stableOpenEditModal}
+                onLongPress={stableLongPress}
+              />
+            </View>
+          )}
 
-                return (
-                  <View style={styles.todoRoot}>
-                    <View style={styles.modernHeader}>
-                      <View style={styles.headerLabelRow}>
-                        <Text
-                          style={[
-                            styles.mainDateTitle,
-                            { color: currentSolidColor },
-                          ]}
-                        >
-                          {parseInt(m)}月{parseInt(d)}日 の進捗
-                        </Text>
-                        <Text style={styles.numericProgress}>
-                          {completedDayTasks} / {totalDayTasks}
-                        </Text>
-                      </View>
-                      {totalDayTasks > 0 && (
-                        <View style={styles.thinProgressBg}>
-                          <View
-                            style={[
-                              styles.thinProgressFill,
-                              {
-                                width: `${progress * 100}%`,
-                                backgroundColor: currentSolidColor,
-                              },
-                            ]}
-                          />
-                        </View>
-                      )}
-                    </View>
-
-                    {(() => {
-                      const routineTasks = dayTasks.filter((t) => t.repeatType);
-                      const oneOffTasks = dayTasks.filter((t) => !t.repeatType);
-
-                      return (
-                        <>
-                          {routineTasks.length > 0 && (
-                            <View style={{ marginBottom: 16 }}>
-                              <Text style={styles.upcomingMiniTitle}>
-                                ROUTINE / 習慣
-                              </Text>
-                              {routineTasks.map((t) => {
-                                const streakCount = calculateStreak(
-                                  t.completedDates,
-                                );
-                                return (
-                                  <TodoItem
-                                    key={t.id}
-                                    item={t}
-                                    itemDate={selectedDate}
-                                    selectedDate={selectedDate}
-                                    formatEventTime={stableFormatEventTime}
-                                    openEditModal={stableOpenEditModal}
-                                    toggleTodo={stableToggleTodo}
-                                    toggleSubTodo={stableToggleSubTodo}
-                                    setEditingSubTaskInfo={
-                                      setEditingSubTaskInfo
-                                    }
-                                    setSubTaskModalVisible={
-                                      setSubTaskModalVisible
-                                    }
-                                    streakCount={streakCount}
-                                    onLongPress={stableLongPress}
-                                  />
-                                );
-                              })}
-                            </View>
-                          )}
-
-                          {oneOffTasks.length > 0 && (
-                            <View style={{ marginBottom: 16 }}>
-                              <Text style={styles.upcomingMiniTitle}>
-                                TODO / 単発タスク
-                              </Text>
-                              {oneOffTasks.map((t) => (
-                                <TodoItem
-                                  key={t.id}
-                                  item={t}
-                                  itemDate={selectedDate}
-                                  selectedDate={selectedDate}
-                                  formatEventTime={stableFormatEventTime}
-                                  openEditModal={stableOpenEditModal}
-                                  toggleTodo={stableToggleTodo}
-                                  toggleSubTodo={stableToggleSubTodo}
-                                  setEditingSubTaskInfo={setEditingSubTaskInfo}
-                                  setSubTaskModalVisible={
-                                    setSubTaskModalVisible
-                                  }
-                                  streakCount={0}
-                                  onLongPress={stableLongPress}
-                                />
-                              ))}
-                            </View>
-                          )}
-                        </>
-                      );
-                    })()}
-
-                    {upcomingTasks.length > 0 && (
-                      <View style={styles.upcomingSection}>
-                        <Text style={styles.upcomingMiniTitle}>
-                          今後の予定（未完了）
-                        </Text>
-                        {upcomingTasks.map((t) => {
-                          const streakCount = t.repeatType
-                            ? calculateStreak(t.completedDates)
-                            : 0;
-                          return (
-                            <TodoItem
-                              key={t.id}
-                              item={t}
-                              itemDate={t.date}
-                              selectedDate={selectedDate}
-                              formatEventTime={stableFormatEventTime}
-                              openEditModal={stableOpenEditModal}
-                              toggleTodo={stableToggleTodo}
-                              toggleSubTodo={stableToggleSubTodo}
-                              setEditingSubTaskInfo={setEditingSubTaskInfo}
-                              setSubTaskModalVisible={setSubTaskModalVisible}
-                              streakCount={streakCount}
-                              onLongPress={stableLongPress}
-                            />
-                          );
-                        })}
-                      </View>
-                    )}
-                  </View>
-                );
-              }
-
-              return (
-                <View style={styles.listPadding}>
-                  <Text style={styles.dateTitle}>{selectedDate} の予定</Text>
-                  {dayEvents.map((item) => (
-                    <EventItem
-                      key={item.id}
-                      item={item}
-                      activeTags={activeTags}
-                      tagMaster={tagMaster}
-                      layerMaster={layerMaster}
-                      formatEventTime={formatEventTime}
-                      openEditModal={openEditModal}
-                      onLongPress={stableLongPress}
-                    />
-                  ))}
-                </View>
-              );
-            })()}
-          </ScrollView>
+          {/* 🌟 家計簿モードのみ ScrollView を残す */}
+          {activeMode === "money" && (
+            <ScrollView
+              style={styles.scheduleList}
+              contentContainerStyle={{ paddingBottom: 120 }}
+              removeClippedSubviews={false}
+              scrollEventThrottle={16}
+              keyboardShouldPersistTaps="handled"
+            >
+              <MoneyDashboard
+                selectedDate={selectedDate}
+                activeTags={activeTags}
+                setHasUnsavedChanges={setHasUnsavedChanges}
+                isSummaryMode={isMoneySummaryMode}
+              />
+            </ScrollView>
+          )}
         </View>
       </View>
       <Modal
@@ -2078,13 +1955,13 @@ export default function Index() {
                         styles.gridCard,
                         tempActiveTags.includes("外部予定")
                           ? {
-                              backgroundColor: "#FF2D55",
-                              borderColor: "#FF2D55",
-                            }
+                            backgroundColor: "#FF2D55",
+                            borderColor: "#FF2D55",
+                          }
                           : [
-                              styles.gridCardGhost,
-                              { borderColor: "#FF2D5540" },
-                            ],
+                            styles.gridCardGhost,
+                            { borderColor: "#FF2D5540" },
+                          ],
                       ]}
                       onPress={() => toggleTempTag("外部予定")}
                     >
@@ -2134,13 +2011,13 @@ export default function Index() {
                           styles.gridCard,
                           isSelected
                             ? {
-                                backgroundColor: layerMaster[layer],
-                                borderColor: layerMaster[layer],
-                              }
+                              backgroundColor: layerMaster[layer],
+                              borderColor: layerMaster[layer],
+                            }
                             : [
-                                styles.gridCardGhost,
-                                { borderColor: layerMaster[layer] + "40" },
-                              ],
+                              styles.gridCardGhost,
+                              { borderColor: layerMaster[layer] + "40" },
+                            ],
                         ]}
                         onPress={() => toggleTempTag(layer)}
                       >
@@ -2912,5 +2789,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "bold",
     marginLeft: 2,
+  },
+  emptyText: {
+    textAlign: "center",
+    color: "#8E8E93",
+    fontSize: 15,
+    fontWeight: "bold",
+    marginTop: 40,
   },
 });

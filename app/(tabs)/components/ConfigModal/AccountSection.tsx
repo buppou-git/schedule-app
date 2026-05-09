@@ -2,33 +2,35 @@ import { Ionicons } from "@expo/vector-icons";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import * as AppleAuthentication from "expo-apple-authentication";
 import {
-    GoogleAuthProvider,
-    linkWithCredential,
-    OAuthProvider,
-    signInWithCredential,
+  GoogleAuthProvider,
+  linkWithCredential,
+  OAuthProvider,
+  signInWithCredential,
 } from "firebase/auth";
 import React, { useCallback, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Platform,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Platform,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { auth } from "../../../../firebaseConfig"; // 🌟 パスは環境に合わせてください
+import { auth } from "../../../../firebaseConfig";
 import { styles } from "./ConfigModal.styles";
 
 interface AccountSectionProps {
   isAnonymous: boolean;
+  // 🌟 ここを追加！親の state を更新する関数を受け取る
+  setIsAnonymous: (val: boolean) => void;
   onDeleteAccount: () => void;
 }
 
 export const AccountSection = React.memo(
-  ({ isAnonymous, onDeleteAccount }: AccountSectionProps) => {
+  ({ isAnonymous, setIsAnonymous, onDeleteAccount }: AccountSectionProps) => {
     const [isLinking, setIsLinking] = useState(false);
 
-    // 🌟 Googleログインロジック（引き継ぎ対応版）
+    // 🌟 Googleログインロジック
     const handleGoogleSignIn = useCallback(async () => {
       setIsLinking(true);
       try {
@@ -40,14 +42,13 @@ export const AccountSection = React.memo(
         if (id_token && auth.currentUser) {
           const credential = GoogleAuthProvider.credential(id_token);
           try {
-            // 1. まずは新しいデータとの「連携」を試みる
             await linkWithCredential(auth.currentUser, credential);
+            setIsAnonymous(false); // 🌟 連携成功時に親の State を更新
             Alert.alert(
               "連携完了",
               "アカウントと紐付けられ、データが保護されました。",
             );
           } catch (linkError: any) {
-            // 🌟 2. 既に連携済み（＝機種変更してきたユーザー）の場合、引き継ぎ処理へ
             if (linkError.code === "auth/credential-already-in-use") {
               Alert.alert(
                 "データ引き継ぎ",
@@ -58,6 +59,7 @@ export const AccountSection = React.memo(
                     text: "引き継ぐ",
                     onPress: async () => {
                       await signInWithCredential(auth, credential);
+                      setIsAnonymous(false); // 🌟 引き継ぎ成功時に親の State を更新
                       Alert.alert(
                         "完了",
                         "引き継ぎました！「クラウドからデータを復元」を押してください。",
@@ -75,17 +77,14 @@ export const AccountSection = React.memo(
       } catch (error: any) {
         if (error.code !== "ASYNC_OP_IN_PROGRESS") {
           console.error("Google login error:", error);
-          Alert.alert(
-            "エラー",
-            "アカウント連携をキャンセル、または失敗しました。",
-          );
+          Alert.alert("エラー", "アカウント連携をキャンセル、または失敗しました。");
         }
       } finally {
         setIsLinking(false);
       }
-    }, []);
+    }, [setIsAnonymous]);
 
-    // 🌟 Appleログインロジック（引き継ぎ対応版）
+    // 🌟 Appleログインロジック
     const handleAppleSignIn = useCallback(async () => {
       setIsLinking(true);
       try {
@@ -104,12 +103,12 @@ export const AccountSection = React.memo(
 
           try {
             await linkWithCredential(auth.currentUser, firebaseCredential);
+            setIsAnonymous(false); // 🌟 連携成功時に親の State を更新
             Alert.alert(
               "連携完了",
               "Appleアカウントと紐付けられ、データが保護されました。",
             );
           } catch (linkError: any) {
-            // 🌟 機種変更ユーザーの場合
             if (linkError.code === "auth/credential-already-in-use") {
               Alert.alert(
                 "データ引き継ぎ",
@@ -120,6 +119,7 @@ export const AccountSection = React.memo(
                     text: "引き継ぐ",
                     onPress: async () => {
                       await signInWithCredential(auth, firebaseCredential);
+                      setIsAnonymous(false); // 🌟 引き継ぎ成功時に親の State を更新
                       Alert.alert(
                         "完了",
                         "引き継ぎました！「クラウドからデータを復元」を押してください。",
@@ -137,15 +137,12 @@ export const AccountSection = React.memo(
       } catch (error: any) {
         if (error.code !== "ERR_CANCELED") {
           console.error("Apple login error:", error);
-          Alert.alert(
-            "エラー",
-            "アカウント連携をキャンセル、または失敗しました。",
-          );
+          Alert.alert("エラー", "アカウント連携をキャンセル、または失敗しました。");
         }
       } finally {
         setIsLinking(false);
       }
-    }, []);
+    }, [setIsAnonymous]);
 
     return (
       <>

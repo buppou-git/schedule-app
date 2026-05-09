@@ -141,6 +141,7 @@ export default function ConfigModal({
 
                   <AccountSection
                     isAnonymous={isAnonymous}
+                    setIsAnonymous={setIsAnonymous}
                     onDeleteAccount={onDeleteAccount}
                   />
 
