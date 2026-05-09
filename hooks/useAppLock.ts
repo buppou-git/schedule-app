@@ -19,6 +19,13 @@ export function useAppLock() {
       return;
     }
 
+    // 🌟 修正：Face IDなどの認証ポップアップを出す「前」に、アプリをロック画面状態にする！
+    setIsAppLocked(true);
+
+    // 🌟 超重要：Reactが「ロック画面（AppLockScreen）」を描画し終わるのを待つ
+    // これがないと、裏側にカレンダーが透けたままポップアップが出てしまいます
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
     if (useBio === "true") {
       const result = await LocalAuthentication.authenticateAsync({
         promptMessage: "認証してUniCalを開く",
@@ -29,12 +36,6 @@ export function useAppLock() {
         setPinForUnlock("");
         return;
       }
-    }
-
-    if (usePin === "true") {
-      setIsAppLocked(true);
-    } else {
-      setIsAppLocked(false);
     }
   };
 

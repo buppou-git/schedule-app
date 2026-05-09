@@ -326,24 +326,12 @@ export default function Index() {
     (layer: string) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setTempActiveTags((prev) => {
-        const next = prev.includes(layer)
+        return prev.includes(layer)
           ? prev.filter((t) => t !== layer)
           : [...prev, layer];
-
-        // 🌟 修正：「すべて表示」に戻す条件を、外部予定も含めた「全レイヤー数」と厳密に比較するように変更
-        // isExternalSyncEnabled が true の時、layerMaster の数 + 1 が全レイヤー数になる
-        const totalLayerCount =
-          Object.keys(layerMaster).length + (isExternalSyncEnabled ? 1 : 0);
-
-        // 🌟 修正：レイヤーが2つ以上ある時だけ、全選択時にリセットする
-        // レイヤーが1つ（外部予定のみ）の時は、個別選択を優先する
-        if (totalLayerCount > 1 && next.length >= totalLayerCount) {
-          return [];
-        }
-        return next;
       });
     },
-    [layerMaster, isExternalSyncEnabled], // 🌟 修正：依存配列を最新状態に更新
+    [], // 🌟 依存配列も空になってパフォーマンスUP！
   );
 
   const applyFilters = useCallback(() => {
