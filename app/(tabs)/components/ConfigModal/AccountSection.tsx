@@ -21,7 +21,6 @@ import { styles } from "./ConfigModal.styles";
 
 interface AccountSectionProps {
   isAnonymous: boolean;
-  // 🌟 ここを追加！親の state を更新する関数を受け取る
   setIsAnonymous: (val: boolean) => void;
   onDeleteAccount: () => void;
 }
@@ -43,7 +42,7 @@ export const AccountSection = React.memo(
           const credential = GoogleAuthProvider.credential(id_token);
           try {
             await linkWithCredential(auth.currentUser, credential);
-            setIsAnonymous(false); // 🌟 連携成功時に親の State を更新
+            setIsAnonymous(false);
             Alert.alert(
               "連携完了",
               "アカウントと紐付けられ、データが保護されました。",
@@ -58,12 +57,19 @@ export const AccountSection = React.memo(
                   {
                     text: "引き継ぐ",
                     onPress: async () => {
-                      await signInWithCredential(auth, credential);
-                      setIsAnonymous(false); // 🌟 引き継ぎ成功時に親の State を更新
-                      Alert.alert(
-                        "完了",
-                        "引き継ぎました！「クラウドからデータを復元」を押してください。",
-                      );
+                      setIsLinking(true);
+                      try {
+                        await signInWithCredential(auth, credential);
+                        setIsAnonymous(false); // 🌟 引き継ぎ成功時に親の State を更新
+                        Alert.alert(
+                          "完了",
+                          "引き継ぎました！「クラウドからデータを復元」を押してください。",
+                        );
+                      } catch (error: any) {
+                        Alert.alert("エラー", "引き継ぎに失敗しました。もう一度連携ボタンを押してください。");
+                      } finally {
+                        setIsLinking(false);
+                      }
                     },
                   },
                 ],
@@ -103,7 +109,7 @@ export const AccountSection = React.memo(
 
           try {
             await linkWithCredential(auth.currentUser, firebaseCredential);
-            setIsAnonymous(false); // 🌟 連携成功時に親の State を更新
+            setIsAnonymous(false);
             Alert.alert(
               "連携完了",
               "Appleアカウントと紐付けられ、データが保護されました。",
@@ -118,12 +124,19 @@ export const AccountSection = React.memo(
                   {
                     text: "引き継ぐ",
                     onPress: async () => {
-                      await signInWithCredential(auth, firebaseCredential);
-                      setIsAnonymous(false); // 🌟 引き継ぎ成功時に親の State を更新
-                      Alert.alert(
-                        "完了",
-                        "引き継ぎました！「クラウドからデータを復元」を押してください。",
-                      );
+                      setIsLinking(true);
+                      try {
+                        await signInWithCredential(auth, firebaseCredential);
+                        setIsAnonymous(false); // 🌟 引き継ぎ成功時に親の State を更新
+                        Alert.alert(
+                          "完了",
+                          "引き継ぎました！「クラウドからデータを復元」を押してください。",
+                        );
+                      } catch (error: any) {
+                        Alert.alert("引き継ぎエラー", "Appleの認証期限が切れました。もう一度「Appleでデータを保護」を押して引き継ぎを実行してください。");
+                      } finally {
+                        setIsLinking(false);
+                      }
                     },
                   },
                 ],
@@ -146,8 +159,8 @@ export const AccountSection = React.memo(
 
     return (
       <>
-        {/* 🌟 ACCOUNT セクション */}
-        <Text style={styles.sectionLabel}>ACCOUNT</Text>
+        {/* 🌟 ACCOUNT セクション（marginTop: 35 で上のセクションと綺麗に離しました！） */}
+        <Text style={[styles.sectionLabel, { marginTop: 35 }]}>ACCOUNT</Text>
         <View style={styles.card}>
           <View style={styles.row}>
             <View style={styles.rowLeft}>
