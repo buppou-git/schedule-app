@@ -430,9 +430,10 @@ export default function Index() {
       filtered[d] = combined[d].filter((item) => {
         if (activeTags.length === 0) return true;
 
-        // 外部予定または同期設定済みの予定を「外部予定」レイヤーとして判定
+        // 🌟 3. 色分けとレイヤーの適用（外部予定の判定）
         let itemLayer = "共通";
-        if (item.category === "外部カレンダー" || item.externalEventId) {
+        // 🌟 修正：自分で作った予定（tagがある）は、IDを持っていても外部予定に上書きしない！
+        if (item.category === "外部カレンダー" || (!item.tag && item.externalEventId)) {
           itemLayer = "外部予定";
           item.color = "#FF2D55";
         } else {
@@ -1399,12 +1400,12 @@ export default function Index() {
       return;
     }
 
-    // 🌟 修正：externalEventId があるかどうかで、外部予定かを判定する！
-    if (item.externalEventId) {
+    // 🌟 修正：「純粋な外部カレンダーの予定」だけを読み取り専用モーダルで開く
+    if (item.category === "外部カレンダー" || (!item.tag && item.externalEventId)) {
       setSelectedExternalItem(item);
       setExternalModalVisible(true);
     } else {
-      // 外部予定以外は、今まで通りクイック入力モーダルを開く
+      // アプリ内で作成した予定は、今まで通り編集モーダルを開く
       setQuickActionItem(item);
       setQuickActionVisible(true);
     }
@@ -1652,13 +1653,39 @@ export default function Index() {
                       <Text style={styles.monthLabel}>
                         {parseInt(selectedDate.split("-")[1])}月
                       </Text>
-                      <TouchableOpacity onPress={handleOpenNewModal}>
-                        <Ionicons
-                          name="add-circle"
-                          size={30}
-                          color={currentSolidColor}
-                        />
-                      </TouchableOpacity>
+                      {/* 🌟 変更：「今日に戻る」ボタンと「＋」ボタンを横並びにする */}
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                        <TouchableOpacity
+                          onPress={() => setSelectedDate(getTodayString())}
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            backgroundColor: currentSolidColor + "10", // 月間カレンダーと同じ美しい透け感
+                            alignItems: "center",
+                            justifyContent: "center",
+                            borderWidth: 1,
+                            borderColor: currentSolidColor + "30",
+                            shadowColor: "#000",
+                            shadowOpacity: 0.05,
+                            shadowRadius: 2,
+                            elevation: 1,
+                          }}
+                        >
+                          <Ionicons
+                            name="return-down-back-outline" // 同じアイコンを使用
+                            size={18}
+                            color={currentSolidColor}
+                          />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={handleOpenNewModal}>
+                          <Ionicons
+                            name="add-circle"
+                            size={30}
+                            color={currentSolidColor}
+                          />
+                        </TouchableOpacity>
+                      </View>
                     </View>
                     <CalendarProvider
                       date={selectedDate}
