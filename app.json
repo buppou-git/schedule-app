@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.buppou.multicalendar",
-      "googleServicesFile": "GoogleService-Info.plist",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleURLTypes": [
@@ -41,7 +41,9 @@
         "expo-build-properties",
         {
           "ios": {
-            "deploymentTarget": "15.1"
+            "deploymentTarget": "15.1",
+            "useModularHeaders": true,
+            "useFrameworks": "static"
           }
         }
       ],
@@ -77,7 +79,6 @@
           "iosUrlScheme": "com.googleusercontent.apps.633661996714-m1eoribajuqgbe5grrv3gpcco27peqrv"
         }
       ],
-      "expo-build-properties",
       "@react-native-firebase/app",
       "@react-native-firebase/crashlytics"
     ],
