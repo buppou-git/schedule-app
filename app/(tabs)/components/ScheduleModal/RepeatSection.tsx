@@ -4,7 +4,7 @@ import { ScheduleFormData } from "../../../../types"; // 🌟 追加
 import { styles } from "./ScheduleModal.styles";
 
 interface RepeatSectionProps {
-  repeatType: string;
+  repeatType: "none" | "daily" | "weekly" | "monthly" | "custom";
   repeatDays: number[];
   repeatInterval: number;
   uiThemeColor: string;
@@ -36,7 +36,7 @@ export const RepeatSection = React.memo(
                 styles.layerChip,
                 repeatType === opt.value && { backgroundColor: uiThemeColor },
               ]}
-              onPress={() => updateForm({ repeatType: opt.value as any })}
+              onPress={() => updateForm({ repeatType: opt.value as RepeatSectionProps["repeatType"] })}
             >
               <Text
                 style={[

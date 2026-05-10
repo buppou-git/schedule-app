@@ -37,7 +37,6 @@
     },
     "plugins": [
       "expo-router",
-
       [
         "expo-build-properties",
         {
@@ -78,7 +77,9 @@
           "iosUrlScheme": "com.googleusercontent.apps.633661996714-m1eoribajuqgbe5grrv3gpcco27peqrv"
         }
       ],
-      "expo-build-properties"
+      "expo-build-properties",
+      "@react-native-firebase/app",
+      "@react-native-firebase/crashlytics"
     ],
     "experiments": {
       "typedRoutes": true

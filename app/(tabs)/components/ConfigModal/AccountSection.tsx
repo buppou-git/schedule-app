@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
+import CryptoJS from "crypto-js";
 import * as AppleAuthentication from "expo-apple-authentication";
 import {
   GoogleAuthProvider,
@@ -35,7 +36,7 @@ export const AccountSection = React.memo(
       try {
         await GoogleSignin.hasPlayServices();
         const response = await GoogleSignin.signIn();
-        const typedResponse = response as any;
+        const typedResponse = response as { data?: { idToken: string | null }, idToken?: string | null };
         const id_token = typedResponse.data?.idToken || typedResponse.idToken;
 
         if (id_token && auth.currentUser) {
@@ -47,8 +48,9 @@ export const AccountSection = React.memo(
               "連携完了",
               "アカウントと紐付けられ、データが保護されました。",
             );
-          } catch (linkError: any) {
-            if (linkError.code === "auth/credential-already-in-use") {
+          } catch (linkError: unknown) { // 🌟 unknown に変更
+            const err = linkError as { code?: string }; // 🌟 エラーコードを取り出す準備
+            if (err.code === "auth/credential-already-in-use") {
               Alert.alert(
                 "データ引き継ぎ",
                 "このアカウントには過去のデータがあります。この端末に引き継ぎますか？",
@@ -65,7 +67,7 @@ export const AccountSection = React.memo(
                           "完了",
                           "引き継ぎました！「クラウドからデータを復元」を押してください。",
                         );
-                      } catch (error: any) {
+                      } catch (error: unknown) {
                         Alert.alert("エラー", "引き継ぎに失敗しました。もう一度連携ボタンを押してください。");
                       } finally {
                         setIsLinking(false);
@@ -80,9 +82,10 @@ export const AccountSection = React.memo(
             }
           }
         }
-      } catch (error: any) {
-        if (error.code !== "ASYNC_OP_IN_PROGRESS") {
-          console.error("Google login error:", error);
+      } catch (error: unknown) { // 🌟 unknown に変更
+        const err = error as { code?: string };
+        if (err.code !== "ASYNC_OP_IN_PROGRESS") {
+          console.error("Google login error:", err); // 🌟 エラー本体ではなくerrを出力
           Alert.alert("エラー", "アカウント連携をキャンセル、または失敗しました。");
         }
       } finally {
@@ -94,17 +97,26 @@ export const AccountSection = React.memo(
     const handleAppleSignIn = useCallback(async () => {
       setIsLinking(true);
       try {
+        // --- 🌟 ここから追加 ---
+        // 1. Nonce（推測不可能なランダムな文字列）を作成
+        const rawNonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        // 2. 作成したNonceをSHA256でハッシュ化（Appleに渡す用）
+        const hashedNonce = CryptoJS.SHA256(rawNonce).toString(CryptoJS.enc.Hex);
+        // --- 🌟 ここまで追加 ---
+
         const credential = await AppleAuthentication.signInAsync({
           requestedScopes: [
             AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
             AppleAuthentication.AppleAuthenticationScope.EMAIL,
           ],
+          nonce: hashedNonce, // 🌟 3. Appleにハッシュ化したNonceを渡す
         });
 
         if (credential.identityToken && auth.currentUser) {
           const provider = new OAuthProvider("apple.com");
           const firebaseCredential = provider.credential({
             idToken: credential.identityToken,
+            rawNonce: rawNonce, // 🌟 4. Firebaseには「元のNonce」を渡す（裏で照合されます）
           });
 
           try {
@@ -114,8 +126,9 @@ export const AccountSection = React.memo(
               "連携完了",
               "Appleアカウントと紐付けられ、データが保護されました。",
             );
-          } catch (linkError: any) {
-            if (linkError.code === "auth/credential-already-in-use") {
+          } catch (linkError: unknown) { // 🌟 unknown に変更
+            const err = linkError as { code?: string };
+            if (err.code === "auth/credential-already-in-use") {
               Alert.alert(
                 "データ引き継ぎ",
                 "このAppleアカウントには過去のデータがあります。引き継ぎますか？",
@@ -132,7 +145,7 @@ export const AccountSection = React.memo(
                           "完了",
                           "引き継ぎました！「クラウドからデータを復元」を押してください。",
                         );
-                      } catch (error: any) {
+                      } catch (error: unknown) {
                         Alert.alert("引き継ぎエラー", "Appleの認証期限が切れました。もう一度「Appleでデータを保護」を押して引き継ぎを実行してください。");
                       } finally {
                         setIsLinking(false);
@@ -147,9 +160,10 @@ export const AccountSection = React.memo(
             }
           }
         }
-      } catch (error: any) {
-        if (error.code !== "ERR_CANCELED") {
-          console.error("Apple login error:", error);
+      } catch (error: unknown) { // 🌟 unknown に変更
+        const err = error as { code?: string };
+        if (err.code !== "ERR_CANCELED") {
+          console.error("Apple login error:", err);
           Alert.alert("エラー", "アカウント連携をキャンセル、または失敗しました。");
         }
       } finally {

@@ -6,12 +6,12 @@ import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import React, { useCallback, useState } from "react";
 import {
-    Alert,
-    Platform,
-    Switch,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  Platform,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 // 🌟 パスはご自身の環境に合わせて調整してください
@@ -125,7 +125,8 @@ export const SyncAndBackupSection = React.memo(
         const SafeFS = FileSystem as unknown as {
           documentDirectory: string | null;
           EncodingType: { UTF8: string };
-          writeAsStringAsync: any;
+          // 🌟 any を「ファイルパスと中身を受け取って保存する関数」の型に書き換え
+          writeAsStringAsync: (fileUri: string, contents: string, options?: { encoding?: string }) => Promise<void>;
         };
         const fileUri = SafeFS.documentDirectory + "UniCal_Data.csv";
 

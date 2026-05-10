@@ -33,28 +33,34 @@ export const useScheduleManager = () => {
     loadInitialData();
   }, []);
 
-  // 2. データを更新した時に、スマホ本体とFirebaseの両方に保存する魔法の関数
-  const setScheduleData = async (newData: {
-    [key: string]: ScheduleItem[];
-  }) => {
-    // 🌟 画面の表示を即座に更新する（Zustand倉庫を更新！）
+  // 🌟 修正：newData として「オブジェクト」または「関数」を受け取れるようにする
+  const setScheduleData = async (
+    updater:
+      | { [key: string]: ScheduleItem[] }
+      | ((prev: { [key: string]: ScheduleItem[] }) => { [key: string]: ScheduleItem[] })
+  ) => {
+    // 1. まず、新しいデータを確定させる
+    // updater が関数の場合（prev => ...）は、現在のZustandのデータ（scheduleData）を渡して計算させる
+    const newData = typeof updater === "function" ? updater(scheduleData) : updater;
+
+    // 2. 確定した新しいデータをZustandの倉庫に格納して、画面を即座に更新！
     setZustandScheduleData(newData);
 
+    // 3. 裏側でローカルとFirebaseに保存する（ここは非同期でOK）
     try {
-      // ローカル（スマホ本体）に保存
       await AsyncStorage.setItem("scheduleData", JSON.stringify(newData));
 
-      // クラウド（Firebase）に同期
       if (auth.currentUser) {
         const userRef = doc(db, "users", auth.currentUser.uid);
         const now = new Date().toISOString();
 
+        // 不要な関数などが混じらないように安全に文字列化→復元
         const sanitizedData = JSON.parse(JSON.stringify(newData));
 
         await setDoc(
           userRef,
           { scheduleData: sanitizedData, lastSyncedAt: now },
-          { merge: true },
+          { merge: true }
         );
 
         setLastSyncedAt(now);

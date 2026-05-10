@@ -2,12 +2,12 @@ import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import React, { useState } from "react";
 import {
-    Modal,
-    Platform,
-    Text,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+  Modal,
+  Platform,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native";
 import { styles } from "./ScheduleModal.styles"; // 🌟 さっき作ったスタイルを読み込む
 
@@ -26,7 +26,7 @@ export const ModernDatePicker = ({
   mode: "date" | "time";
   onChange: (d: Date) => void;
   themeColor: string;
-  icon?: string;
+  icon?: keyof typeof Ionicons.glyphMap;
 }) => {
   const [show, setShow] = useState(false);
 
@@ -49,7 +49,7 @@ export const ModernDatePicker = ({
       >
         {icon && (
           <Ionicons
-            name={icon as any}
+            name={icon}
             size={16}
             color={themeColor}
             style={{ marginRight: 6 }}

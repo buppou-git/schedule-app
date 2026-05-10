@@ -408,12 +408,12 @@ export default function DailyExpense({
                     onPress={() => handleOpenEdit(i, selectedDate)}
                   >
                     <View style={styles.dailyItemInfo}>
-                    <View
+                      <View
                         style={[
                           styles.dailyItemDot,
-                          { 
+                          {
                             // 🌟 外部予定(externalEventIdがある)なら必ず赤、それ以外は設定色
-                            backgroundColor: isIncome ? "#8E8E93" : (i.externalEventId ? "#FF2D55" : i.color) 
+                            backgroundColor: isIncome ? "#8E8E93" : (i.externalEventId ? "#FF2D55" : i.color)
                           },
                         ]}
                       />
@@ -463,17 +463,19 @@ export default function DailyExpense({
           >
             {displayLayers.map((l) => {
               const c =
-                l === "ALL_LAYERS" ? "#8E8E93" : layerMaster[l] || themeColor;
+                l === "外部予定"
+                  ? "#FF2D55" // 🌟 外部予定レイヤーなら強制的に赤！
+                  : (l === "ALL_LAYERS" ? "#8E8E93" : layerMaster[l] || themeColor);
               const isAll = l === "ALL_LAYERS";
               const qTags =
                 quickMainTags[l] || quickMainTags["ALL_LAYERS"] || [];
               const sTags = isAll
                 ? Object.keys(tagMaster).filter(
-                    (t) => tagMaster[t].layer === "共通",
-                  )
+                  (t) => tagMaster[t].layer === "共通",
+                )
                 : Object.keys(tagMaster).filter(
-                    (t) => tagMaster[t].layer === l,
-                  );
+                  (t) => tagMaster[t].layer === l,
+                );
 
               return (
                 <View

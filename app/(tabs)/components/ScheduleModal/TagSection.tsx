@@ -14,8 +14,8 @@ import { styles } from "./ScheduleModal.styles";
 interface TagSectionProps {
   selectedLayer: string;
   setSelectedLayer: (l: string) => void;
-  layerMaster: any;
-  tagMaster: any;
+  layerMaster: { [key: string]: string };
+  tagMaster: { [key: string]: { layer: string; color: string } };
   formDataTag: string;
   uiThemeColor: string;
   updateForm: (updates: Partial<ScheduleFormData>) => void; // 🌟 anyを修正

@@ -160,7 +160,7 @@ const calculateStreak = (completedDates: string[] | undefined) => {
   return streak;
 };
 
-export default function Index() {
+function IndexContent() {
   useEffect(() => {
     const initAds = async () => {
       try {
@@ -1694,7 +1694,8 @@ export default function Index() {
                         markedDates={currentMarkedDates}
                         theme={{
                           calendarBackground: "transparent",
-                          todayTextColor: currentSolidColor,
+                          todayTextColor: "#FFF",
+                          todayBackgroundColor: currentSolidColor + "33",
                           selectedDayBackgroundColor: currentSolidColor,
                         }}
                       />
@@ -2306,5 +2307,18 @@ export default function Index() {
         />
       </View>
     </SafeAreaView>
+  );
+}
+
+
+
+import { ErrorBoundary } from "./components/ErrorBoundary";
+
+// 🌟 これが「外側からバリアを張った」新しいメイン画面！
+export default function Index() {
+  return (
+    <ErrorBoundary>
+      <IndexContent />
+    </ErrorBoundary>
   );
 }

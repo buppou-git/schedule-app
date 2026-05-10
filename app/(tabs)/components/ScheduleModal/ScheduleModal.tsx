@@ -51,7 +51,7 @@ interface ScheduleModalProps {
   selectedItem: ScheduleItem | null;
   activeMode: string;
   scheduleData: { [date: string]: ScheduleItem[] };
-  setScheduleData: (data: { [date: string]: ScheduleItem[] }) => void;
+  setScheduleData: React.Dispatch<React.SetStateAction<{ [key: string]: ScheduleItem[] }>>;
   layerMaster?: { [key: string]: string };
   tagMaster?: { [key: string]: { layer: string; color: string } };
   setTagMaster?: (data: {
@@ -705,16 +705,60 @@ export default function ScheduleModal({
         selectedItem?.externalEventId,
       );
 
-      if (returnedId && newData[sStr] && newData[sStr].length > 0) {
-        newData[sStr][newData[sStr].length - 1].externalEventId = returnedId;
-      }
+      // 外部カレンダー連携で返ってきたIDがあればセット
+      let finalReturnedId = returnedId;
 
+      // 🌟 ここから「関数型」で即時更新！(Record型を使ってanyを回避)
+      setScheduleData((prevData: Record<string, ScheduleItem[]>) => {
+        const nextData = { ...prevData }; // 🌟 最新の状態をコピー
+
+        if (selectedItem) {
+          if (mode === "single") {
+            Object.keys(nextData).forEach((d) => {
+              nextData[d] = nextData[d].map((i) =>
+                i.id === selectedItem.id
+                  ? { ...i, exceptionDates: [...(i.exceptionDates || []), selectedDate] }
+                  : i,
+              );
+            });
+            const newItem: ScheduleItem = {
+              ...selectedItem,
+              ...(itemData as Omit<ScheduleItem, 'id'>), // 型エラー防止のためキャスト
+              id: Date.now().toString(),
+              repeatType: undefined,
+              linkedMasterId: selectedItem.id,
+              externalEventId: finalReturnedId || selectedItem.externalEventId,
+            };
+            if (!nextData[sStr]) nextData[sStr] = [];
+            nextData[sStr] = [...nextData[sStr], newItem];
+          } else {
+            Object.keys(nextData).forEach((d) => {
+              nextData[d] = nextData[d].filter((i) => i.id !== selectedItem.id);
+            });
+            if (!nextData[sStr]) nextData[sStr] = [];
+            nextData[sStr] = [
+              ...nextData[sStr],
+              {
+                ...selectedItem,
+                ...(itemData as Omit<ScheduleItem, 'id'>),
+                externalEventId: finalReturnedId || selectedItem.externalEventId
+              } as ScheduleItem,
+            ];
+          }
+        } else {
+          if (!nextData[sStr]) nextData[sStr] = [];
+          nextData[sStr] = [
+            ...nextData[sStr],
+            { id: Date.now().toString(), ...(itemData as Omit<ScheduleItem, 'id'>), externalEventId: finalReturnedId } as ScheduleItem,
+          ];
+        }
+
+        return nextData; // 🌟 新しいデータを返すことで画面が「即座に」再描画される
+      });
+
+      setHasUnsavedChanges(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      onClose();
-      setTimeout(() => {
-        setScheduleData(newData);
-        setHasUnsavedChanges(true);
-      }, 300);
+      onClose(); // 🌟 データの更新命令を出した直後に画面を閉じる
 
     } catch (error) {
       // 🌟 3. 万が一のエラーをキャッチしてユーザーに伝える
@@ -790,20 +834,25 @@ export default function ScheduleModal({
             console.error("共有データ削除エラー:", e);
           }
         } else {
-          Object.keys(newData).forEach((d) => {
-            newData[d] = newData[d].filter(
-              (i: ScheduleItem) => i.id !== selectedItem.id,
-            );
+          // 🌟 関数型アップデートで「確実に今のデータから消す」 (Record型を使用)
+          setScheduleData((prevData: Record<string, ScheduleItem[]>) => {
+            const nextData = { ...prevData };
+            Object.keys(nextData).forEach((d) => {
+              nextData[d] = nextData[d].filter(
+                (i: ScheduleItem) => i.id !== selectedItem.id,
+              );
+            });
+            return nextData;
           });
         }
       }
-      onClose();
-      setTimeout(() => {
-        setScheduleData(newData);
-        setHasUnsavedChanges(true);
-      }, 300);
 
-    } catch (error) {
+      setHasUnsavedChanges(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      onClose(); // 🌟 消した直後に閉じる
+
+
+    } catch (error: unknown) { // 🌟 ついでにここも unknown にして型安全に！
       // 🌟 ガード2：エラーハンドリング
       console.error("Delete Error:", error);
       Alert.alert("削除エラー", "削除中に問題が発生しました。もう一度お試しください。");

@@ -468,14 +468,14 @@ export default function BudgetDashboard({
       newList = wishlist.map((w) =>
         w.id === editingWishId
           ? {
-              ...w,
-              name: newWishName.trim(),
-              targetAmount,
-              icon: newWishIcon,
-              color: newWishColor,
-              autoDepositEnabled: newWishAutoDeposit,
-              autoDepositAmount: autoAmount,
-            }
+            ...w,
+            name: newWishName.trim(),
+            targetAmount,
+            icon: newWishIcon,
+            color: newWishColor,
+            autoDepositEnabled: newWishAutoDeposit,
+            autoDepositAmount: autoAmount,
+          }
           : w,
       );
     } else {
@@ -656,9 +656,9 @@ export default function BudgetDashboard({
         updatedWishlist = updatedWishlist.map((w) =>
           w.id === id
             ? {
-                ...w,
-                savedAmount: Math.min(w.targetAmount, w.savedAmount + amount),
-              }
+              ...w,
+              savedAmount: Math.min(w.targetAmount, w.savedAmount + amount),
+            }
             : w,
         );
       }
@@ -819,7 +819,7 @@ export default function BudgetDashboard({
             color={themeColor}
           />
           <Text style={[styles.paydayText, { color: themeColor }]}>
-            給料日まで あと {daysToPayday} 日
+            予算リセットまで あと {daysToPayday} 日
           </Text>
         </View>
         <TouchableOpacity onPress={() => setIsSettingMode(!isSettingMode)}>
@@ -836,7 +836,7 @@ export default function BudgetDashboard({
           style={styles.settingArea}
           showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.settingLabel}>給料日指定</Text>
+          <Text style={styles.settingLabel}>リセット日指定</Text>
           <TextInput
             style={styles.settingInput}
             keyboardType="numeric"
@@ -1201,9 +1201,9 @@ export default function BudgetDashboard({
                             ? key === "共通"
                               ? "#8E8E93"
                               : layerMaster[key] ||
-                                CHART_PALETTE[index % CHART_PALETTE.length]
+                              CHART_PALETTE[index % CHART_PALETTE.length]
                             : tagMaster[key]?.color ||
-                              CHART_PALETTE[index % CHART_PALETTE.length],
+                            CHART_PALETTE[index % CHART_PALETTE.length],
                       legendFontColor: "#666",
                       legendFontSize: 11,
                     }))}
@@ -2096,37 +2096,60 @@ export default function BudgetDashboard({
               <View
                 style={[
                   styles.editActionRow,
-                  { justifyContent: "space-between", marginTop: 10 },
+                  {
+                    justifyContent: "space-between",
+                    marginTop: 20, // 少し余裕を持たせました
+                    alignItems: "center"
+                  },
                 ]}
               >
+                {/* キャンセルボタン：控えめにしつつタップ範囲を確保 */}
                 <TouchableOpacity
                   onPress={() => setIsAddWishModalVisible(false)}
-                  style={{ padding: 10 }}
+                  style={{ paddingVertical: 10, paddingHorizontal: 5 }}
                 >
                   <Text style={{ color: "#8E8E93", fontWeight: "bold" }}>
                     キャンセル
                   </Text>
                 </TouchableOpacity>
 
-                {editingWishId && (
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  {/* 🌟 削除ボタン：薄い赤の背景を付けて、押しやすく存在感をアップ */}
+                  {editingWishId && (
+                    <TouchableOpacity
+                      onPress={confirmDeleteWish}
+                      style={[
+                        styles.saveBtn,
+                        {
+                          backgroundColor: "#FF3B3015", // 薄い赤
+                          marginRight: 10,
+                          paddingHorizontal: 15, // 横幅を調整
+                          borderWidth: 0,
+                        },
+                      ]}
+                    >
+                      <Text style={{ color: "#FF3B30", fontWeight: "bold" }}>
+                        削除
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* 保存ボタン：メインのアクション */}
                   <TouchableOpacity
-                    onPress={confirmDeleteWish}
-                    style={{ padding: 10 }}
+                    style={[
+                      styles.saveBtn,
+                      {
+                        backgroundColor: newWishColor,
+                        paddingHorizontal: 20,
+                      }
+                    ]}
+                    onPress={executeAddWish}
                   >
-                    <Text style={{ color: "#FF3B30", fontWeight: "bold" }}>
-                      削除
+                    <Text style={styles.saveText}>
+                      {editingWishId ? "保存" : "目標を設定"}
                     </Text>
                   </TouchableOpacity>
-                )}
-
-                <TouchableOpacity
-                  style={[styles.saveBtn, { backgroundColor: newWishColor }]}
-                  onPress={executeAddWish}
-                >
-                  <Text style={styles.saveText}>
-                    {editingWishId ? "保存" : "目標を設定"}
-                  </Text>
-                </TouchableOpacity>
+                </View>
               </View>
             </View>
           </TouchableWithoutFeedback>

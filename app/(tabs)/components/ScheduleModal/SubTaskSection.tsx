@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useCallback } from "react";
+import React, { Dispatch, SetStateAction, useCallback } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { ScheduleFormData, SubTask } from "../../../../types"; // 🌟 ScheduleFormData を追加
 import { styles } from "./ScheduleModal.styles";
@@ -9,7 +9,7 @@ interface SubTaskSectionProps {
   showSubTasks: boolean;
   setShowSubTasks: (val: boolean) => void;
   subTasks: SubTask[];
-  setSubTasks: any; 
+  setSubTasks: Dispatch<SetStateAction<SubTask[]>>;
   uiThemeColor: string;
   selectedDate: string;
   currentQuickTags: string[];
