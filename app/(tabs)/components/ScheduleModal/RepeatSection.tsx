@@ -1,5 +1,6 @@
 import React from "react";
 import { Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ScheduleFormData } from "../../../../types"; // 🌟 追加
 import { styles } from "./ScheduleModal.styles";
 
 interface RepeatSectionProps {
@@ -7,7 +8,7 @@ interface RepeatSectionProps {
   repeatDays: number[];
   repeatInterval: number;
   uiThemeColor: string;
-  updateForm: (updates: any) => void;
+  updateForm: (updates: Partial<ScheduleFormData>) => void; // 🌟 anyを修正
 }
 
 export const RepeatSection = React.memo(

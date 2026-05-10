@@ -1,12 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import {
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
+import { ScheduleFormData } from "../../../../types"; // 🌟 追加
 import { PRESET_COLORS } from "../../../../utils/helpers";
 import { styles } from "./ScheduleModal.styles";
 
@@ -17,7 +18,7 @@ interface TagSectionProps {
   tagMaster: any;
   formDataTag: string;
   uiThemeColor: string;
-  updateForm: (updates: any) => void;
+  updateForm: (updates: Partial<ScheduleFormData>) => void; // 🌟 anyを修正
   isCreatingNewTag: boolean;
   setIsCreatingNewTag: (val: boolean) => void;
   newTagColor: string;

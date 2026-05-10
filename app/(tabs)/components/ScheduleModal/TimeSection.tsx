@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Switch, Text, View } from "react-native";
+import { ScheduleFormData } from "../../../../types"; // 🌟 追加
 import { ModernDatePicker, formatTime } from "./ModernDatePicker";
 import { styles } from "./ScheduleModal.styles";
 
@@ -11,7 +12,7 @@ interface TimeSectionProps {
   endDate: Date;
   endTime: Date;
   uiThemeColor: string;
-  updateForm: (updates: any) => void;
+  updateForm: (updates: Partial<ScheduleFormData>) => void; // 🌟 anyを修正
 }
 
 export const TimeSection = React.memo(

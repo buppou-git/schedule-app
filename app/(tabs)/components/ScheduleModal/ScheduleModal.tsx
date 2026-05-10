@@ -131,6 +131,7 @@ export default function ScheduleModal({
     useState("ALL_LAYERS");
 
   // 🌟 追加：属性編集用State
+
   const [editSubTagModalVisible, setEditSubTagModalVisible] = useState(false);
   const [editingSubTagOriginalName, setEditingSubTagOriginalName] =
     useState("");
@@ -230,6 +231,9 @@ export default function ScheduleModal({
     useNotificationManager();
 
   const uiThemeColor = layerMaster[selectedLayer] || "#007AFF";
+
+  // 🌟 追加：保存処理中かどうかを判定するフラグ
+  const [isSaving, setIsSaving] = useState(false);
 
   // 🌟 追加：簡易モードの判定フラグ
   const [isSimpleMode, setIsSimpleMode] = useState(true);
@@ -454,256 +458,274 @@ export default function ScheduleModal({
   };
 
   const executeSave = async (mode: "normal" | "all" | "single") => {
+
+    if (isSaving) return; // 🌟 1. 保存中なら処理をブロック（二重押し防止）
+
     if (!formData.title)
       return Alert.alert("エラー", "タイトルを入力してください");
-    const r = {
-      ...readingMaster,
-      [formData.title.trim()]: toHiragana(formData.title.trim()),
-    };
-    setReadingMaster(r);
-    AsyncStorage.setItem("readingMasterData", JSON.stringify(r));
 
-    const finalTag = formData.tag.trim() || selectedLayer;
+    setIsSaving(true); // 🌟 2. 保存開始！ローディングをONにする
 
-    let finalColor = uiThemeColor;
-    if (formData.tag.trim()) {
-      const existingTag = tagMaster[formData.tag.trim()];
-      if (existingTag) {
-        finalColor = existingTag.color;
-      } else {
-        finalColor = newTagColor || uiThemeColor;
-        const m = {
-          ...tagMaster,
-          [formData.tag.trim()]: { layer: selectedLayer, color: finalColor },
-        };
-        setTagMaster?.(m);
-        AsyncStorage.setItem("tagMasterData", JSON.stringify(m));
-      }
-    }
+    try {
+      const r = {
+        ...readingMaster,
+        [formData.title.trim()]: toHiragana(formData.title.trim()),
+      };
+      setReadingMaster(r);
+      AsyncStorage.setItem("readingMasterData", JSON.stringify(r));
 
-    let finalNotificationIds: string[] = [];
-    if (
-      selectedItem?.notificationIds &&
-      selectedItem.notificationIds.length > 0
-    ) {
-      for (const oldId of selectedItem.notificationIds) {
-        await cancelItemNotification(oldId);
-      }
-    }
+      const finalTag = formData.tag.trim() || selectedLayer;
 
-    if (selectedReminders.length > 0) {
-      for (const option of selectedReminders) {
-        if (option === "custom") continue;
-        let triggerDate = new Date(formData.startDate);
-        if (formData.isAllDay) {
-          if (option === "morning") triggerDate.setHours(7, 0, 0, 0);
-          else if (option === "dayBefore") {
-            triggerDate.setDate(triggerDate.getDate() - 1);
-            triggerDate.setHours(21, 0, 0, 0);
-          } else if (option === "2daysBefore") {
-            triggerDate.setDate(triggerDate.getDate() - 2);
-            triggerDate.setHours(21, 0, 0, 0);
-          }
+      let finalColor = uiThemeColor;
+      if (formData.tag.trim()) {
+        const existingTag = tagMaster[formData.tag.trim()];
+        if (existingTag) {
+          finalColor = existingTag.color;
         } else {
-          triggerDate.setHours(
-            formData.startTime.getHours(),
-            formData.startTime.getMinutes(),
-            0,
-            0,
-          );
-          if (option === "10min")
-            triggerDate.setMinutes(triggerDate.getMinutes() - 10);
-          else if (option === "30min")
-            triggerDate.setMinutes(triggerDate.getMinutes() - 30);
-          else if (option === "1hour")
-            triggerDate.setHours(triggerDate.getHours() - 1);
-          else if (option === "morning") triggerDate.setHours(7, 0, 0, 0);
-          else if (option === "dayBefore") {
-            triggerDate.setDate(triggerDate.getDate() - 1);
-            triggerDate.setHours(21, 0, 0, 0);
-          }
-        }
-
-        if (triggerDate > new Date()) {
-          const id = await scheduleItemNotification(
-            formData.title,
-            triggerDate,
-          );
-          if (id) finalNotificationIds.push(id);
+          finalColor = newTagColor || uiThemeColor;
+          const m = {
+            ...tagMaster,
+            [formData.tag.trim()]: { layer: selectedLayer, color: finalColor },
+          };
+          setTagMaster?.(m);
+          AsyncStorage.setItem("tagMasterData", JSON.stringify(m));
         }
       }
 
-      if (selectedReminders.includes("custom")) {
-        for (const customTime of customReminderTimes) {
-          if (customTime > new Date()) {
+      let finalNotificationIds: string[] = [];
+      if (
+        selectedItem?.notificationIds &&
+        selectedItem.notificationIds.length > 0
+      ) {
+        for (const oldId of selectedItem.notificationIds) {
+          await cancelItemNotification(oldId);
+        }
+      }
+
+      if (selectedReminders.length > 0) {
+        for (const option of selectedReminders) {
+          if (option === "custom") continue;
+          let triggerDate = new Date(formData.startDate);
+          if (formData.isAllDay) {
+            if (option === "morning") triggerDate.setHours(7, 0, 0, 0);
+            else if (option === "dayBefore") {
+              triggerDate.setDate(triggerDate.getDate() - 1);
+              triggerDate.setHours(21, 0, 0, 0);
+            } else if (option === "2daysBefore") {
+              triggerDate.setDate(triggerDate.getDate() - 2);
+              triggerDate.setHours(21, 0, 0, 0);
+            }
+          } else {
+            triggerDate.setHours(
+              formData.startTime.getHours(),
+              formData.startTime.getMinutes(),
+              0,
+              0,
+            );
+            if (option === "10min")
+              triggerDate.setMinutes(triggerDate.getMinutes() - 10);
+            else if (option === "30min")
+              triggerDate.setMinutes(triggerDate.getMinutes() - 30);
+            else if (option === "1hour")
+              triggerDate.setHours(triggerDate.getHours() - 1);
+            else if (option === "morning") triggerDate.setHours(7, 0, 0, 0);
+            else if (option === "dayBefore") {
+              triggerDate.setDate(triggerDate.getDate() - 1);
+              triggerDate.setHours(21, 0, 0, 0);
+            }
+          }
+
+          if (triggerDate > new Date()) {
             const id = await scheduleItemNotification(
               formData.title,
-              customTime,
+              triggerDate,
             );
             if (id) finalNotificationIds.push(id);
           }
         }
-      }
-    }
 
-    const updatedSubTasks = await Promise.all(
-      subTasks.map(async (task) => {
-        if (task.notificationId) {
-          await cancelItemNotification(task.notificationId);
-        }
-        let newNotifId = undefined;
-        if (
-          task.hasDateTime &&
-          task.endTime &&
-          task.reminderOption &&
-          task.reminderOption !== "none"
-        ) {
-          let triggerDate = new Date(task.endTime);
-          if (task.reminderOption === "1hour")
-            triggerDate.setHours(triggerDate.getHours() - 1);
-          else if (task.reminderOption === "1day")
-            triggerDate.setDate(triggerDate.getDate() - 1);
-          if (triggerDate > new Date()) {
-            const id = await scheduleItemNotification(
-              `子タスク: ${task.title}`,
-              triggerDate,
-            );
-            if (id) newNotifId = id;
+        if (selectedReminders.includes("custom")) {
+          for (const customTime of customReminderTimes) {
+            if (customTime > new Date()) {
+              const id = await scheduleItemNotification(
+                formData.title,
+                customTime,
+              );
+              if (id) finalNotificationIds.push(id);
+            }
           }
         }
-        return { ...task, notificationId: newNotifId };
-      }),
-    );
-
-    const pureTodos = updatedSubTasks.filter(
-      (t) => !t.isExpense && !t.isIncome,
-    );
-    const allDone = pureTodos.length > 0 && pureTodos.every((t) => t.isDone);
-
-    const newData = { ...scheduleData };
-    const sStr = formData.startDate.toISOString().split("T")[0];
-    const itemData = {
-      title: formData.title,
-      tag: finalTag,
-      tags: [finalTag],
-      amount: parseInt(formData.amount) || 0,
-      isEvent: formData.isEvent,
-      isTodo: formData.isTodo,
-      isExpense: formData.isExpense,
-      isDone: allDone ? true : selectedItem ? selectedItem.isDone : false,
-      color: finalColor,
-      category: formData.isExpense ? formData.category : undefined,
-      repeatType:
-        formData.repeatType !== "none" ? formData.repeatType : undefined,
-      repeatDays:
-        formData.repeatType === "custom" ? formData.repeatDays : undefined,
-      repeatInterval:
-        formData.repeatType === "custom" ? formData.repeatInterval : undefined,
-      isAllDay: formData.isAllDay,
-      startDate: sStr,
-      endDate: formData.endDate.toISOString().split("T")[0],
-      startTime: formData.isAllDay ? undefined : formatTime(formData.startTime),
-      endTime: formData.isAllDay ? undefined : formatTime(formData.endTime),
-      notificationIds: finalNotificationIds,
-      reminderOptions: selectedReminders,
-      customReminderTimes: customReminderTimes.map((d) => d.toISOString()),
-      subTasks: updatedSubTasks,
-    };
-
-    const isShared = selectedLayer === "共有" || finalTag === "共有";
-
-    if (isShared) {
-      try {
-        const docId = selectedItem ? selectedItem.id : Date.now().toString();
-        const docRef = doc(db, "shared_schedules", docId);
-        await setDoc(docRef, {
-          ...itemData,
-          id: docId,
-          date: sStr,
-          updatedAt: new Date().toISOString(),
-        });
-      } catch (e) {
-        console.error("共有保存エラー:", e);
-        Alert.alert("エラー", "共有データの保存に失敗しました。");
       }
-    } else {
-      if (selectedItem) {
-        if (mode === "single") {
-          Object.keys(newData).forEach((d) => {
-            newData[d] = newData[d].map((i: ScheduleItem) => {
-              if (i.id === selectedItem.id) {
-                return {
-                  ...i,
-                  exceptionDates: [...(i.exceptionDates || []), selectedDate],
-                };
-              }
-              return i;
-            });
-          });
-          const newItem = {
-            ...selectedItem,
+
+      const updatedSubTasks = await Promise.all(
+        subTasks.map(async (task) => {
+          if (task.notificationId) {
+            await cancelItemNotification(task.notificationId);
+          }
+          let newNotifId = undefined;
+          if (
+            task.hasDateTime &&
+            task.endTime &&
+            task.reminderOption &&
+            task.reminderOption !== "none"
+          ) {
+            let triggerDate = new Date(task.endTime);
+            if (task.reminderOption === "1hour")
+              triggerDate.setHours(triggerDate.getHours() - 1);
+            else if (task.reminderOption === "1day")
+              triggerDate.setDate(triggerDate.getDate() - 1);
+            if (triggerDate > new Date()) {
+              const id = await scheduleItemNotification(
+                `子タスク: ${task.title}`,
+                triggerDate,
+              );
+              if (id) newNotifId = id;
+            }
+          }
+          return { ...task, notificationId: newNotifId };
+        }),
+      );
+
+      const pureTodos = updatedSubTasks.filter(
+        (t) => !t.isExpense && !t.isIncome,
+      );
+      const allDone = pureTodos.length > 0 && pureTodos.every((t) => t.isDone);
+
+      const newData = { ...scheduleData };
+      const sStr = formData.startDate.toISOString().split("T")[0];
+      const itemData = {
+        title: formData.title,
+        tag: finalTag,
+        tags: [finalTag],
+        amount: parseInt(formData.amount) || 0,
+        isEvent: formData.isEvent,
+        isTodo: formData.isTodo,
+        isExpense: formData.isExpense,
+        isDone: allDone ? true : selectedItem ? selectedItem.isDone : false,
+        color: finalColor,
+        category: formData.isExpense ? formData.category : undefined,
+        repeatType:
+          formData.repeatType !== "none" ? formData.repeatType : undefined,
+        repeatDays:
+          formData.repeatType === "custom" ? formData.repeatDays : undefined,
+        repeatInterval:
+          formData.repeatType === "custom" ? formData.repeatInterval : undefined,
+        isAllDay: formData.isAllDay,
+        startDate: sStr,
+        endDate: formData.endDate.toISOString().split("T")[0],
+        startTime: formData.isAllDay ? undefined : formatTime(formData.startTime),
+        endTime: formData.isAllDay ? undefined : formatTime(formData.endTime),
+        notificationIds: finalNotificationIds,
+        reminderOptions: selectedReminders,
+        customReminderTimes: customReminderTimes.map((d) => d.toISOString()),
+        subTasks: updatedSubTasks,
+      };
+
+      const isShared = selectedLayer === "共有" || finalTag === "共有";
+
+      if (isShared) {
+        try {
+          const docId = selectedItem ? selectedItem.id : Date.now().toString();
+          const docRef = doc(db, "shared_schedules", docId);
+          await setDoc(docRef, {
             ...itemData,
-            id: Date.now().toString(),
-            repeatType: undefined,
-            linkedMasterId: selectedItem.id,
-          };
-          if (!newData[sStr]) newData[sStr] = [];
-          newData[sStr].push(newItem);
-        } else {
-          Object.keys(newData).forEach((d) => {
-            newData[d] = newData[d].filter(
-              (i: ScheduleItem) => i.id !== selectedItem.id,
-            );
+            id: docId,
+            date: sStr,
+            updatedAt: new Date().toISOString(),
           });
-          if (!newData[sStr]) newData[sStr] = [];
-          newData[sStr].push({ ...selectedItem, ...itemData });
+        } catch (e) {
+          console.error("共有保存エラー:", e);
+          Alert.alert("エラー", "共有データの保存に失敗しました。");
         }
       } else {
-        if (!newData[sStr]) newData[sStr] = [];
-        newData[sStr].push({
-          id: Date.now().toString(),
-          ...itemData,
-        });
+        if (selectedItem) {
+          if (mode === "single") {
+            Object.keys(newData).forEach((d) => {
+              newData[d] = newData[d].map((i: ScheduleItem) => {
+                if (i.id === selectedItem.id) {
+                  return {
+                    ...i,
+                    exceptionDates: [...(i.exceptionDates || []), selectedDate],
+                  };
+                }
+                return i;
+              });
+            });
+            const newItem = {
+              ...selectedItem,
+              ...itemData,
+              id: Date.now().toString(),
+              repeatType: undefined,
+              linkedMasterId: selectedItem.id,
+            };
+            if (!newData[sStr]) newData[sStr] = [];
+            newData[sStr].push(newItem);
+          } else {
+            Object.keys(newData).forEach((d) => {
+              newData[d] = newData[d].filter(
+                (i: ScheduleItem) => i.id !== selectedItem.id,
+              );
+            });
+            if (!newData[sStr]) newData[sStr] = [];
+            newData[sStr].push({ ...selectedItem, ...itemData });
+          }
+        } else {
+          if (!newData[sStr]) newData[sStr] = [];
+          newData[sStr].push({
+            id: Date.now().toString(),
+            ...itemData,
+          });
+        }
       }
-    }
 
-    const startForExport = formData.isAllDay
-      ? formData.startDate
-      : new Date(
-        formData.startDate.getFullYear(),
-        formData.startDate.getMonth(),
-        formData.startDate.getDate(),
-        formData.startTime.getHours(),
-        formData.startTime.getMinutes(),
+      const startForExport = formData.isAllDay
+        ? formData.startDate
+        : new Date(
+          formData.startDate.getFullYear(),
+          formData.startDate.getMonth(),
+          formData.startDate.getDate(),
+          formData.startTime.getHours(),
+          formData.startTime.getMinutes(),
+        );
+      const endForExport = formData.isAllDay
+        ? formData.endDate
+        : new Date(
+          formData.endDate.getFullYear(),
+          formData.endDate.getMonth(),
+          formData.endDate.getDate(),
+          formData.endTime.getHours(),
+          formData.endTime.getMinutes(),
+        );
+
+      const returnedId = await exportToStandardCalendar(
+        formData.title,
+        startForExport,
+        endForExport,
+        formData.isAllDay,
+        selectedItem?.externalEventId,
       );
-    const endForExport = formData.isAllDay
-      ? formData.endDate
-      : new Date(
-        formData.endDate.getFullYear(),
-        formData.endDate.getMonth(),
-        formData.endDate.getDate(),
-        formData.endTime.getHours(),
-        formData.endTime.getMinutes(),
-      );
 
-    const returnedId = await exportToStandardCalendar(
-      formData.title,
-      startForExport,
-      endForExport,
-      formData.isAllDay,
-      selectedItem?.externalEventId,
-    );
+      if (returnedId && newData[sStr] && newData[sStr].length > 0) {
+        newData[sStr][newData[sStr].length - 1].externalEventId = returnedId;
+      }
 
-    if (returnedId && newData[sStr] && newData[sStr].length > 0) {
-      newData[sStr][newData[sStr].length - 1].externalEventId = returnedId;
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      onClose();
+      setTimeout(() => {
+        setScheduleData(newData);
+        setHasUnsavedChanges(true);
+      }, 300);
+
+    } catch (error) {
+      // 🌟 3. 万が一のエラーをキャッチしてユーザーに伝える
+      console.error("Save Error:", error);
+      Alert.alert("保存エラー", "予定の保存に失敗しました。通信環境を確認してください。");
+    } finally {
+      // 🌟 4. 成功しても失敗しても、最後に必ずローディングをOFFにする
+      setIsSaving(false);
     }
-
-    onClose();
-    setTimeout(() => {
-      setScheduleData(newData);
-      setHasUnsavedChanges(true);
-    }, 300);
   };
+
   const handleDeletePress = () => {
     if (selectedItem && selectedItem.repeatType) {
       Alert.alert("繰り返しの削除", "この予定をどのように削除しますか？", [
@@ -719,60 +741,76 @@ export default function ScheduleModal({
   const executeDelete = async (mode: "normal" | "all" | "single") => {
     if (!selectedItem) return;
 
-    // 🌟 追加：アプリから消す前に、外部カレンダーからも予定を消す
-    if (selectedItem.externalEventId) {
-      try {
-        await Calendar.deleteEventAsync(selectedItem.externalEventId);
-      } catch (e) { }
-    }
+    // 🌟 ガード1：連打防止
+    if (isSaving) return;
 
-    const newData = { ...scheduleData };
+    setIsSaving(true); // 🌟 ローディング開始
 
-    if (mode === "single") {
-      Object.keys(newData).forEach((d) => {
-        newData[d] = newData[d].map((i: ScheduleItem) => {
-          if (i.id === selectedItem.id) {
-            return {
-              ...i,
-              exceptionDates: [...(i.exceptionDates || []), selectedDate],
-            };
-          }
-          return i;
-        });
-      });
-    } else {
-      if (selectedItem.notificationIds) {
-        for (const id of selectedItem.notificationIds)
-          await cancelItemNotification(id);
-      }
-      if (selectedItem.subTasks) {
-        for (const task of selectedItem.subTasks) {
-          if (task.notificationId)
-            await cancelItemNotification(task.notificationId);
-        }
-      }
+    try {
 
-      const isShared =
-        selectedItem.tags?.includes("共有") || selectedItem.tag === "共有";
-      if (isShared) {
+      // 🌟 追加：アプリから消す前に、外部カレンダーからも予定を消す
+      if (selectedItem.externalEventId) {
         try {
-          await deleteDoc(doc(db, "shared_schedules", selectedItem.id));
-        } catch (e) {
-          console.error("共有データ削除エラー:", e);
-        }
-      } else {
-        Object.keys(newData).forEach((d) => {
-          newData[d] = newData[d].filter(
-            (i: ScheduleItem) => i.id !== selectedItem.id,
-          );
-        });
+          await Calendar.deleteEventAsync(selectedItem.externalEventId);
+        } catch (e) { }
       }
+
+      const newData = { ...scheduleData };
+
+      if (mode === "single") {
+        Object.keys(newData).forEach((d) => {
+          newData[d] = newData[d].map((i: ScheduleItem) => {
+            if (i.id === selectedItem.id) {
+              return {
+                ...i,
+                exceptionDates: [...(i.exceptionDates || []), selectedDate],
+              };
+            }
+            return i;
+          });
+        });
+      } else {
+        if (selectedItem.notificationIds) {
+          for (const id of selectedItem.notificationIds)
+            await cancelItemNotification(id);
+        }
+        if (selectedItem.subTasks) {
+          for (const task of selectedItem.subTasks) {
+            if (task.notificationId)
+              await cancelItemNotification(task.notificationId);
+          }
+        }
+
+        const isShared =
+          selectedItem.tags?.includes("共有") || selectedItem.tag === "共有";
+        if (isShared) {
+          try {
+            await deleteDoc(doc(db, "shared_schedules", selectedItem.id));
+          } catch (e) {
+            console.error("共有データ削除エラー:", e);
+          }
+        } else {
+          Object.keys(newData).forEach((d) => {
+            newData[d] = newData[d].filter(
+              (i: ScheduleItem) => i.id !== selectedItem.id,
+            );
+          });
+        }
+      }
+      onClose();
+      setTimeout(() => {
+        setScheduleData(newData);
+        setHasUnsavedChanges(true);
+      }, 300);
+
+    } catch (error) {
+      // 🌟 ガード2：エラーハンドリング
+      console.error("Delete Error:", error);
+      Alert.alert("削除エラー", "削除中に問題が発生しました。もう一度お試しください。");
+    } finally {
+      // 🌟 ガード3：必ず解除
+      setIsSaving(false);
     }
-    onClose();
-    setTimeout(() => {
-      setScheduleData(newData);
-      setHasUnsavedChanges(true);
-    }, 300);
   };
 
   const timeAndTagSection = useMemo(() => {
@@ -1132,15 +1170,18 @@ export default function ScheduleModal({
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                          style={[
-                            styles.simpleLargeSaveBtn,
-                            { backgroundColor: uiThemeColor },
-                          ]}
                           onPress={handleSavePress}
+                          disabled={isSaving} // 🌟 保存中はボタンを無効化
+                          style={[
+                            styles.saveBtn,
+                            { backgroundColor: isSaving ? "#C7C7CC" : uiThemeColor }, // 🌟 保存中はグレーにする
+                          ]}
                         >
-                          <Text style={styles.simpleLargeSaveBtnText}>
-                            保存して閉じる
-                          </Text>
+                          {isSaving ? (
+                            <ActivityIndicator size="small" color="#FFF" /> // 🌟 スピナーを表示
+                          ) : (
+                            <Text style={styles.saveBtnText}>保存して閉じる</Text>
+                          )}
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -1426,10 +1467,13 @@ export default function ScheduleModal({
                         {selectedItem && (
                           <TouchableOpacity
                             onPress={handleDeletePress}
+                            // 🌟 保存中（削除中）はボタンを無効化
+                            disabled={isSaving}
                             style={{
                               width: "100%",
                               paddingVertical: 16,
-                              backgroundColor: "#FF3B3015",
+                              // 🌟 削除中ならもっと薄いグレーにする
+                              backgroundColor: isSaving ? "#E5E5EA" : "#FF3B3015",
                               borderRadius: 16,
                               alignItems: "center",
                               marginTop: 10,
@@ -1437,8 +1481,17 @@ export default function ScheduleModal({
                               justifyContent: "center",
                             }}
                           >
-                            <Ionicons name="trash-outline" size={18} color="#FF3B30" style={{ marginRight: 6 }} />
-                            <Text style={{ color: "#FF3B30", fontSize: 16, fontWeight: "bold" }}>この予定を削除する</Text>
+                            {isSaving ? (
+                              // 🌟 削除中も「くるくる」を表示
+                              <ActivityIndicator size="small" color="#FF3B30" />
+                            ) : (
+                              <>
+                                <Ionicons name="trash-outline" size={18} color="#FF3B30" style={{ marginRight: 6 }} />
+                                <Text style={{ color: "#FF3B30", fontSize: 16, fontWeight: "bold" }}>
+                                  この予定を削除する
+                                </Text>
+                              </>
+                            )}
                           </TouchableOpacity>
                         )}
                       </View>

@@ -1,21 +1,20 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { SubTask } from "../../../../types"; // 🌟 パス調整
+import { ScheduleFormData, SubTask } from "../../../../types"; // 🌟 ScheduleFormData を追加
 import { styles } from "./ScheduleModal.styles";
-import { SubTaskItem } from "./SubTaskItem"; // 🌟 分離したコンポーネントをインポート
+import { SubTaskItem } from "./SubTaskItem";
 
 interface SubTaskSectionProps {
   showSubTasks: boolean;
   setShowSubTasks: (val: boolean) => void;
   subTasks: SubTask[];
-  setSubTasks: any; // 🌟 状態更新関数
+  setSubTasks: any; 
   uiThemeColor: string;
   selectedDate: string;
   currentQuickTags: string[];
-  updateForm: (updates: any) => void;
+  updateForm: (updates: Partial<ScheduleFormData>) => void; // 🌟 anyを修正
 }
-
 export const SubTaskSection = React.memo(
   ({
     showSubTasks,

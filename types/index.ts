@@ -69,3 +69,22 @@ export interface LayerMaster {
 export interface ScheduleData {
   [dateString: string]: ScheduleItem[];
 }
+
+export interface ScheduleFormData {
+  title: string;
+  amount: string;
+  isEvent: boolean;
+  isTodo: boolean;
+  isExpense: boolean;
+  tag: string;
+  tagColor: string;
+  category: string;
+  isAllDay: boolean;
+  repeatType: "none" | "daily" | "weekly" | "monthly" | "custom";
+  repeatDays: number[];
+  repeatInterval: number;
+  startDate: Date;
+  endDate: Date;
+  startTime: Date;
+  endTime: Date;
+}
