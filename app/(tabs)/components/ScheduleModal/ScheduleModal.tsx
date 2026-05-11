@@ -257,6 +257,8 @@ export default function ScheduleModal({
       const def = layers.length > 0 ? layers[0] : "生活";
 
       if (selectedItem) {
+        setIsSimpleMode(false);
+
         // 🌟 先に時間のパース（変換）だけやっておく
         const parsedStartTime = new Date();
         if (selectedItem.startTime) {
@@ -329,6 +331,8 @@ export default function ScheduleModal({
         // ==========================================
         // 🌟 新規作成時（elseの中身）も一撃でリセット！
         // ==========================================
+        setIsSimpleMode(true);
+
         updateForm({
           title: "",
           amount: "",
@@ -1236,7 +1240,19 @@ export default function ScheduleModal({
                       <View style={styles.simpleBottomActions}>
                         <TouchableOpacity
                           style={styles.simpleDetailLink}
-                          onPress={() => setIsSimpleMode(false)}
+                          onPress={() => {
+                            Haptics.impactAsync(
+                              Haptics.ImpactFeedbackStyle.Light,
+                            );
+
+                            // 🌟 魔法の修正1：先にキーボードを閉じて、アニメーションの衝突を防ぐ！
+                            Keyboard.dismiss();
+
+                            // 🌟 0.15秒（キーボードが下がる時間）だけ待ってから、重い詳細画面を描画する
+                            setTimeout(() => {
+                              setIsSimpleMode(false);
+                            }, 150);
+                          }}
                         >
                           <Text
                             style={[
