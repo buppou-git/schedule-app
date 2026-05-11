@@ -36,7 +36,10 @@ export const AccountSection = React.memo(
       try {
         await GoogleSignin.hasPlayServices();
         const response = await GoogleSignin.signIn();
-        const typedResponse = response as { data?: { idToken: string | null }, idToken?: string | null };
+        const typedResponse = response as {
+          data?: { idToken: string | null };
+          idToken?: string | null;
+        };
         const id_token = typedResponse.data?.idToken || typedResponse.idToken;
 
         if (id_token && auth.currentUser) {
@@ -48,7 +51,8 @@ export const AccountSection = React.memo(
               "連携完了",
               "アカウントと紐付けられ、データが保護されました。",
             );
-          } catch (linkError: unknown) { // 🌟 unknown に変更
+          } catch (linkError: unknown) {
+            // 🌟 unknown に変更
             const err = linkError as { code?: string }; // 🌟 エラーコードを取り出す準備
             if (err.code === "auth/credential-already-in-use") {
               Alert.alert(
@@ -68,7 +72,10 @@ export const AccountSection = React.memo(
                           "引き継ぎました！「クラウドからデータを復元」を押してください。",
                         );
                       } catch (error: unknown) {
-                        Alert.alert("エラー", "引き継ぎに失敗しました。もう一度連携ボタンを押してください。");
+                        Alert.alert(
+                          "エラー",
+                          "引き継ぎに失敗しました。もう一度連携ボタンを押してください。",
+                        );
                       } finally {
                         setIsLinking(false);
                       }
@@ -82,11 +89,15 @@ export const AccountSection = React.memo(
             }
           }
         }
-      } catch (error: unknown) { // 🌟 unknown に変更
+      } catch (error: unknown) {
+        // 🌟 unknown に変更
         const err = error as { code?: string };
         if (err.code !== "ASYNC_OP_IN_PROGRESS") {
           console.error("Google login error:", err); // 🌟 エラー本体ではなくerrを出力
-          Alert.alert("エラー", "アカウント連携をキャンセル、または失敗しました。");
+          Alert.alert(
+            "エラー",
+            "アカウント連携をキャンセル、または失敗しました。",
+          );
         }
       } finally {
         setIsLinking(false);
@@ -97,26 +108,27 @@ export const AccountSection = React.memo(
     const handleAppleSignIn = useCallback(async () => {
       setIsLinking(true);
       try {
-        // --- 🌟 ここから追加 ---
-        // 1. Nonce（推測不可能なランダムな文字列）を作成
-        const rawNonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-        // 2. 作成したNonceをSHA256でハッシュ化（Appleに渡す用）
-        const hashedNonce = CryptoJS.SHA256(rawNonce).toString(CryptoJS.enc.Hex);
-        // --- 🌟 ここまで追加 ---
+        // 1. 初回のNonce作成
+        const rawNonce =
+          Math.random().toString(36).substring(2, 15) +
+          Math.random().toString(36).substring(2, 15);
+        const hashedNonce = CryptoJS.SHA256(rawNonce).toString(
+          CryptoJS.enc.Hex,
+        );
 
         const credential = await AppleAuthentication.signInAsync({
           requestedScopes: [
             AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
             AppleAuthentication.AppleAuthenticationScope.EMAIL,
           ],
-          nonce: hashedNonce, // 🌟 3. Appleにハッシュ化したNonceを渡す
+          nonce: hashedNonce,
         });
 
         if (credential.identityToken && auth.currentUser) {
           const provider = new OAuthProvider("apple.com");
           const firebaseCredential = provider.credential({
             idToken: credential.identityToken,
-            rawNonce: rawNonce, // 🌟 4. Firebaseには「元のNonce」を渡す（裏で照合されます）
+            rawNonce: rawNonce,
           });
 
           try {
@@ -126,7 +138,7 @@ export const AccountSection = React.memo(
               "連携完了",
               "Appleアカウントと紐付けられ、データが保護されました。",
             );
-          } catch (linkError: unknown) { // 🌟 unknown に変更
+          } catch (linkError: unknown) {
             const err = linkError as { code?: string };
             if (err.code === "auth/credential-already-in-use") {
               Alert.alert(
@@ -139,14 +151,51 @@ export const AccountSection = React.memo(
                     onPress: async () => {
                       setIsLinking(true);
                       try {
-                        await signInWithCredential(auth, firebaseCredential);
-                        setIsAnonymous(false); // 🌟 引き継ぎ成功時に親の State を更新
-                        Alert.alert(
-                          "完了",
-                          "引き継ぎました！「クラウドからデータを復元」を押してください。",
-                        );
+                        // 🌟 重要：引き継ぎ（再ログイン）用にもう一度「新品のNonce」と「新品のトークン」を取得する
+                        const newRawNonce =
+                          Math.random().toString(36).substring(2, 15) +
+                          Math.random().toString(36).substring(2, 15);
+                        const newHashedNonce = CryptoJS.SHA256(
+                          newRawNonce,
+                        ).toString(CryptoJS.enc.Hex);
+
+                        const newCredential =
+                          await AppleAuthentication.signInAsync({
+                            requestedScopes: [
+                              AppleAuthentication.AppleAuthenticationScope
+                                .FULL_NAME,
+                              AppleAuthentication.AppleAuthenticationScope
+                                .EMAIL,
+                            ],
+                            nonce: newHashedNonce,
+                          });
+
+                        if (newCredential.identityToken) {
+                          // 新しいトークンでクレデンシャルを再作成
+                          const newFirebaseCredential = provider.credential({
+                            idToken: newCredential.identityToken,
+                            rawNonce: newRawNonce,
+                          });
+
+                          // 新しいクレデンシャルでサインインを実行
+                          await signInWithCredential(
+                            auth,
+                            newFirebaseCredential,
+                          );
+                          setIsAnonymous(false);
+                          Alert.alert(
+                            "完了",
+                            "引き継ぎました！「クラウドからデータを復元」を押してください。",
+                          );
+                        }
                       } catch (error: unknown) {
-                        Alert.alert("引き継ぎエラー", "Appleの認証期限が切れました。もう一度「Appleでデータを保護」を押して引き継ぎを実行してください。");
+                        const signInErr = error as { code?: string };
+                        if (signInErr.code !== "ERR_CANCELED") {
+                          Alert.alert(
+                            "引き継ぎエラー",
+                            "再認証に失敗しました。もう一度お試しください。",
+                          );
+                        }
                       } finally {
                         setIsLinking(false);
                       }
@@ -155,16 +204,14 @@ export const AccountSection = React.memo(
                 ],
               );
             } else {
-              console.error("Apple link error:", linkError);
               Alert.alert("エラー", "アカウント連携に失敗しました。");
             }
           }
         }
-      } catch (error: unknown) { // 🌟 unknown に変更
+      } catch (error: unknown) {
         const err = error as { code?: string };
         if (err.code !== "ERR_CANCELED") {
-          console.error("Apple login error:", err);
-          Alert.alert("エラー", "アカウント連携をキャンセル、または失敗しました。");
+          Alert.alert("エラー", "キャンセル、または失敗しました。");
         }
       } finally {
         setIsLinking(false);

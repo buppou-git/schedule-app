@@ -119,7 +119,9 @@ export default function BudgetDashboard({
   const screenWidth = Dimensions.get("window").width;
   const currentActiveLayer = activeTags.length === 1 ? activeTags[0] : null;
   const themeColor = currentActiveLayer
-    ? layerMaster[currentActiveLayer]
+    ? currentActiveLayer === "外部予定" // 🌟 外部予定なら赤！
+      ? "#FF2D55"
+      : layerMaster[currentActiveLayer]
     : "#1C1C1E";
 
   const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
@@ -468,14 +470,14 @@ export default function BudgetDashboard({
       newList = wishlist.map((w) =>
         w.id === editingWishId
           ? {
-            ...w,
-            name: newWishName.trim(),
-            targetAmount,
-            icon: newWishIcon,
-            color: newWishColor,
-            autoDepositEnabled: newWishAutoDeposit,
-            autoDepositAmount: autoAmount,
-          }
+              ...w,
+              name: newWishName.trim(),
+              targetAmount,
+              icon: newWishIcon,
+              color: newWishColor,
+              autoDepositEnabled: newWishAutoDeposit,
+              autoDepositAmount: autoAmount,
+            }
           : w,
       );
     } else {
@@ -656,9 +658,9 @@ export default function BudgetDashboard({
         updatedWishlist = updatedWishlist.map((w) =>
           w.id === id
             ? {
-              ...w,
-              savedAmount: Math.min(w.targetAmount, w.savedAmount + amount),
-            }
+                ...w,
+                savedAmount: Math.min(w.targetAmount, w.savedAmount + amount),
+              }
             : w,
         );
       }
@@ -772,7 +774,9 @@ export default function BudgetDashboard({
     let otherActual = 0;
     let otherBudget = 0;
 
-    const layers = [...Object.keys(layerMaster), "共通"];
+    const layers = Array.from(
+      new Set([...Object.keys(layerMaster), "共通", "外部予定"]),
+    );
     layers.forEach((l) => {
       if (layerBudgetEnabled[l] === false) return;
       const actual = layerActuals[l] || 0;
@@ -781,7 +785,13 @@ export default function BudgetDashboard({
 
       if (isMatched) {
         segments.push({
-          color: l === "共通" ? "#8E8E93" : layerMaster[l],
+          // 🌟 修正：外部予定なら赤色にする！
+          color:
+            l === "外部予定"
+              ? "#FF2D55"
+              : l === "共通"
+                ? "#8E8E93"
+                : layerMaster[l],
           actual,
           budget,
         });
@@ -850,7 +860,10 @@ export default function BudgetDashboard({
           <Text style={[styles.settingLabel, { marginTop: 10 }]}>
             予算スライダーの表示切替
           </Text>
-          {[...Object.keys(layerMaster), "共通"].map((l) => (
+          {/* 🌟 修正：ループの対象に "外部予定" を追加 */}
+          {Array.from(
+            new Set([...Object.keys(layerMaster), "共通", "外部予定"]),
+          ).map((l) => (
             <View key={l} style={styles.settingSwitchRow}>
               <Text style={styles.settingSwitchLabel}>{l}</Text>
               <Switch
@@ -865,7 +878,9 @@ export default function BudgetDashboard({
                 }}
                 trackColor={{
                   false: "#E5E5EA",
-                  true: layerMaster[l] || "#8E8E93",
+                  // 🌟 修正：外部予定のスイッチを赤にする
+                  true:
+                    l === "外部予定" ? "#FF2D55" : layerMaster[l] || "#8E8E93",
                 }}
               />
             </View>
@@ -1200,10 +1215,12 @@ export default function BudgetDashboard({
                           : !currentActiveLayer && chartGroupBy === "layer"
                             ? key === "共通"
                               ? "#8E8E93"
-                              : layerMaster[key] ||
-                              CHART_PALETTE[index % CHART_PALETTE.length]
+                              : key === "外部予定" // 🌟 ここを追加！
+                                ? "#FF2D55"
+                                : layerMaster[key] ||
+                                  CHART_PALETTE[index % CHART_PALETTE.length]
                             : tagMaster[key]?.color ||
-                            CHART_PALETTE[index % CHART_PALETTE.length],
+                              CHART_PALETTE[index % CHART_PALETTE.length],
                       legendFontColor: "#666",
                       legendFontSize: 11,
                     }))}
@@ -1349,14 +1366,18 @@ export default function BudgetDashboard({
                   </View>
                   <View style={styles.divider} />
 
-                  {Object.keys(layerMaster).map((l) => {
+                  {/* 🌟 修正：ループの対象に "外部予定" を含める */}
+                  {Array.from(
+                    new Set([...Object.keys(layerMaster), "外部予定"]),
+                  ).map((l) => {
                     if (layerBudgetEnabled[l] === false) return null;
                     if (activeTags.length > 0 && !activeTags.includes(l))
                       return null;
 
                     const b = layerBudgets[l] || 0;
                     const a = layerActuals[l] || 0;
-                    const color = layerMaster[l];
+                    // 🌟 修正：外部予定ならテーマカラーを赤にする
+                    const color = l === "外部予定" ? "#FF2D55" : layerMaster[l];
                     const limit =
                       b + Math.max(0, globalBudgetCalc.unallocatedBuffer);
                     const layerSubTags = Object.keys(tagMaster).filter(
@@ -1569,7 +1590,14 @@ export default function BudgetDashboard({
                     (() => {
                       let otherB = 0;
                       let otherA = 0;
-                      [...Object.keys(layerMaster), "共通"].forEach((l) => {
+                      // 🌟 修正：ここにも "外部予定" を含める
+                      Array.from(
+                        new Set([
+                          ...Object.keys(layerMaster),
+                          "共通",
+                          "外部予定",
+                        ]),
+                      ).forEach((l) => {
                         if (
                           !activeTags.includes(l) &&
                           layerBudgetEnabled[l] !== false
@@ -1922,8 +1950,11 @@ export default function BudgetDashboard({
                   style={[
                     styles.saveBtn,
                     {
+                      // 🌟 修正：外部予定なら赤にする
                       backgroundColor:
-                        layerMaster[targetLayerForSubTag] || themeColor,
+                        targetLayerForSubTag === "外部予定"
+                          ? "#FF2D55"
+                          : layerMaster[targetLayerForSubTag] || themeColor,
                     },
                   ]}
                   onPress={executeAddSubTag}
@@ -2099,7 +2130,7 @@ export default function BudgetDashboard({
                   {
                     justifyContent: "space-between",
                     marginTop: 20, // 少し余裕を持たせました
-                    alignItems: "center"
+                    alignItems: "center",
                   },
                 ]}
               >
@@ -2141,7 +2172,7 @@ export default function BudgetDashboard({
                       {
                         backgroundColor: newWishColor,
                         paddingHorizontal: 20,
-                      }
+                      },
                     ]}
                     onPress={executeAddWish}
                   >
