@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "633661996714",
+    "project_id": "multi-calendar-app-1379f",
+    "storage_bucket": "multi-calendar-app-1379f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:633661996714:android:dc213f8962367800765ad3",
+        "android_client_info": {
+          "package_name": "com.buppou.multicalendar"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "633661996714-j5cb16hjn156oeqf51pi384e0hh7b158.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBm4eL21x4xIOlakZk5olA1B2LRX-jXcRM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "633661996714-j5cb16hjn156oeqf51pi384e0hh7b158.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "633661996714-m1eoribajuqgbe5grrv3gpcco27peqrv.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.buppou.multicalendar"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
