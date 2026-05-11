@@ -42,9 +42,7 @@
         "expo-build-properties",
         {
           "ios": {
-            "deploymentTarget": "15.1",
-            "useModularHeaders": true
-        
+            "deploymentTarget": "15.1"
           }
         }
       ],
