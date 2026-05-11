@@ -43,8 +43,7 @@
         {
           "ios": {
             "deploymentTarget": "15.1",
-            "useModularHeaders": true,
-            "buildReactNativeFromSource": true
+            "useModularHeaders": true
           }
         }
       ],
