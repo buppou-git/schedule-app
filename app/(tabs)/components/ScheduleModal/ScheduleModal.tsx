@@ -1063,27 +1063,26 @@ export default function ScheduleModal({
                         </View>
                       </View>
 
-                      {/* 🌟 4. カテゴリ（レイヤー）選択エリア */}
+                      {/* 🌟 4. カレンダー（レイヤー）選択エリア */}
                       <View style={styles.simpleCategorySection}>
-                        <Text style={styles.simpleCategoryTitle}>カテゴリ</Text>
+                        <Text style={styles.simpleCategoryTitle}>
+                          カレンダー
+                        </Text>
                         <ScrollView
                           horizontal
                           showsHorizontalScrollIndicator={false}
                           style={{ width: "100%" }}
                         >
-                          {/* 🌟 修正：tagMaster ではなく layerMaster (大枠カテゴリ) をループさせる */}
                           {Object.keys(layerMaster)
                             .filter(
                               (name) => name !== "祝日" && name !== "外部予定",
                             )
                             .map((layerName) => {
-                              // 各カテゴリに設定された色を取得
                               const layerColor =
                                 layerMaster[layerName] || uiThemeColor;
 
-                              // 🌟 修正：formData.layer と比較して選択状態を判定
-                              const isSelected =
-                                formData.category === layerName;
+                              // 🟢 修正：formData.category ではなく、正しく selectedLayer と比較する！
+                              const isSelected = selectedLayer === layerName;
 
                               return (
                                 <TouchableOpacity
@@ -1101,12 +1100,13 @@ export default function ScheduleModal({
                                     Haptics.impactAsync(
                                       Haptics.ImpactFeedbackStyle.Light,
                                     );
-                                    // 🌟 修正：formData の layer を直接更新する
-                                    // これにより「デフォルト」に逃げるのを防ぎます
-                                    updateForm({
-                                      category: layerName,
-                                      isExpense: layerName === "家計簿",
-                                    });
+                                    // 🟢 修正：レイヤーを正しく切り替える！
+                                    setSelectedLayer(layerName);
+
+                                    // ※家計簿レイヤーを選んだら、ついでに支出ボタンをONにしてあげる
+                                    if (layerName === "家計簿") {
+                                      updateForm({ isExpense: true });
+                                    }
                                   }}
                                 >
                                   <Text
