@@ -481,6 +481,7 @@ export default function ScheduleModal({
     if (!formData.title)
       return Alert.alert("エラー", "タイトルを入力してください");
 
+    isSavingRef.current = true;
     setIsSaving(true); // 🌟 2. 保存開始！ローディングをONにする
 
     try {
