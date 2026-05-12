@@ -403,55 +403,7 @@ function IndexContent() {
     return itemTags.some((tag) => Object.keys(sharedRooms).includes(tag));
   };
 
-  const filteredData = useMemo(() => {
-    const filtered: { [date: string]: ScheduleItem[] } = {};
-    const localData = { ...scheduleData };
 
-    // 1. アプリ側で既に持っている外部イベントIDを収集（重複防止のため）
-    const ownedExternalIds = new Set<string>();
-    Object.values(scheduleData).forEach((dayItems) => {
-      dayItems.forEach((item) => {
-        if (item.externalEventId) ownedExternalIds.add(item.externalEventId);
-      });
-    });
-
-    // 2. 外部予定をマージ（既にアプリ内に存在するIDのものはスキップ）
-    const combined = { ...localData };
-    Object.keys(externalEvents).forEach((d) => {
-      const filteredExt = externalEvents[d].filter((extItem) => {
-        const rawId = extItem.id.replace("ext_", "");
-        return !ownedExternalIds.has(rawId);
-      });
-      combined[d] = [...(combined[d] || []), ...filteredExt];
-    });
-
-    // 3. フィルタリング実行
-    Object.keys(combined).forEach((d) => {
-      filtered[d] = combined[d].filter((item) => {
-        if (activeTags.length === 0) return true;
-
-        // 🌟 3. 色分けとレイヤーの適用（外部予定の判定）
-        let itemLayer = "共通";
-        // 🌟 最強の判定：IDが「ext_」から始まっているものだけを外部予定とする！
-        if (item.id && String(item.id).startsWith("ext_")) {
-          itemLayer = "外部予定";
-          item.color = "#FF2D55";
-        } else {
-          const itemTags =
-            item.tags && item.tags.length > 0
-              ? item.tags
-              : item.tag
-                ? [item.tag]
-                : [];
-          if (itemTags.length > 0) {
-            itemLayer = tagMaster[itemTags[0]]?.layer || "共通";
-          }
-        }
-        return activeTags.includes(itemLayer);
-      });
-    });
-    return filtered;
-  }, [scheduleData, externalEvents, activeTags, tagMaster]);
 
   // 🌟 追加・修正：通信を1回にまとめる「安全な移動・コピー」
   const handleMoveOrCopy = async (
@@ -825,13 +777,46 @@ function IndexContent() {
     syncToStorage();
   }, [layerMaster, tagMaster, presets, activeTags]);
 
+  // 🌟 修正：最強の軽量化版！無駄な再計算をゼロにする
+  const coloredScheduleData = useMemo(() => {
+    let hasAnyChange = false;
+    const nextData: { [date: string]: ScheduleItem[] } = {};
+
+    Object.keys(scheduleData).forEach((date) => {
+      let dateChanged = false;
+      const newItems = scheduleData[date].map((item) => {
+        const itemTag = item.tag || (item.tags && item.tags[0]);
+        // 常に最新の色を取得
+        const latestColor = itemTag && tagMaster[itemTag] ? tagMaster[itemTag].color : item.color;
+
+        // 🌟 ここが爆速化の鍵！「色が本当に変わった時」だけ新しいデータを作る
+        if (item.color !== latestColor) {
+          dateChanged = true;
+          return { ...item, color: latestColor };
+        }
+        return item; // 変わっていなければ、元のデータをそのまま使い回す！
+      });
+
+      if (dateChanged) {
+        nextData[date] = newItems;
+        hasAnyChange = true;
+      } else {
+        nextData[date] = scheduleData[date]; // 変わっていなければ、元の配列を使い回す！
+      }
+    });
+
+    // 🌟 1つも色の変更がなければ、大元の scheduleData をそのまま返す（これで再描画ラグがゼロになります）
+    return hasAnyChange ? nextData : scheduleData;
+  }, [scheduleData, tagMaster]);
+
   const displayData = useDisplayData(
-    scheduleData,
+    coloredScheduleData,
     externalEvents,
     roomSchedules,
     activeTags,
     tagMaster,
   );
+
 
   const { expandedScheduleData, currentMarkedDates } = useCalendarData(
     displayData,
