@@ -2284,6 +2284,12 @@ function IndexContent() {
           Alert.alert("保存完了", "支出情報を予定に紐付けました。");
         }}
       />
+
+      {/* 🌟 ここにテスト用の文字を挟み込む！ */}
+      <Text style={{ textAlign: "center", color: "red", fontWeight: "bold", padding: 10, fontSize: 16 }}>
+        🍎 アップデート成功テスト 🍎
+      </Text>
+      
       <View style={styles.adContainer}>
         <BannerAd
           unitId={TestIds.BANNER}
