@@ -218,7 +218,9 @@ function IndexContent() {
 
   const { scheduleData, setScheduleData, lastSyncedAt } = useScheduleManager();
 
-  const { externalEvents } = useExternalCalendar(selectedDate);
+  const [isExternalSyncEnabled, setIsExternalSyncEnabled] = useState(false);
+
+  const { externalEvents } = useExternalCalendar(selectedDate, isExternalSyncEnabled);
 
   const {
     layerMaster,
@@ -279,7 +281,7 @@ function IndexContent() {
 
   const [activeTags, setActiveTags] = useState<string[]>([]);
 
-  const [isExternalSyncEnabled, setIsExternalSyncEnabled] = useState(false);
+
 
   const [isAppReady, setIsAppReady] = useState(false);
 
@@ -2183,21 +2185,21 @@ function IndexContent() {
           </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       </Modal>
-      // index.tsx (1166行目付近〜)
-      {/* 🌟 変更：&& を外し、あらかじめ裏側に待機させておく（開くのが爆速になります） */}
-      <ScheduleModal
-        visible={modalVisible}
-        onClose={() => setModalVisible(false)}
-        selectedDate={selectedDate}
-        selectedItem={selectedItem}
-        activeMode={activeMode}
-        scheduleData={scheduleData}
-        setScheduleData={setScheduleData}
-        layerMaster={layerMaster}
-        tagMaster={tagMaster}
-        setTagMaster={setTagMaster}
-        setHasUnsavedChanges={setHasUnsavedChanges}
-      />
+      {modalVisible && (
+        <ScheduleModal
+          visible={modalVisible}
+          onClose={() => setModalVisible(false)}
+          selectedDate={selectedDate}
+          selectedItem={selectedItem}
+          activeMode={activeMode}
+          scheduleData={scheduleData}
+          setScheduleData={setScheduleData}
+          layerMaster={layerMaster}
+          tagMaster={tagMaster}
+          setTagMaster={setTagMaster}
+          setHasUnsavedChanges={setHasUnsavedChanges}
+        />
+      )}
       <LayerManagementModal
         visible={layerModalVisible}
         onClose={() => setLayerModalVisible(false)}

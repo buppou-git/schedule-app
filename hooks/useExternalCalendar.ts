@@ -1,17 +1,16 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'; // 🌟 追加
 import * as Calendar from 'expo-calendar';
 import { useEffect, useState } from 'react';
 import { ScheduleItem } from '../types';
 
-export function useExternalCalendar(selectedDate: string) {
+// 🌟 1. 引数に「isExternalSyncEnabled」を追加！
+export function useExternalCalendar(selectedDate: string, isExternalSyncEnabled: boolean) {
   const [externalEvents, setExternalEvents] = useState<{ [date: string]: ScheduleItem[] }>({});
 
   useEffect(() => {
     const fetchEvents = async () => {
       try {
-        // 🌟 追加：同期スイッチがONか確認する
-        const isSyncEnabled = await AsyncStorage.getItem("externalCalendarSync");
-        if (isSyncEnabled !== "true") {
+        // 🌟 2. AsyncStorageではなく、親から受け取ったフラグをそのまま使う！
+        if (!isExternalSyncEnabled) {
           setExternalEvents({}); // OFFなら空にする
           return;
         }
@@ -68,7 +67,8 @@ export function useExternalCalendar(selectedDate: string) {
     };
 
     fetchEvents();
-  }, [selectedDate]);
+  // 🌟 3. 監視配列（ここ！）に isExternalSyncEnabled を追加。これでON/OFFした瞬間に表示が切り替わります！
+  }, [selectedDate, isExternalSyncEnabled]);
 
   return { externalEvents };
 }

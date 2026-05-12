@@ -236,9 +236,10 @@ export default function ScheduleModal({
     useNotificationManager();
 
   const uiThemeColor = layerMaster[selectedLayer] || "#007AFF";
-
+  
   // 🌟 追加：保存処理中かどうかを判定するフラグ
   const [isSaving, setIsSaving] = useState(false);
+  const isSavingRef = useRef(false);
 
   // 🌟 追加：簡易モードの判定フラグ
   const [isSimpleMode, setIsSimpleMode] = useState(true);
@@ -467,7 +468,9 @@ export default function ScheduleModal({
   };
 
   const executeSave = async (mode: "normal" | "all" | "single") => {
-    if (isSaving) return; // 🌟 1. 保存中なら処理をブロック（二重押し防止）
+    
+    // 🌟 1. 保存中なら処理をブロック（光の速さのRefで二重押しを完全無効化！）
+    if (isSaving || isSavingRef.current) return;
 
     if (!formData.title)
       return Alert.alert("エラー", "タイトルを入力してください");
@@ -720,6 +723,9 @@ export default function ScheduleModal({
       // 外部カレンダー連携で返ってきたIDがあればセット
       let finalReturnedId = returnedId;
 
+      // 🌟 魔法の修正：IDの生成をReactのState更新の外に出す（二重生成バグの元凶を絶つ）
+      const newEventId = Date.now().toString();
+
       // 共有レイヤーのデータはFirebaseの onSnapshot が自動で画面を更新してくれるので、
       // 自分で scheduleData に突っ込むと「手動追加」と「自動受信」で2個に増殖してしまいます！
       // なので、共有じゃない（ローカルの）予定の時だけ setScheduleData を実行します。
@@ -747,7 +753,7 @@ export default function ScheduleModal({
               const newItem: ScheduleItem = {
                 ...selectedItem,
                 ...(itemData as Omit<ScheduleItem, "id">), // 型エラー防止のためキャスト
-                id: Date.now().toString(),
+                id: newEventId,
                 repeatType: undefined,
                 linkedMasterId: selectedItem.id,
                 externalEventId:
@@ -777,7 +783,7 @@ export default function ScheduleModal({
             nextData[sStr] = [
               ...nextData[sStr],
               {
-                id: Date.now().toString(),
+                id: newEventId,
                 ...(itemData as Omit<ScheduleItem, "id">),
                 externalEventId: finalReturnedId,
               } as ScheduleItem,
@@ -800,6 +806,7 @@ export default function ScheduleModal({
       );
     } finally {
       // 🌟 4. 成功しても失敗しても、最後に必ずローディングをOFFにする
+      isSavingRef.current = false;
       setIsSaving(false);
     }
   };
