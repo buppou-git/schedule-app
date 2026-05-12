@@ -235,14 +235,14 @@ export default function ScheduleModal({
   const { scheduleItemNotification, cancelItemNotification } =
     useNotificationManager();
 
-    const uiThemeColor = useMemo(() => {
-      const selectedTag = formData.tag.trim();
-      if (selectedTag && tagMaster[selectedTag]) {
-        return tagMaster[selectedTag].color; 
-      }
-      return layerMaster[selectedLayer] || "#007AFF"; 
-    }, [formData.tag, selectedLayer, layerMaster, tagMaster]);
-  
+  const uiThemeColor = useMemo(() => {
+    const selectedTag = formData.tag.trim();
+    if (selectedTag && tagMaster[selectedTag]) {
+      return tagMaster[selectedTag].color;
+    }
+    return layerMaster[selectedLayer] || "#007AFF";
+  }, [formData.tag, selectedLayer, layerMaster, tagMaster]);
+
   // 🌟 追加：保存処理中かどうかを判定するフラグ
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
@@ -474,7 +474,7 @@ export default function ScheduleModal({
   };
 
   const executeSave = async (mode: "normal" | "all" | "single") => {
-    
+
     // 🌟 1. 保存中なら処理をブロック（光の速さのRefで二重押しを完全無効化！）
     if (isSaving || isSavingRef.current) return;
 
@@ -703,21 +703,21 @@ export default function ScheduleModal({
       const startForExport = formData.isAllDay
         ? formData.startDate
         : new Date(
-            formData.startDate.getFullYear(),
-            formData.startDate.getMonth(),
-            formData.startDate.getDate(),
-            formData.startTime.getHours(),
-            formData.startTime.getMinutes(),
-          );
+          formData.startDate.getFullYear(),
+          formData.startDate.getMonth(),
+          formData.startDate.getDate(),
+          formData.startTime.getHours(),
+          formData.startTime.getMinutes(),
+        );
       const endForExport = formData.isAllDay
         ? formData.endDate
         : new Date(
-            formData.endDate.getFullYear(),
-            formData.endDate.getMonth(),
-            formData.endDate.getDate(),
-            formData.endTime.getHours(),
-            formData.endTime.getMinutes(),
-          );
+          formData.endDate.getFullYear(),
+          formData.endDate.getMonth(),
+          formData.endDate.getDate(),
+          formData.endTime.getHours(),
+          formData.endTime.getMinutes(),
+        );
 
       const returnedId = await exportToStandardCalendar(
         formData.title,
@@ -733,90 +733,94 @@ export default function ScheduleModal({
       // 🌟 魔法の修正：IDの生成をReactのState更新の外に出す（二重生成バグの元凶を絶つ）
       const newEventId = Date.now().toString();
 
-      // 共有レイヤーのデータはFirebaseの onSnapshot が自動で画面を更新してくれるので、
-      // 自分で scheduleData に突っ込むと「手動追加」と「自動受信」で2個に増殖してしまいます！
-      // なので、共有じゃない（ローカルの）予定の時だけ setScheduleData を実行します。
+      // 🌟 修正1：重いデータ更新の【前】に、まずモーダルを爆速で閉じる！
+      onClose();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      if (!isShared) {
-        // 🌟 ここから「関数型」で即時更新！(Record型を使ってanyを回避)
-        setScheduleData((prevData: Record<string, ScheduleItem[]>) => {
-          const nextData = { ...prevData }; // 🌟 最新の状態をコピー
+      // 🌟 修正2：画面が閉じるアニメーション（約0.3秒）が終わった後の「暇な時間」に重い再描画を走らせる
+      InteractionManager.runAfterInteractions(() => {
+        if (!isShared) {
+          setScheduleData((prevData: Record<string, ScheduleItem[]>) => {
+            const nextData = { ...prevData };
 
-          if (selectedItem) {
-            if (mode === "single") {
-              Object.keys(nextData).forEach((d) => {
-                nextData[d] = nextData[d].map((i) =>
-                  i.id === selectedItem.id
-                    ? {
+            if (selectedItem) {
+              if (mode === "single") {
+                Object.keys(nextData).forEach((d) => {
+                  nextData[d] = nextData[d].map((i) =>
+                    i.id === selectedItem.id
+                      ? {
                         ...i,
                         exceptionDates: [
                           ...(i.exceptionDates || []),
                           selectedDate,
                         ],
                       }
-                    : i,
-                );
-              });
-              const newItem: ScheduleItem = {
-                ...selectedItem,
-                ...(itemData as Omit<ScheduleItem, "id">), // 型エラー防止のためキャスト
-                id: newEventId,
-                repeatType: undefined,
-                linkedMasterId: selectedItem.id,
-                externalEventId:
-                  finalReturnedId || selectedItem.externalEventId,
-              };
-              if (!nextData[sStr]) nextData[sStr] = [];
-              nextData[sStr] = [...nextData[sStr], newItem];
+                      : i,
+                  );
+                });
+                const newItem: ScheduleItem = {
+                  ...selectedItem,
+                  ...(itemData as Omit<ScheduleItem, "id">),
+                  id: newEventId,
+                  repeatType: undefined,
+                  linkedMasterId: selectedItem.id,
+                  externalEventId:
+                    finalReturnedId || selectedItem.externalEventId,
+                };
+                if (!nextData[sStr]) nextData[sStr] = [];
+                nextData[sStr] = [...nextData[sStr], newItem];
+              } else {
+                Object.keys(nextData).forEach((d) => {
+                  nextData[d] = nextData[d].filter(
+                    (i) => i.id !== selectedItem.id,
+                  );
+                });
+                if (!nextData[sStr]) nextData[sStr] = [];
+                nextData[sStr] = [
+                  ...nextData[sStr],
+                  {
+                    ...selectedItem,
+                    ...(itemData as Omit<ScheduleItem, "id">),
+                    externalEventId:
+                      finalReturnedId || selectedItem.externalEventId,
+                  } as ScheduleItem,
+                ];
+              }
             } else {
-              Object.keys(nextData).forEach((d) => {
-                nextData[d] = nextData[d].filter(
-                  (i) => i.id !== selectedItem.id,
-                );
-              });
               if (!nextData[sStr]) nextData[sStr] = [];
               nextData[sStr] = [
                 ...nextData[sStr],
                 {
-                  ...selectedItem,
+                  id: newEventId,
                   ...(itemData as Omit<ScheduleItem, "id">),
-                  externalEventId:
-                    finalReturnedId || selectedItem.externalEventId,
+                  externalEventId: finalReturnedId,
                 } as ScheduleItem,
               ];
             }
-          } else {
-            if (!nextData[sStr]) nextData[sStr] = [];
-            nextData[sStr] = [
-              ...nextData[sStr],
-              {
-                id: newEventId,
-                ...(itemData as Omit<ScheduleItem, "id">),
-                externalEventId: finalReturnedId,
-              } as ScheduleItem,
-            ];
-          }
 
-          return nextData;
-        });
-      }
+            return nextData;
+          });
+        }
 
-      setHasUnsavedChanges(true);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      onClose(); // 🌟 データの更新命令を出した直後に画面を閉じる
+        setHasUnsavedChanges(true);
+        // 🌟 修正3：finallyの中にあったバリア解除処理をここに移動
+        isSavingRef.current = false;
+        setIsSaving(false);
+      });
+
     } catch (error) {
-      // 🌟 3. 万が一のエラーをキャッチしてユーザーに伝える
       console.error("Save Error:", error);
       Alert.alert(
         "保存エラー",
         "予定の保存に失敗しました。通信環境を確認してください。",
       );
-    } finally {
-      // 🌟 4. 成功しても失敗しても、最後に必ずローディングをOFFにする
+      // エラー時も確実にバリアを解除
       isSavingRef.current = false;
       setIsSaving(false);
     }
   };
+
+
 
   const handleDeletePress = () => {
     if (selectedItem && selectedItem.repeatType) {
@@ -832,35 +836,19 @@ export default function ScheduleModal({
 
   const executeDelete = async (mode: "normal" | "all" | "single") => {
     if (!selectedItem) return;
+    if (isSaving || isSavingRef.current) return;
 
-    // 🌟 ガード1：連打防止
-    if (isSaving) return;
-
-    setIsSaving(true); // 🌟 ローディング開始
+    isSavingRef.current = true;
+    setIsSaving(true);
 
     try {
-      // 🌟 追加：アプリから消す前に、外部カレンダーからも予定を消す
       if (selectedItem.externalEventId) {
         try {
           await Calendar.deleteEventAsync(selectedItem.externalEventId);
-        } catch (e) {}
+        } catch (e) { }
       }
 
-      const newData = { ...scheduleData };
-
-      if (mode === "single") {
-        Object.keys(newData).forEach((d) => {
-          newData[d] = newData[d].map((i: ScheduleItem) => {
-            if (i.id === selectedItem.id) {
-              return {
-                ...i,
-                exceptionDates: [...(i.exceptionDates || []), selectedDate],
-              };
-            }
-            return i;
-          });
-        });
-      } else {
+      if (mode !== "single") {
         if (selectedItem.notificationIds) {
           for (const id of selectedItem.notificationIds)
             await cancelItemNotification(id);
@@ -871,42 +859,62 @@ export default function ScheduleModal({
               await cancelItemNotification(task.notificationId);
           }
         }
-
-        const isShared =
-          selectedItem.tags?.includes("共有") || selectedItem.tag === "共有";
+        const isShared = selectedItem.tags?.includes("共有") || selectedItem.tag === "共有";
         if (isShared) {
           try {
             await deleteDoc(doc(db, "shared_schedules", selectedItem.id));
           } catch (e) {
             console.error("共有データ削除エラー:", e);
           }
-        } else {
-          // 🌟 関数型アップデートで「確実に今のデータから消す」 (Record型を使用)
-          setScheduleData((prevData: Record<string, ScheduleItem[]>) => {
-            const nextData = { ...prevData };
-            Object.keys(nextData).forEach((d) => {
-              nextData[d] = nextData[d].filter(
-                (i: ScheduleItem) => i.id !== selectedItem.id,
-              );
-            });
-            return nextData;
-          });
         }
       }
 
-      setHasUnsavedChanges(true);
+      // 🌟 修正1：先にモーダルを爆速で閉じる！
+      onClose();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      onClose(); // 🌟 消した直後に閉じる
+
+      // 🌟 修正2：画面が閉じた裏側でデータを削除する
+      InteractionManager.runAfterInteractions(() => {
+        const isShared = selectedItem.tags?.includes("共有") || selectedItem.tag === "共有";
+
+        if (!isShared || mode === "single") {
+          setScheduleData((prevData: Record<string, ScheduleItem[]>) => {
+            const nextData = { ...prevData };
+            if (mode === "single") {
+              Object.keys(nextData).forEach((d) => {
+                nextData[d] = nextData[d].map((i: ScheduleItem) => {
+                  if (i.id === selectedItem.id) {
+                    return {
+                      ...i,
+                      exceptionDates: [...(i.exceptionDates || []), selectedDate],
+                    };
+                  }
+                  return i;
+                });
+              });
+            } else {
+              Object.keys(nextData).forEach((d) => {
+                nextData[d] = nextData[d].filter(
+                  (i: ScheduleItem) => i.id !== selectedItem.id,
+                );
+              });
+            }
+            return nextData;
+          });
+        }
+
+        setHasUnsavedChanges(true);
+        isSavingRef.current = false;
+        setIsSaving(false);
+      });
+
     } catch (error: unknown) {
-      // 🌟 ついでにここも unknown にして型安全に！
-      // 🌟 ガード2：エラーハンドリング
       console.error("Delete Error:", error);
       Alert.alert(
         "削除エラー",
         "削除中に問題が発生しました。もう一度お試しください。",
       );
-    } finally {
-      // 🌟 ガード3：必ず解除
+      isSavingRef.current = false;
       setIsSaving(false);
     }
   };
@@ -1486,19 +1494,19 @@ export default function ScheduleModal({
 
                           {(formData.isAllDay
                             ? [
-                                { label: "当日の朝(7:00)", value: "morning" },
-                                { label: "前日", value: "dayBefore" },
-                                { label: "2日前", value: "2daysBefore" },
-                                { label: "カスタム", value: "custom" },
-                              ]
+                              { label: "当日の朝(7:00)", value: "morning" },
+                              { label: "前日", value: "dayBefore" },
+                              { label: "2日前", value: "2daysBefore" },
+                              { label: "カスタム", value: "custom" },
+                            ]
                             : [
-                                { label: "ちょうど", value: "exact" },
-                                { label: "10分前", value: "10min" },
-                                { label: "30分前", value: "30min" },
-                                { label: "1時間前", value: "1hour" },
-                                { label: "当日の朝", value: "morning" },
-                                { label: "カスタム", value: "custom" },
-                              ]
+                              { label: "ちょうど", value: "exact" },
+                              { label: "10分前", value: "10min" },
+                              { label: "30分前", value: "30min" },
+                              { label: "1時間前", value: "1hour" },
+                              { label: "当日の朝", value: "morning" },
+                              { label: "カスタム", value: "custom" },
+                            ]
                           ).map((opt) => {
                             const isSelected = selectedReminders.includes(
                               opt.value,

@@ -25,9 +25,10 @@ export function useExternalCalendar(selectedDate: string, isExternalSyncEnabled:
         const calendarColorMap: { [id: string]: string } = {};
         calendars.forEach(c => { calendarColorMap[c.id] = c.color; });
 
-        const targetDate = new Date(selectedDate);
-        const startDate = new Date(targetDate.getFullYear(), targetDate.getMonth() - 1, 1);
-        const endDate = new Date(targetDate.getFullYear(), targetDate.getMonth() + 2, 0);
+       // 🌟 修正：取得範囲を「前後1ヶ月」から「前後1年（計24ヶ月分）」に大幅拡大！
+       const targetDate = new Date(selectedDate);
+       const startDate = new Date(targetDate.getFullYear() - 1, targetDate.getMonth(), 1);
+       const endDate = new Date(targetDate.getFullYear() + 1, targetDate.getMonth(), 0);
 
         const events = await Calendar.getEventsAsync(calendarIds, startDate, endDate);
         const newExternalEvents: { [date: string]: ScheduleItem[] } = {};

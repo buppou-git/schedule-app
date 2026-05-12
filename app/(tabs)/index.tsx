@@ -2195,8 +2195,12 @@ function IndexContent() {
       <StatusBar style="auto" />
       <ConfigModal
         visible={configModalVisible}
-        onClose={() => setConfigModalVisible(false)} // 🌟 閉じる時はただ閉じるだけにスッキリさせる
-        onExternalSyncChange={setIsExternalSyncEnabled} // 🌟 追加：スイッチを押した瞬間に、裏のメイン画面に「ONになったよ！」と伝える
+        onClose={() => setConfigModalVisible(false)}
+        onExternalSyncChange={(val) => {
+          setIsExternalSyncEnabled(val);
+          // 🌟 追加：ON/OFFが切り替わった瞬間に、カレンダーを強制的に再起動して予定を出現させる！
+          setCalendarResetKey((prev) => prev + 1);
+        }}
         lastSyncedAt={lastSyncedAt}
         onRestore={handleRestore}
         onBackup={handleManualBackup}
