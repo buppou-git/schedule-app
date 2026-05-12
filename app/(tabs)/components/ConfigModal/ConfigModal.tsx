@@ -26,6 +26,7 @@ import { SyncAndBackupSection } from "./SyncAndBackupSection";
 interface ConfigModalProps {
   visible: boolean;
   onClose: () => void;
+  onExternalSyncChange?: (val: boolean) => void;
   lastSyncedAt: string | null;
   onRestore: () => void;
   onBackup: () => void;
@@ -44,6 +45,7 @@ GoogleSignin.configure({
 export default function ConfigModal({
   visible,
   onClose,
+  onExternalSyncChange,
   lastSyncedAt,
   onRestore,
   onBackup,
@@ -154,7 +156,11 @@ export default function ConfigModal({
 
                   <SyncAndBackupSection
                     isCalendarSyncEnabled={isCalendarSyncEnabled}
-                    setIsCalendarSyncEnabled={setIsCalendarSyncEnabled}
+                    setIsCalendarSyncEnabled={(val) => {
+                      setIsCalendarSyncEnabled(val);
+                      // 🌟 追加：スイッチが切り替わった瞬間に親（index.tsx）に報告する
+                      if (onExternalSyncChange) onExternalSyncChange(val);
+                    }}
                     lastSyncedAt={lastSyncedAt}
                     onRestore={onRestore}
                     onBackup={onBackup}

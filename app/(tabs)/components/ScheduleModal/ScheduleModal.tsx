@@ -235,7 +235,13 @@ export default function ScheduleModal({
   const { scheduleItemNotification, cancelItemNotification } =
     useNotificationManager();
 
-  const uiThemeColor = layerMaster[selectedLayer] || "#007AFF";
+    const uiThemeColor = useMemo(() => {
+      const selectedTag = formData.tag.trim();
+      if (selectedTag && tagMaster[selectedTag]) {
+        return tagMaster[selectedTag].color; 
+      }
+      return layerMaster[selectedLayer] || "#007AFF"; 
+    }, [formData.tag, selectedLayer, layerMaster, tagMaster]);
   
   // 🌟 追加：保存処理中かどうかを判定するフラグ
   const [isSaving, setIsSaving] = useState(false);

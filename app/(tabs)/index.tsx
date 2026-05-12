@@ -2210,12 +2210,8 @@ function IndexContent() {
       <StatusBar style="auto" />
       <ConfigModal
         visible={configModalVisible}
-        onClose={() => {
-          setConfigModalVisible(false);
-          AsyncStorage.getItem("externalCalendarSync").then((val) =>
-            setIsExternalSyncEnabled(val === "true"),
-          );
-        }}
+        onClose={() => setConfigModalVisible(false)} // 🌟 閉じる時はただ閉じるだけにスッキリさせる
+        onExternalSyncChange={setIsExternalSyncEnabled} // 🌟 追加：スイッチを押した瞬間に、裏のメイン画面に「ONになったよ！」と伝える
         lastSyncedAt={lastSyncedAt}
         onRestore={handleRestore}
         onBackup={handleManualBackup}
