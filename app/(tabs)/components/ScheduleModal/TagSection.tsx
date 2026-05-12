@@ -52,7 +52,13 @@ export const TagSection = React.memo(
                 styles.layerChip,
                 selectedLayer === l && { backgroundColor: layerMaster[l] },
               ]}
-              onPress={() => setSelectedLayer(l)}
+              onPress={() => {
+                setSelectedLayer(l);
+                // 🌟 魔法の追加2：ここでも裏側のタグをリセットする！
+                updateForm({ tag: "" });
+                setIsCreatingNewTag(false);
+                setNewTagColor("");
+              }}
             >
               <Text
                 style={[

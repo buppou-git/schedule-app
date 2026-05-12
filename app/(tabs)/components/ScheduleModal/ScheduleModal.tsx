@@ -194,8 +194,11 @@ export default function ScheduleModal({
       newTagMaster[trimmed] = { layer: oldLayer, color: editingSubTagColor };
       if (formData.tag === editingSubTagOriginalName)
         updateForm({ tag: trimmed });
+    } else {
+      // 🌟 魔法の追加3：「名前」はそのままに「色」だけ変えた場合も確実に保存する！
       newTagMaster[trimmed].color = editingSubTagColor;
     }
+
     setTagMaster?.(newTagMaster);
     await AsyncStorage.setItem("tagMasterData", JSON.stringify(newTagMaster));
     setEditSubTagModalVisible(false);
@@ -1102,6 +1105,9 @@ export default function ScheduleModal({
                                     );
                                     // 🟢 修正：レイヤーを正しく切り替える！
                                     setSelectedLayer(layerName);
+
+                                    // 🌟 魔法の追加1：カレンダーを変えたら、裏に残っている別のタグを消す！
+                                    updateForm({ tag: "" });
 
                                     // ※家計簿レイヤーを選んだら、ついでに支出ボタンをONにしてあげる
                                     if (layerName === "家計簿") {
