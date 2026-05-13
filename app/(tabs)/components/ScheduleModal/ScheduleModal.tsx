@@ -737,14 +737,13 @@ export default function ScheduleModal({
         }
       }
 
+      // 【✅ 爆速 ＋ アラート付き】
       if (hasCloudAction) {
-        try {
-          await batch.commit();
-        } catch (e) {
+        batch.commit().catch((e) => {
           console.error("共有保存エラー:", e);
-          Alert.alert("エラー", "共有データの保存に失敗しました。");
-          throw e; // 失敗したらここで止める
-        }
+          // 裏側でエラーになった時だけ、こっそりアラートを出す
+          Alert.alert("エラー", "共有データの保存に失敗しました。電波状況を確認してください。");
+        });
       }
 
       // ==========================================
@@ -854,16 +853,15 @@ export default function ScheduleModal({
           }
         }
 
-        // 🌟 修正：正しい共有パスから削除する
+        // 【✅ 爆速 ＋ アラート付き】
         if (wasShared) {
-          try {
-            const oldLayer = (selectedItem.tags || [selectedItem.tag || ""]).find((tag) => Object.keys(sharedRooms).includes(tag));
-            const roomId = oldLayer ? sharedRooms[oldLayer] : null;
-            if (roomId) {
-              await deleteDoc(doc(db, "rooms", roomId, "schedules", selectedItem.id));
-            }
-          } catch (e) {
-            console.error("共有データ削除エラー:", e);
+          const oldLayer = (selectedItem.tags || [selectedItem.tag || ""]).find((tag) => Object.keys(sharedRooms).includes(tag));
+          const roomId = oldLayer ? sharedRooms[oldLayer] : null;
+          if (roomId) {
+            deleteDoc(doc(db, "rooms", roomId, "schedules", selectedItem.id)).catch((e) => {
+              console.error("共有データ削除エラー:", e);
+              Alert.alert("エラー", "共有データの削除に失敗しました。");
+            });
           }
         }
       }
@@ -973,6 +971,239 @@ export default function ScheduleModal({
     isCreatingNewTag,
     newTagColor,
   ]);
+
+  // 🌟 限界突破の最終兵器：オプション設定の「安全な」完全キャッシュ化！
+  // タイトル入力などのたびに発生していた激重な再描画を完全に防ぎます。
+  const optionsSection = useMemo(() => {
+    if (!isReady) return null;
+    return (
+      <View
+        style={{
+          backgroundColor: "#F8F8FA",
+          borderRadius: 16,
+          padding: 16,
+          marginBottom: 20,
+        }}
+      >
+        {/* 🔔 通知リマインダー */}
+        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
+          <View style={{ backgroundColor: uiThemeColor + "15", padding: 6, borderRadius: 8, marginRight: 10 }}>
+            <Ionicons name="notifications" size={18} color={uiThemeColor} />
+          </View>
+          <Text style={{ fontSize: 16, fontWeight: "bold", color: "#1C1C1E" }}>通知リマインダー</Text>
+        </View>
+
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, paddingBottom: 16 }}>
+          <TouchableOpacity
+            style={[
+              styles.layerChip,
+              { borderWidth: 1, borderColor: "#E5E5EA", borderRadius: 20, paddingHorizontal: 16, backgroundColor: "#FFF" },
+              selectedReminders.length === 0 && { backgroundColor: uiThemeColor, borderColor: uiThemeColor },
+            ]}
+            onPress={() => {
+              setSelectedReminders([]);
+              setCustomReminderTimes([]);
+            }}
+          >
+            <Text style={[styles.layerChipText, selectedReminders.length === 0 && { color: "#fff", fontWeight: "bold" }]}>
+              なし
+            </Text>
+          </TouchableOpacity>
+
+          {(formData.isAllDay
+            ? [
+              { label: "当日の朝(7:00)", value: "morning" },
+              { label: "前日", value: "dayBefore" },
+              { label: "2日前", value: "2daysBefore" },
+              { label: "カスタム", value: "custom" },
+            ]
+            : [
+              { label: "ちょうど", value: "exact" },
+              { label: "10分前", value: "10min" },
+              { label: "30分前", value: "30min" },
+              { label: "1時間前", value: "1hour" },
+              { label: "当日の朝", value: "morning" },
+              { label: "カスタム", value: "custom" },
+            ]
+          ).map((opt) => {
+            const isSelected = selectedReminders.includes(opt.value);
+            return (
+              <TouchableOpacity
+                key={opt.value}
+                style={[
+                  styles.layerChip,
+                  { borderWidth: 1, borderColor: "#E5E5EA", borderRadius: 20, paddingHorizontal: 16, backgroundColor: isSelected ? uiThemeColor : "#FFF" },
+                ]}
+                onPress={() =>
+                  setSelectedReminders((prev) => {
+                    if (prev.includes(opt.value)) {
+                      return prev.filter((v) => v !== opt.value);
+                    } else {
+                      if (opt.value === "custom" && customReminderTimes.length === 0) {
+                        setCustomReminderTimes([new Date()]);
+                      }
+                      return [...prev, opt.value];
+                    }
+                  })
+                }
+              >
+                <Text style={[styles.layerChipText, isSelected && { color: "#fff", fontWeight: "bold" }]}>{opt.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* カスタム通知の時間設定 */}
+        {selectedReminders.includes("custom") && (
+          <View style={{ marginTop: 8, padding: 12, backgroundColor: uiThemeColor + "12", borderRadius: 12, borderLeftWidth: 3, borderLeftColor: uiThemeColor }}>
+            <Text style={{ fontSize: 13, fontWeight: "bold", color: uiThemeColor, marginBottom: 10 }}>通知する日時を設定:</Text>
+            {customReminderTimes.map((time, idx) => (
+              <View key={idx} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <ModernDatePicker
+                    value={time}
+                    mode="date"
+                    onChange={(d) => {
+                      const n = [...customReminderTimes];
+                      n[idx] = d;
+                      setCustomReminderTimes(n);
+                    }}
+                    themeColor={uiThemeColor}
+                    icon="calendar-outline"
+                  />
+                  <ModernDatePicker
+                    value={time}
+                    mode="time"
+                    onChange={(d) => {
+                      const n = [...customReminderTimes];
+                      n[idx] = d;
+                      setCustomReminderTimes(n);
+                    }}
+                    themeColor={uiThemeColor}
+                    icon="time-outline"
+                  />
+                </View>
+                <TouchableOpacity onPress={() => setCustomReminderTimes(customReminderTimes.filter((_, i) => i !== idx))}>
+                  <Ionicons name="remove-circle" size={24} color="#FF3B30" />
+                </TouchableOpacity>
+              </View>
+            ))}
+            <TouchableOpacity
+              style={{ flexDirection: "row", alignItems: "center", marginTop: 5, alignSelf: "flex-start" }}
+              onPress={() => setCustomReminderTimes([...customReminderTimes, new Date()])}
+            >
+              <Ionicons name="add-circle" size={20} color={uiThemeColor} />
+              <Text style={{ color: uiThemeColor, fontWeight: "bold", marginLeft: 5 }}>さらに時間を追加</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <View style={{ height: 1, backgroundColor: "#E5E5EA", marginVertical: 12 }} />
+
+        {/* 🔘 スイッチ群 */}
+        <View style={{ paddingTop: 4 }}>
+          <View style={styles.switchRow}>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <View style={{ backgroundColor: uiThemeColor + "15", padding: 6, borderRadius: 8, marginRight: 10 }}>
+                <Ionicons name="calendar" size={18} color={uiThemeColor} />
+              </View>
+              <Text style={{ fontSize: 15, fontWeight: "bold", color: "#1C1C1E" }}>予定として表示</Text>
+            </View>
+            <Switch
+              value={formData.isEvent}
+              onValueChange={(v) => updateForm({ isEvent: v })}
+              trackColor={{ false: "#C7C7CC", true: uiThemeColor }}
+              ios_backgroundColor="#E5E5EA"
+            />
+          </View>
+
+          <View style={styles.switchRow}>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <View style={{ backgroundColor: "#34C75915", padding: 6, borderRadius: 8, marginRight: 10 }}>
+                <Ionicons name="checkbox" size={18} color="#34C759" />
+              </View>
+              <Text style={{ fontSize: 15, fontWeight: "bold", color: "#1C1C1E" }}>ToDoリストに表示</Text>
+            </View>
+            <Switch
+              value={formData.isTodo}
+              onValueChange={(v) => updateForm({ isTodo: v })}
+              trackColor={{ false: "#C7C7CC", true: uiThemeColor }}
+              ios_backgroundColor="#E5E5EA"
+            />
+          </View>
+
+          <View style={styles.switchRow}>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <View style={{ backgroundColor: "#FFCC0015", padding: 6, borderRadius: 8, marginRight: 10 }}>
+                <Ionicons name="wallet" size={18} color="#FFCC00" />
+              </View>
+              <Text style={{ fontSize: 15, fontWeight: "bold", color: "#1C1C1E" }}>支出を記録</Text>
+            </View>
+            <Switch
+              value={formData.isExpense}
+              onValueChange={(v) => updateForm({ isExpense: v })}
+              trackColor={{ false: "#C7C7CC", true: uiThemeColor }}
+              ios_backgroundColor="#E5E5EA"
+            />
+          </View>
+        </View>
+
+        {/* 💰 支出入力エリア */}
+        {formData.isExpense && (
+          <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: "#E5E5EA" }}>
+            <TextInput
+              style={{
+                backgroundColor: "#FFF",
+                padding: 12,
+                borderRadius: 12,
+                fontSize: 16,
+                fontWeight: "bold",
+                color: "#1C1C1E",
+                borderWidth: 1,
+                borderColor: "#E5E5EA",
+              }}
+              placeholder="金額 (¥)"
+              placeholderTextColor="#AEAEB2"
+              keyboardType="numeric"
+              value={formData.amount}
+              onChangeText={(t) => updateForm({ amount: t })}
+            />
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+              {currentQuickTags.map((cat) => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[
+                    styles.layerChip,
+                    { borderWidth: 1, borderColor: "#E5E5EA", backgroundColor: "#FFF" },
+                    formData.category === cat && { backgroundColor: uiThemeColor, borderColor: uiThemeColor },
+                  ]}
+                  onPress={() => updateForm({ category: cat })}
+                >
+                  <Text style={[styles.layerChipText, formData.category === cat && { color: "#fff", fontWeight: "bold" }]}>{cat}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  }, [
+    isReady,
+    uiThemeColor,
+    selectedReminders,
+    customReminderTimes,
+    formData.isAllDay,
+    formData.startDate,
+    formData.startTime,
+    formData.isEvent,
+    formData.isTodo,
+    formData.isExpense,
+    formData.amount,
+    formData.category,
+    currentQuickTags,
+    updateForm,
+  ]);
+
 
   return (
     <Modal
@@ -1395,485 +1626,16 @@ export default function ScheduleModal({
                           </ScrollView>
                         </View>
                       )}
-
                       {/* ========================================== */}
                       {/* 2. 日時・カレンダー種類（別コンポーネント） */}
                       {/* ========================================== */}
                       {timeAndTagSection}
 
                       {/* ========================================== */}
-                      {/* 3. オプション設定 */}
+                      {/* 3. オプション設定（Apple風の角丸カード） */}
                       {/* ========================================== */}
-                      <View
-                        style={{
-                          backgroundColor: "#F8F8FA",
-                          borderRadius: 16,
-                          padding: 16,
-                          marginBottom: 20,
-                        }}
-                      >
-                        {/* 🔔 通知リマインダー */}
-                        <View
-                          style={{
-                            flexDirection: "row",
-                            alignItems: "center",
-                            marginBottom: 12,
-                          }}
-                        >
-                          <View
-                            style={{
-                              backgroundColor: uiThemeColor + "15",
-                              padding: 6,
-                              borderRadius: 8,
-                              marginRight: 10,
-                            }}
-                          >
-                            <Ionicons
-                              name="notifications"
-                              size={18}
-                              color={uiThemeColor}
-                            />
-                          </View>
-                          <Text
-                            style={{
-                              fontSize: 16,
-                              fontWeight: "bold",
-                              color: "#1C1C1E",
-                            }}
-                          >
-                            通知リマインダー
-                          </Text>
-                        </View>
+                      {optionsSection}
 
-                        <View
-                          style={{
-                            flexDirection: "row",
-                            flexWrap: "wrap",
-                            gap: 8,
-                            paddingBottom: 16,
-                          }}
-                        >
-                          <TouchableOpacity
-                            style={[
-                              styles.layerChip,
-                              {
-                                borderWidth: 1,
-                                borderColor: "#E5E5EA",
-                                borderRadius: 20,
-                                paddingHorizontal: 16,
-                                backgroundColor: "#FFF",
-                              },
-                              selectedReminders.length === 0 && {
-                                backgroundColor: uiThemeColor,
-                                borderColor: uiThemeColor,
-                              },
-                            ]}
-                            onPress={() => {
-                              setSelectedReminders([]);
-                              setCustomReminderTimes([]);
-                            }}
-                          >
-                            <Text
-                              style={[
-                                styles.layerChipText,
-                                selectedReminders.length === 0 && {
-                                  color: "#fff",
-                                  fontWeight: "bold",
-                                },
-                              ]}
-                            >
-                              なし
-                            </Text>
-                          </TouchableOpacity>
-
-                          {(formData.isAllDay
-                            ? [
-                              { label: "当日の朝(7:00)", value: "morning" },
-                              { label: "前日", value: "dayBefore" },
-                              { label: "2日前", value: "2daysBefore" },
-                              { label: "カスタム", value: "custom" },
-                            ]
-                            : [
-                              { label: "ちょうど", value: "exact" },
-                              { label: "10分前", value: "10min" },
-                              { label: "30分前", value: "30min" },
-                              { label: "1時間前", value: "1hour" },
-                              { label: "当日の朝", value: "morning" },
-                              { label: "カスタム", value: "custom" },
-                            ]
-                          ).map((opt) => {
-                            const isSelected = selectedReminders.includes(
-                              opt.value,
-                            );
-                            return (
-                              <TouchableOpacity
-                                key={opt.value}
-                                style={[
-                                  styles.layerChip,
-                                  {
-                                    borderWidth: 1,
-                                    borderColor: "#E5E5EA",
-                                    borderRadius: 20,
-                                    paddingHorizontal: 16,
-                                    backgroundColor: isSelected
-                                      ? uiThemeColor
-                                      : "#FFF",
-                                  },
-                                ]}
-                                onPress={() =>
-                                  setSelectedReminders((prev) => {
-                                    if (prev.includes(opt.value)) {
-                                      return prev.filter(
-                                        (v) => v !== opt.value,
-                                      );
-                                    } else {
-                                      if (
-                                        opt.value === "custom" &&
-                                        customReminderTimes.length === 0
-                                      ) {
-                                        setCustomReminderTimes([new Date()]);
-                                      }
-                                      return [...prev, opt.value];
-                                    }
-                                  })
-                                }
-                              >
-                                <Text
-                                  style={[
-                                    styles.layerChipText,
-                                    isSelected && {
-                                      color: "#fff",
-                                      fontWeight: "bold",
-                                    },
-                                  ]}
-                                >
-                                  {opt.label}
-                                </Text>
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </View>
-
-                        {/* カスタム通知の時間設定 */}
-                        {selectedReminders.includes("custom") && (
-                          <View
-                            style={{
-                              marginTop: 8,
-                              padding: 12,
-                              backgroundColor: uiThemeColor + "12",
-                              borderRadius: 12,
-                              borderLeftWidth: 3,
-                              borderLeftColor: uiThemeColor,
-                            }}
-                          >
-                            <Text
-                              style={{
-                                fontSize: 13,
-                                fontWeight: "bold",
-                                color: uiThemeColor,
-                                marginBottom: 10,
-                              }}
-                            >
-                              通知する日時を設定:
-                            </Text>
-                            {customReminderTimes.map((time, idx) => (
-                              <View
-                                key={idx}
-                                style={{
-                                  flexDirection: "row",
-                                  alignItems: "center",
-                                  justifyContent: "space-between",
-                                  marginBottom: 10,
-                                }}
-                              >
-                                <View
-                                  style={{
-                                    flexDirection: "row",
-                                    alignItems: "center",
-                                    gap: 8,
-                                  }}
-                                >
-                                  <ModernDatePicker
-                                    value={time}
-                                    mode="date"
-                                    onChange={(d) => {
-                                      const n = [...customReminderTimes];
-                                      n[idx] = d;
-                                      setCustomReminderTimes(n);
-                                    }}
-                                    themeColor={uiThemeColor}
-                                    icon="calendar-outline"
-                                  />
-                                  <ModernDatePicker
-                                    value={time}
-                                    mode="time"
-                                    onChange={(d) => {
-                                      const n = [...customReminderTimes];
-                                      n[idx] = d;
-                                      setCustomReminderTimes(n);
-                                    }}
-                                    themeColor={uiThemeColor}
-                                    icon="time-outline"
-                                  />
-                                </View>
-                                <TouchableOpacity
-                                  onPress={() =>
-                                    setCustomReminderTimes(
-                                      customReminderTimes.filter(
-                                        (_, i) => i !== idx,
-                                      ),
-                                    )
-                                  }
-                                >
-                                  <Ionicons
-                                    name="remove-circle"
-                                    size={24}
-                                    color="#FF3B30"
-                                  />
-                                </TouchableOpacity>
-                              </View>
-                            ))}
-                            <TouchableOpacity
-                              style={{
-                                flexDirection: "row",
-                                alignItems: "center",
-                                marginTop: 5,
-                                alignSelf: "flex-start",
-                              }}
-                              onPress={() =>
-                                setCustomReminderTimes([
-                                  ...customReminderTimes,
-                                  new Date(),
-                                ])
-                              }
-                            >
-                              <Ionicons
-                                name="add-circle"
-                                size={20}
-                                color={uiThemeColor}
-                              />
-                              <Text
-                                style={{
-                                  color: uiThemeColor,
-                                  fontWeight: "bold",
-                                  marginLeft: 5,
-                                }}
-                              >
-                                さらに時間を追加
-                              </Text>
-                            </TouchableOpacity>
-                          </View>
-                        )}
-
-                        {/* 区切り線 */}
-                        <View
-                          style={{
-                            height: 1,
-                            backgroundColor: "#E5E5EA",
-                            marginVertical: 12,
-                          }}
-                        />
-
-                        {/* 🔘 スイッチ群 */}
-                        <View style={{ paddingTop: 4 }}>
-                          <View style={styles.switchRow}>
-                            <View
-                              style={{
-                                flexDirection: "row",
-                                alignItems: "center",
-                              }}
-                            >
-                              <View
-                                style={{
-                                  backgroundColor: uiThemeColor + "15",
-                                  padding: 6,
-                                  borderRadius: 8,
-                                  marginRight: 10,
-                                }}
-                              >
-                                <Ionicons
-                                  name="calendar"
-                                  size={18}
-                                  color={uiThemeColor}
-                                />
-                              </View>
-                              <Text
-                                style={{
-                                  fontSize: 15,
-                                  fontWeight: "bold",
-                                  color: "#1C1C1E",
-                                }}
-                              >
-                                予定として表示
-                              </Text>
-                            </View>
-                            <Switch
-                              value={formData.isEvent}
-                              onValueChange={(v) => updateForm({ isEvent: v })}
-                              trackColor={{
-                                false: "#C7C7CC",
-                                true: uiThemeColor,
-                              }}
-                              ios_backgroundColor="#E5E5EA"
-                            />
-                          </View>
-
-                          <View style={styles.switchRow}>
-                            <View
-                              style={{
-                                flexDirection: "row",
-                                alignItems: "center",
-                              }}
-                            >
-                              <View
-                                style={{
-                                  backgroundColor: "#34C75915",
-                                  padding: 6,
-                                  borderRadius: 8,
-                                  marginRight: 10,
-                                }}
-                              >
-                                <Ionicons
-                                  name="checkbox"
-                                  size={18}
-                                  color="#34C759"
-                                />
-                              </View>
-                              <Text
-                                style={{
-                                  fontSize: 15,
-                                  fontWeight: "bold",
-                                  color: "#1C1C1E",
-                                }}
-                              >
-                                ToDoリストに表示
-                              </Text>
-                            </View>
-                            <Switch
-                              value={formData.isTodo}
-                              onValueChange={(v) => updateForm({ isTodo: v })}
-                              trackColor={{
-                                false: "#C7C7CC",
-                                true: uiThemeColor,
-                              }}
-                              ios_backgroundColor="#E5E5EA"
-                            />
-                          </View>
-
-                          <View style={styles.switchRow}>
-                            <View
-                              style={{
-                                flexDirection: "row",
-                                alignItems: "center",
-                              }}
-                            >
-                              <View
-                                style={{
-                                  backgroundColor: "#FFCC0015",
-                                  padding: 6,
-                                  borderRadius: 8,
-                                  marginRight: 10,
-                                }}
-                              >
-                                <Ionicons
-                                  name="wallet"
-                                  size={18}
-                                  color="#FFCC00"
-                                />
-                              </View>
-                              <Text
-                                style={{
-                                  fontSize: 15,
-                                  fontWeight: "bold",
-                                  color: "#1C1C1E",
-                                }}
-                              >
-                                支出を記録
-                              </Text>
-                            </View>
-                            <Switch
-                              value={formData.isExpense}
-                              onValueChange={(v) =>
-                                updateForm({ isExpense: v })
-                              }
-                              trackColor={{
-                                false: "#C7C7CC",
-                                true: uiThemeColor,
-                              }}
-                              ios_backgroundColor="#E5E5EA"
-                            />
-                          </View>
-                        </View>
-
-                        {/* 💰 支出入力エリア（支出ONの時だけふわっと出す） */}
-                        {formData.isExpense && (
-                          <View
-                            style={{
-                              marginTop: 16,
-                              padding: 16,
-                              borderTopWidth: 1,
-                              borderTopColor: "#E5E5EA",
-                            }}
-                          >
-                            <TextInput
-                              style={{
-                                backgroundColor: "#FFF",
-                                padding: 12,
-                                borderRadius: 12,
-                                fontSize: 16,
-                                fontWeight: "bold",
-                                color: "#1C1C1E",
-                                borderWidth: 1,
-                                borderColor: "#E5E5EA",
-                              }}
-                              placeholder="金額 (¥)"
-                              placeholderTextColor="#AEAEB2"
-                              keyboardType="numeric"
-                              value={formData.amount}
-                              onChangeText={(t) => updateForm({ amount: t })}
-                            />
-                            <View
-                              style={{
-                                flexDirection: "row",
-                                flexWrap: "wrap",
-                                gap: 6,
-                                marginTop: 10,
-                              }}
-                            >
-                              {currentQuickTags.map((cat) => (
-                                <TouchableOpacity
-                                  key={cat}
-                                  style={[
-                                    styles.layerChip,
-                                    {
-                                      borderWidth: 1,
-                                      borderColor: "#E5E5EA",
-                                      backgroundColor: "#FFF",
-                                    },
-                                    formData.category === cat && {
-                                      backgroundColor: uiThemeColor,
-                                      borderColor: uiThemeColor,
-                                    },
-                                  ]}
-                                  onPress={() => updateForm({ category: cat })}
-                                >
-                                  <Text
-                                    style={[
-                                      styles.layerChipText,
-                                      formData.category === cat && {
-                                        color: "#fff",
-                                        fontWeight: "bold",
-                                      },
-                                    ]}
-                                  >
-                                    {cat}
-                                  </Text>
-                                </TouchableOpacity>
-                              ))}
-                            </View>
-                          </View>
-                        )}
-                      </View>
                       {/* ========================================== */}
                       {/* 4. サブタスク（買い物リストなど） */}
                       {/* ========================================== */}
