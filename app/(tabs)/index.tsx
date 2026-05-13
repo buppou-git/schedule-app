@@ -786,18 +786,34 @@ function IndexContent() {
     syncToStorage();
   }, [layerMaster, tagMaster, presets, activeTags]);
 
-  // 🌟 修正：最強の軽量化版！無駄な再計算をゼロにしつつ、親の色変更を即座に反映！
+  // =========================================================================
+  // 🌟 限界突破の最終兵器：ボタン押下後の「激重フリーズ」を消滅させる究極キャッシュ！
+  // =========================================================================
+  const prevScheduleData = useRef(scheduleData);
+  const prevTagMaster = useRef(tagMaster);
+  const prevLayerMaster = useRef(layerMaster);
+  const cachedColoredData = useRef<{ [date: string]: ScheduleItem[] }>({});
+
   const coloredScheduleData = useMemo(() => {
+    const isThemeChanged = tagMaster !== prevTagMaster.current || layerMaster !== prevLayerMaster.current;
+    prevTagMaster.current = tagMaster;
+    prevLayerMaster.current = layerMaster;
+
     let hasAnyChange = false;
     const nextData: { [date: string]: ScheduleItem[] } = {};
 
     Object.keys(scheduleData).forEach((date) => {
+      // 🌟 魔法のキャッシュ：テーマ色もその日の予定も変わっていなければ、数千回の計算を完全にスキップ！
+      if (!isThemeChanged && scheduleData[date] === prevScheduleData.current[date] && cachedColoredData.current[date]) {
+        nextData[date] = cachedColoredData.current[date];
+        return;
+      }
+
       let dateChanged = false;
       const newItems = scheduleData[date].map((item) => {
         const itemTag = item.tag || (item.tags && item.tags[0]);
         const parentTag = (item.tags && item.tags.length > 0) ? item.tags[0] : itemTag;
 
-        // 🌟 ここが超重要！tagMasterだけでなく、layerMasterからも常に最新の色を引っ張る！
         let latestColor = item.color;
         if (itemTag && tagMaster[itemTag]) {
           latestColor = tagMaster[itemTag].color;
@@ -805,25 +821,34 @@ function IndexContent() {
           latestColor = layerMaster[parentTag];
         }
 
-        // 🌟 色が変わるべき時だけ新しいデータを作る
         if (item.color !== latestColor) {
           dateChanged = true;
           return { ...item, color: latestColor };
         }
-        return item; // 変わっていなければ、元のデータをそのまま使い回す！
+        return item;
       });
 
       if (dateChanged) {
         nextData[date] = newItems;
         hasAnyChange = true;
       } else {
-        nextData[date] = scheduleData[date]; // 変わっていなければ、元の配列を使い回す！
+        nextData[date] = scheduleData[date];
       }
     });
 
-    // 🌟 1つも色の変更がなければ、大元の scheduleData をそのまま返す（これで再描画ラグがゼロになります）
-    return hasAnyChange ? nextData : scheduleData;
-  }, [scheduleData, tagMaster, layerMaster]); // 🌟 layerMaster を監視対象に追加！
+    // 削除された日付があるかチェック
+    if (Object.keys(cachedColoredData.current).length !== Object.keys(nextData).length) {
+      hasAnyChange = true;
+    }
+
+    prevScheduleData.current = scheduleData;
+
+    if (hasAnyChange || isThemeChanged) {
+      cachedColoredData.current = nextData;
+      return nextData;
+    }
+    return cachedColoredData.current;
+  }, [scheduleData, tagMaster, layerMaster]);
 
   const displayData = useDisplayData(
     coloredScheduleData,
