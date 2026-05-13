@@ -30,7 +30,7 @@ import { useNotificationManager } from "../../hooks/useNotificationManager";
 
 import { signInAnonymously } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
-import { AppState } from "react-native";
+import { AppState, InteractionManager } from "react-native";
 import { auth, db } from "../../firebaseConfig";
 
 
@@ -405,22 +405,24 @@ function IndexContent() {
 
 
 
-  // 🌟 追加・修正：通信を1回にまとめる「安全な移動・コピー」
+  // 🌟 修正：長押し画面からの移動・コピーを完璧に反映させる
   const handleMoveOrCopy = async (
     item: ScheduleItem & { date?: string },
     targetLayer: string,
     isCopy: boolean,
   ) => {
-    const newItem = {
+    // 🌟 修正1：tag と tags 両方を更新し、色も最新のカテゴリ色に塗り替える
+    const newItem: ScheduleItem = {
       ...item,
       id: isCopy ? Date.now().toString() : item.id,
-      tags: [targetLayer],
+      tag: targetLayer,     // 🌟 単数形のタグも更新（重要！）
+      tags: [targetLayer],  // 🌟 複数形も一貫性のため更新
+      color: tagMaster[targetLayer]?.color || item.color, // 🌟 色もこの瞬間に最新にする
     };
 
     const targetDate = item.date || selectedDate;
 
     try {
-      // 🌟 魔法の封筒（バッチ処理）を用意する
       const { writeBatch, doc } = await import("firebase/firestore");
       const batch = writeBatch(db);
       let hasCloudAction = false;
@@ -433,9 +435,7 @@ function IndexContent() {
         );
         if (oldSharedLayer) {
           const oldRoomId = sharedRooms[oldSharedLayer];
-          // 💡 ついでに間違っていた削除パスのバグも修正！
-          const oldDocRef = doc(db, "rooms", oldRoomId, "schedules", item.id);
-          batch.delete(oldDocRef); // 封筒に「削除」を入れる
+          batch.delete(doc(db, "rooms", oldRoomId, "schedules", item.id));
           hasCloudAction = true;
         }
       }
@@ -443,70 +443,52 @@ function IndexContent() {
       // ② 新しい共有先に保存する
       if (Object.keys(sharedRooms).includes(targetLayer)) {
         const targetRoomId = sharedRooms[targetLayer];
-        const newDocRef = doc(
-          db,
-          "rooms",
-          targetRoomId,
-          "schedules",
-          newItem.id,
-        );
-        batch.set(newDocRef, {
+        batch.set(doc(db, "rooms", targetRoomId, "schedules", newItem.id), {
           ...newItem,
           date: targetDate,
           updatedAt: new Date().toISOString(),
-        }); // 封筒に「保存」を入れる
+        });
         hasCloudAction = true;
       }
 
-      // 🌟 ③ 封筒の中身を【1回の通信】で一気に実行！（電波が切れても安全）
       if (hasCloudAction) {
         await batch.commit();
       }
 
-      // ④ 自分の端末内（ローカル）の画面を更新
-      const newData = { ...scheduleData };
+      // 🌟 修正2：まずモーダルを閉じ、裏側で重い計算を回す（ユーザーを待たせない）
+      setQuickActionVisible(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      if (!isCopy && !isSharedItem(item)) {
-        // 🌟 O(N)ループを撤去し、ピンポイントで削除！
-        if (
-          newData[targetDate] &&
-          newData[targetDate].some((i) => i.id === item.id)
-        ) {
-          newData[targetDate] = newData[targetDate].filter(
-            (i) => i.id !== item.id,
-          );
-        } else {
-          // 万が一見つからなかった場合のみ全検索
-          Object.keys(newData).forEach((d) => {
-            newData[d] = newData[d].filter((i) => i.id !== item.id);
-          });
-        }
-      }
+      InteractionManager.runAfterInteractions(() => {
+        setScheduleData((prevData: Record<string, ScheduleItem[]>) => {
+          const nextData = { ...prevData };
 
-      if (!Object.keys(sharedRooms).includes(targetLayer)) {
-        if (!newData[targetDate]) newData[targetDate] = [];
-        const existingIdx = newData[targetDate].findIndex(
-          (i) => i.id === newItem.id,
-        );
-        if (existingIdx >= 0) {
-          newData[targetDate][existingIdx] = newItem;
-        } else {
-          newData[targetDate].push(newItem);
-        }
-      }
+          // 元の場所から消す（移動の場合のみ）
+          if (!isCopy && !isSharedItem(item)) {
+            Object.keys(nextData).forEach((d) => {
+              nextData[d] = nextData[d].filter((i) => i.id !== item.id);
+            });
+          }
 
-      setScheduleData(newData);
-      setHasUnsavedChanges(true);
+          // 新しい場所に足す（移動先がローカルカレンダーの場合のみ。共有は自動同期に任せる）
+          if (!Object.keys(sharedRooms).includes(targetLayer)) {
+            if (!nextData[targetDate]) nextData[targetDate] = [];
+            // 重複防止のため、念のため同じIDの古いデータを排除してから追加
+            nextData[targetDate] = [
+              ...nextData[targetDate].filter(i => i.id !== newItem.id),
+              newItem
+            ];
+          }
+
+          return nextData;
+        });
+        setHasUnsavedChanges(true);
+      });
+
     } catch (e) {
       console.error("Move/Copy Error:", e);
-      Alert.alert(
-        "エラー",
-        "データの移動に失敗しました。電波の良いところで再度お試しください。",
-      );
+      Alert.alert("エラー", "データの移動に失敗しました。");
     }
-
-    setQuickActionVisible(false);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   // 🌟 消えてしまった関数を復活！

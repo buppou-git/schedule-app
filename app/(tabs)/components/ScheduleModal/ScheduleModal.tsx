@@ -4,6 +4,7 @@ import * as Calendar from "expo-calendar";
 import * as Haptics from "expo-haptics";
 import React, {
   useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -390,30 +391,46 @@ export default function ScheduleModal({
       )
       .toLowerCase();
 
-  // 🌟 改善1: 全予定の読み込みは「モーダルを開いた時（visibleがtrueになった時）」の1回だけに制限！
+  // 🌟 限界突破1：flat()を廃止し、最新の150件だけを高速スキャンする
   const allTitles = useMemo(() => {
     if (!visible) return [];
     const titles = new Set<string>();
-    const allItems = Object.values(scheduleData).flat() as ScheduleItem[];
-    const recentItems = allItems.slice(-150);
 
-    recentItems.forEach((i) => {
-      if (i.title) titles.add(i.title);
-    });
+    // 日付順に並べたキー（日付）を取得
+    const dateKeys = Object.keys(scheduleData).sort();
+
+    let count = 0;
+    // 最新の日付（配列の後ろ）から逆ループして、合計150件分チェックしたら即終了！
+    for (let i = dateKeys.length - 1; i >= 0; i--) {
+      const items = scheduleData[dateKeys[i]] || [];
+      for (let j = items.length - 1; j >= 0; j--) {
+        const title = items[j].title;
+        if (title) titles.add(title);
+        count++;
+        if (count >= 150) break; // 🌟 150件で見切ることで計算量を大幅削減
+      }
+      if (count >= 150) break;
+    }
+
     return Array.from(titles);
-  }, [scheduleData, visible]); // 👈 inputText を依存から外した（超重要）
+    // 🌟 依存から scheduleData を外すことで、入力中の余計な再計算を防ぎます
+  }, [visible]);
 
-  // 🌟 改善2: 文字を打つたびに走るのは、抽出済みの allTitles からの「絞り込み」だけ！
+  // 🌟 限界突破2-A：入力中の文字を「裏側で」評価するように設定
+  const deferredTitle = useDeferredValue(formData.title);
+
+  // 🌟 限界突破2-B：サジェストの絞り込みには「遅延評価された文字」を使う
   const suggestions = useMemo(() => {
-    const s = formData.title.trim();
+    const s = deferredTitle.trim(); // 🌟 formData.title ではなく deferredTitle を使う
     if (!s || !isReady) return [];
+
     const r = toHiragana(s);
     return allTitles
       .filter(
         (t) => (readingMaster[t] || toHiragana(t)).startsWith(r) && t !== s,
       )
       .slice(0, 5);
-  }, [formData.title, allTitles, readingMaster, isReady]);
+  }, [deferredTitle, allTitles, readingMaster, isReady]); // 🌟 依存も deferredTitle に
 
   const currentQuickTags = useMemo(
     () =>
@@ -647,21 +664,21 @@ export default function ScheduleModal({
       const startForExport = formData.isAllDay
         ? formData.startDate
         : new Date(
-            formData.startDate.getFullYear(),
-            formData.startDate.getMonth(),
-            formData.startDate.getDate(),
-            formData.startTime.getHours(),
-            formData.startTime.getMinutes(),
-          );
+          formData.startDate.getFullYear(),
+          formData.startDate.getMonth(),
+          formData.startDate.getDate(),
+          formData.startTime.getHours(),
+          formData.startTime.getMinutes(),
+        );
       const endForExport = formData.isAllDay
         ? formData.endDate
         : new Date(
-            formData.endDate.getFullYear(),
-            formData.endDate.getMonth(),
-            formData.endDate.getDate(),
-            formData.endTime.getHours(),
-            formData.endTime.getMinutes(),
-          );
+          formData.endDate.getFullYear(),
+          formData.endDate.getMonth(),
+          formData.endDate.getDate(),
+          formData.endTime.getHours(),
+          formData.endTime.getMinutes(),
+        );
 
       const returnedId = await exportToStandardCalendar(
         formData.title,
@@ -679,7 +696,7 @@ export default function ScheduleModal({
 
       // 🌟 魔法の修正：共有判定を sharedRooms ベースにし、保存パスを完全修正！
       const isShared = Object.keys(sharedRooms).includes(finalTag);
-      const wasShared = selectedItem 
+      const wasShared = selectedItem
         ? (selectedItem.tags || [selectedItem.tag || ""]).some((tag) => Object.keys(sharedRooms).includes(tag))
         : false;
 
@@ -744,12 +761,12 @@ export default function ScheduleModal({
                 nextData[d] = nextData[d].map((i) =>
                   i.id === selectedItem.id
                     ? {
-                        ...i,
-                        exceptionDates: [
-                          ...(i.exceptionDates || []),
-                          selectedDate,
-                        ],
-                      }
+                      ...i,
+                      exceptionDates: [
+                        ...(i.exceptionDates || []),
+                        selectedDate,
+                      ],
+                    }
                     : i,
                 );
               });
@@ -817,7 +834,7 @@ export default function ScheduleModal({
       if (selectedItem.externalEventId) {
         try {
           await Calendar.deleteEventAsync(selectedItem.externalEventId);
-        } catch (e) {}
+        } catch (e) { }
       }
 
       const wasShared = selectedItem.tags?.some((tag) => Object.keys(sharedRooms).includes(tag)) || Object.keys(sharedRooms).includes(selectedItem.tag || "");
@@ -833,7 +850,7 @@ export default function ScheduleModal({
               await cancelItemNotification(task.notificationId);
           }
         }
-        
+
         // 🌟 修正：正しい共有パスから削除する
         if (wasShared) {
           try {
