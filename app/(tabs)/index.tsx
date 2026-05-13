@@ -411,13 +411,41 @@ function IndexContent() {
     targetLayer: string,
     isCopy: boolean,
   ) => {
-    // 🌟 修正1：tag と tags 両方を更新し、色も最新のカテゴリ色に塗り替える
+    // 🌟 魔法の修正1：元の親レイヤーを特定する
+    const oldParentLayer = (item.tags && item.tags.length > 0) ? item.tags[0] : item.tag;
+
+    // 🌟 魔法の修正2：選ばれたのが「カレンダー（大枠）」か「カテゴリ（小タグ）」かを判定
+    const isTargetMainLayer = Object.keys(layerMaster).includes(targetLayer);
+
+    let parentLayer = oldParentLayer || "生活";
+    let subTag = targetLayer;
+
+    if (isTargetMainLayer) {
+      // カレンダー自体を移動した場合は、親を更新して小タグは空にする
+      parentLayer = targetLayer;
+      subTag = "";
+    } else if (tagMaster[targetLayer]) {
+      // 登録済みの小タグが選ばれた場合
+      parentLayer = tagMaster[targetLayer].layer;
+      subTag = targetLayer;
+    } else {
+      // 食費などの「未登録カテゴリ」が選ばれた場合は、親カレンダーを維持する！
+      parentLayer = oldParentLayer || "生活";
+      subTag = targetLayer;
+    }
+
+    // 🌟 魔法の修正3：色を最新のものに染め直す（①小タグ専用色 → ②親レイヤー色 → ③元の色）
+    const newColor = tagMaster[subTag]?.color || layerMaster[parentLayer] || item.color;
+
     const newItem: ScheduleItem = {
       ...item,
       id: isCopy ? Date.now().toString() : item.id,
-      tag: targetLayer,     // 🌟 単数形のタグも更新（重要！）
-      tags: [targetLayer],  // 🌟 複数形も一貫性のため更新
-      color: tagMaster[targetLayer]?.color || item.color, // 🌟 色もこの瞬間に最新にする
+      tag: subTag || parentLayer,
+      // 🌟 魔法の修正4：tags配列に「親レイヤー」を絶対に含める！（フィルター消滅バグを完全防止）
+      tags: subTag && subTag !== parentLayer ? [parentLayer, subTag] : [parentLayer],
+      color: newColor,
+      // 🌟 魔法の修正5：家計簿用のカテゴリも連動して書き換える！（金額計算バグを防止）
+      category: item.isExpense ? (subTag || targetLayer) : item.category,
     };
 
     const targetDate = item.date || selectedDate;
@@ -440,9 +468,9 @@ function IndexContent() {
         }
       }
 
-      // ② 新しい共有先に保存する
-      if (Object.keys(sharedRooms).includes(targetLayer)) {
-        const targetRoomId = sharedRooms[targetLayer];
+      // ② 新しい共有先に保存する（🌟 親レイヤーを使って正しい部屋に保存する！）
+      if (Object.keys(sharedRooms).includes(parentLayer)) {
+        const targetRoomId = sharedRooms[parentLayer];
         batch.set(doc(db, "rooms", targetRoomId, "schedules", newItem.id), {
           ...newItem,
           date: targetDate,
@@ -455,7 +483,7 @@ function IndexContent() {
         await batch.commit();
       }
 
-      // 🌟 修正2：まずモーダルを閉じ、裏側で重い計算を回す（ユーザーを待たせない）
+      // 画面の更新処理（裏側で爆速で行う）
       setQuickActionVisible(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
@@ -470,10 +498,9 @@ function IndexContent() {
             });
           }
 
-          // 新しい場所に足す（移動先がローカルカレンダーの場合のみ。共有は自動同期に任せる）
-          if (!Object.keys(sharedRooms).includes(targetLayer)) {
+          // 新しい場所に足す（移動先がローカルカレンダーの場合のみ）
+          if (!Object.keys(sharedRooms).includes(parentLayer)) {
             if (!nextData[targetDate]) nextData[targetDate] = [];
-            // 重複防止のため、念のため同じIDの古いデータを排除してから追加
             nextData[targetDate] = [
               ...nextData[targetDate].filter(i => i.id !== newItem.id),
               newItem
@@ -759,7 +786,7 @@ function IndexContent() {
     syncToStorage();
   }, [layerMaster, tagMaster, presets, activeTags]);
 
-  // 🌟 修正：最強の軽量化版！無駄な再計算をゼロにする
+  // 🌟 修正：最強の軽量化版！無駄な再計算をゼロにしつつ、親の色変更を即座に反映！
   const coloredScheduleData = useMemo(() => {
     let hasAnyChange = false;
     const nextData: { [date: string]: ScheduleItem[] } = {};
@@ -768,10 +795,17 @@ function IndexContent() {
       let dateChanged = false;
       const newItems = scheduleData[date].map((item) => {
         const itemTag = item.tag || (item.tags && item.tags[0]);
-        // 常に最新の色を取得
-        const latestColor = itemTag && tagMaster[itemTag] ? tagMaster[itemTag].color : item.color;
+        const parentTag = (item.tags && item.tags.length > 0) ? item.tags[0] : itemTag;
 
-        // 🌟 ここが爆速化の鍵！「色が本当に変わった時」だけ新しいデータを作る
+        // 🌟 ここが超重要！tagMasterだけでなく、layerMasterからも常に最新の色を引っ張る！
+        let latestColor = item.color;
+        if (itemTag && tagMaster[itemTag]) {
+          latestColor = tagMaster[itemTag].color;
+        } else if (parentTag && layerMaster[parentTag]) {
+          latestColor = layerMaster[parentTag];
+        }
+
+        // 🌟 色が変わるべき時だけ新しいデータを作る
         if (item.color !== latestColor) {
           dateChanged = true;
           return { ...item, color: latestColor };
@@ -789,7 +823,7 @@ function IndexContent() {
 
     // 🌟 1つも色の変更がなければ、大元の scheduleData をそのまま返す（これで再描画ラグがゼロになります）
     return hasAnyChange ? nextData : scheduleData;
-  }, [scheduleData, tagMaster]);
+  }, [scheduleData, tagMaster, layerMaster]); // 🌟 layerMaster を監視対象に追加！
 
   const displayData = useDisplayData(
     coloredScheduleData,
