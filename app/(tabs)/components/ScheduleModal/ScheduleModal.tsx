@@ -17,7 +17,7 @@ import { PRESET_COLORS } from "../../../../utils/helpers";
 
 import { exportToStandardCalendar } from "../../../../hooks/useCalendarExport";
 
-import { deleteDoc, doc, setDoc } from "firebase/firestore";
+import { deleteDoc, doc, writeBatch } from "firebase/firestore";
 import { db } from "../../../../firebaseConfig";
 
 import { ModernDatePicker, formatTime } from "./ModernDatePicker";
@@ -62,6 +62,7 @@ interface ScheduleModalProps {
   onForceRender?: () => void;
   isExternalSyncEnabled?: boolean;
   setHasUnsavedChanges: (val: boolean) => void;
+  sharedRooms?: { [layerName: string]: string };
 }
 
 export default function ScheduleModal({
@@ -76,6 +77,7 @@ export default function ScheduleModal({
   tagMaster = {},
   setTagMaster,
   setHasUnsavedChanges,
+  sharedRooms = {},
 }: ScheduleModalProps) {
   // =========================================================
   // 🌟 改善：バラバラだった入力用Stateを1つの「formData」に統合！
@@ -609,7 +611,6 @@ export default function ScheduleModal({
       );
       const allDone = pureTodos.length > 0 && pureTodos.every((t) => t.isDone);
 
-      const newData = { ...scheduleData };
       const sStr = formData.startDate.toISOString().split("T")[0];
       const itemData = {
         title: formData.title,
@@ -643,81 +644,24 @@ export default function ScheduleModal({
         subTasks: updatedSubTasks,
       };
 
-      const isShared = selectedLayer === "共有" || finalTag === "共有";
-
-      if (isShared) {
-        try {
-          const docId = selectedItem ? selectedItem.id : Date.now().toString();
-          const docRef = doc(db, "shared_schedules", docId);
-          await setDoc(docRef, {
-            ...itemData,
-            id: docId,
-            date: sStr,
-            updatedAt: new Date().toISOString(),
-          });
-        } catch (e) {
-          console.error("共有保存エラー:", e);
-          Alert.alert("エラー", "共有データの保存に失敗しました。");
-        }
-      } else {
-        if (selectedItem) {
-          if (mode === "single") {
-            Object.keys(newData).forEach((d) => {
-              newData[d] = newData[d].map((i: ScheduleItem) => {
-                if (i.id === selectedItem.id) {
-                  return {
-                    ...i,
-                    exceptionDates: [...(i.exceptionDates || []), selectedDate],
-                  };
-                }
-                return i;
-              });
-            });
-            const newItem = {
-              ...selectedItem,
-              ...itemData,
-              id: Date.now().toString(),
-              repeatType: undefined,
-              linkedMasterId: selectedItem.id,
-            };
-            if (!newData[sStr]) newData[sStr] = [];
-            newData[sStr].push(newItem);
-          } else {
-            Object.keys(newData).forEach((d) => {
-              newData[d] = newData[d].filter(
-                (i: ScheduleItem) => i.id !== selectedItem.id,
-              );
-            });
-            if (!newData[sStr]) newData[sStr] = [];
-            newData[sStr].push({ ...selectedItem, ...itemData });
-          }
-        } else {
-          if (!newData[sStr]) newData[sStr] = [];
-          newData[sStr].push({
-            id: Date.now().toString(),
-            ...itemData,
-          });
-        }
-      }
-
       const startForExport = formData.isAllDay
         ? formData.startDate
         : new Date(
-          formData.startDate.getFullYear(),
-          formData.startDate.getMonth(),
-          formData.startDate.getDate(),
-          formData.startTime.getHours(),
-          formData.startTime.getMinutes(),
-        );
+            formData.startDate.getFullYear(),
+            formData.startDate.getMonth(),
+            formData.startDate.getDate(),
+            formData.startTime.getHours(),
+            formData.startTime.getMinutes(),
+          );
       const endForExport = formData.isAllDay
         ? formData.endDate
         : new Date(
-          formData.endDate.getFullYear(),
-          formData.endDate.getMonth(),
-          formData.endDate.getDate(),
-          formData.endTime.getHours(),
-          formData.endTime.getMinutes(),
-        );
+            formData.endDate.getFullYear(),
+            formData.endDate.getMonth(),
+            formData.endDate.getDate(),
+            formData.endTime.getHours(),
+            formData.endTime.getMinutes(),
+          );
 
       const returnedId = await exportToStandardCalendar(
         formData.title,
@@ -730,80 +674,111 @@ export default function ScheduleModal({
       // 外部カレンダー連携で返ってきたIDがあればセット
       let finalReturnedId = returnedId;
 
-      // 🌟 魔法の修正：IDの生成をReactのState更新の外に出す（二重生成バグの元凶を絶つ）
       const newEventId = Date.now().toString();
+      const targetDocId = selectedItem ? selectedItem.id : newEventId;
 
-      // 🌟 修正1：重いデータ更新の【前】に、まずモーダルを爆速で閉じる！
+      // 🌟 魔法の修正：共有判定を sharedRooms ベースにし、保存パスを完全修正！
+      const isShared = Object.keys(sharedRooms).includes(finalTag);
+      const wasShared = selectedItem 
+        ? (selectedItem.tags || [selectedItem.tag || ""]).some((tag) => Object.keys(sharedRooms).includes(tag))
+        : false;
+
+      // ==========================================
+      // ① Firebase（クラウド）の保存処理
+      // ==========================================
+      let hasCloudAction = false;
+      const batch = writeBatch(db);
+
+      // 古い共有予定を消す（共有からローカルへ、または別の共有レイヤーへ移動した時）
+      if (selectedItem && wasShared) {
+        const oldLayer = (selectedItem.tags || [selectedItem.tag || ""]).find((tag) => Object.keys(sharedRooms).includes(tag));
+        if (oldLayer && (!isShared || oldLayer !== finalTag)) {
+          const oldRoomId = sharedRooms[oldLayer];
+          if (oldRoomId) {
+            batch.delete(doc(db, "rooms", oldRoomId, "schedules", selectedItem.id));
+            hasCloudAction = true;
+          }
+        }
+      }
+
+      // 今回、共有レイヤーに保存する場合
+      if (isShared) {
+        const targetRoomId = sharedRooms[finalTag];
+        if (targetRoomId) {
+          batch.set(doc(db, "rooms", targetRoomId, "schedules", targetDocId), {
+            ...selectedItem, // 既存データを引き継ぐ
+            ...(itemData as Omit<ScheduleItem, "id">),
+            id: targetDocId,
+            externalEventId: finalReturnedId || selectedItem?.externalEventId,
+            date: sStr,
+            updatedAt: new Date().toISOString(),
+          });
+          hasCloudAction = true;
+        }
+      }
+
+      if (hasCloudAction) {
+        try {
+          await batch.commit();
+        } catch (e) {
+          console.error("共有保存エラー:", e);
+          Alert.alert("エラー", "共有データの保存に失敗しました。");
+          throw e; // 失敗したらここで止める
+        }
+      }
+
+      // ==========================================
+      // ② ローカルデータの更新と画面閉じる処理
+      // ==========================================
       onClose();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      // 🌟 修正2：画面が閉じるアニメーション（約0.3秒）が終わった後の「暇な時間」に重い再描画を走らせる
       InteractionManager.runAfterInteractions(() => {
-        if (!isShared) {
-          setScheduleData((prevData: Record<string, ScheduleItem[]>) => {
-            const nextData = { ...prevData };
+        setScheduleData((prevData: Record<string, ScheduleItem[]>) => {
+          const nextData = { ...prevData };
 
-            if (selectedItem) {
-              if (mode === "single") {
-                Object.keys(nextData).forEach((d) => {
-                  nextData[d] = nextData[d].map((i) =>
-                    i.id === selectedItem.id
-                      ? {
+          // 元々ローカルだったデータを消す（編集の時）
+          if (selectedItem && !wasShared) {
+            if (mode === "single") {
+              Object.keys(nextData).forEach((d) => {
+                nextData[d] = nextData[d].map((i) =>
+                  i.id === selectedItem.id
+                    ? {
                         ...i,
                         exceptionDates: [
                           ...(i.exceptionDates || []),
                           selectedDate,
                         ],
                       }
-                      : i,
-                  );
-                });
-                const newItem: ScheduleItem = {
-                  ...selectedItem,
-                  ...(itemData as Omit<ScheduleItem, "id">),
-                  id: newEventId,
-                  repeatType: undefined,
-                  linkedMasterId: selectedItem.id,
-                  externalEventId:
-                    finalReturnedId || selectedItem.externalEventId,
-                };
-                if (!nextData[sStr]) nextData[sStr] = [];
-                nextData[sStr] = [...nextData[sStr], newItem];
-              } else {
-                Object.keys(nextData).forEach((d) => {
-                  nextData[d] = nextData[d].filter(
-                    (i) => i.id !== selectedItem.id,
-                  );
-                });
-                if (!nextData[sStr]) nextData[sStr] = [];
-                nextData[sStr] = [
-                  ...nextData[sStr],
-                  {
-                    ...selectedItem,
-                    ...(itemData as Omit<ScheduleItem, "id">),
-                    externalEventId:
-                      finalReturnedId || selectedItem.externalEventId,
-                  } as ScheduleItem,
-                ];
-              }
+                    : i,
+                );
+              });
             } else {
-              if (!nextData[sStr]) nextData[sStr] = [];
-              nextData[sStr] = [
-                ...nextData[sStr],
-                {
-                  id: newEventId,
-                  ...(itemData as Omit<ScheduleItem, "id">),
-                  externalEventId: finalReturnedId,
-                } as ScheduleItem,
-              ];
+              Object.keys(nextData).forEach((d) => {
+                nextData[d] = nextData[d].filter((i) => i.id !== selectedItem.id);
+              });
             }
+          }
 
-            return nextData;
-          });
-        }
+          // 今回ローカルに保存する場合のみ追加（共有の場合はFirebaseが自動同期する）
+          if (!isShared) {
+            const newItem: ScheduleItem = {
+              ...selectedItem,
+              ...(itemData as Omit<ScheduleItem, "id">),
+              id: mode === "single" && selectedItem ? newEventId : targetDocId,
+              repeatType: mode === "single" ? undefined : itemData.repeatType,
+              linkedMasterId: mode === "single" && selectedItem ? selectedItem.id : undefined,
+              externalEventId: finalReturnedId || selectedItem?.externalEventId,
+            } as ScheduleItem;
+
+            if (!nextData[sStr]) nextData[sStr] = [];
+            nextData[sStr] = [...nextData[sStr], newItem];
+          }
+
+          return nextData;
+        });
 
         setHasUnsavedChanges(true);
-        // 🌟 修正3：finallyの中にあったバリア解除処理をここに移動
         isSavingRef.current = false;
         setIsSaving(false);
       });
@@ -814,13 +789,10 @@ export default function ScheduleModal({
         "保存エラー",
         "予定の保存に失敗しました。通信環境を確認してください。",
       );
-      // エラー時も確実にバリアを解除
       isSavingRef.current = false;
       setIsSaving(false);
     }
   };
-
-
 
   const handleDeletePress = () => {
     if (selectedItem && selectedItem.repeatType) {
@@ -845,8 +817,10 @@ export default function ScheduleModal({
       if (selectedItem.externalEventId) {
         try {
           await Calendar.deleteEventAsync(selectedItem.externalEventId);
-        } catch (e) { }
+        } catch (e) {}
       }
+
+      const wasShared = selectedItem.tags?.some((tag) => Object.keys(sharedRooms).includes(tag)) || Object.keys(sharedRooms).includes(selectedItem.tag || "");
 
       if (mode !== "single") {
         if (selectedItem.notificationIds) {
@@ -859,49 +833,49 @@ export default function ScheduleModal({
               await cancelItemNotification(task.notificationId);
           }
         }
-        const isShared = selectedItem.tags?.includes("共有") || selectedItem.tag === "共有";
-        if (isShared) {
+        
+        // 🌟 修正：正しい共有パスから削除する
+        if (wasShared) {
           try {
-            await deleteDoc(doc(db, "shared_schedules", selectedItem.id));
+            const oldLayer = (selectedItem.tags || [selectedItem.tag || ""]).find((tag) => Object.keys(sharedRooms).includes(tag));
+            const roomId = oldLayer ? sharedRooms[oldLayer] : null;
+            if (roomId) {
+              await deleteDoc(doc(db, "rooms", roomId, "schedules", selectedItem.id));
+            }
           } catch (e) {
             console.error("共有データ削除エラー:", e);
           }
         }
       }
 
-      // 🌟 修正1：先にモーダルを爆速で閉じる！
       onClose();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
 
-      // 🌟 修正2：画面が閉じた裏側でデータを削除する
       InteractionManager.runAfterInteractions(() => {
-        const isShared = selectedItem.tags?.includes("共有") || selectedItem.tag === "共有";
-
-        if (!isShared || mode === "single") {
-          setScheduleData((prevData: Record<string, ScheduleItem[]>) => {
-            const nextData = { ...prevData };
-            if (mode === "single") {
-              Object.keys(nextData).forEach((d) => {
-                nextData[d] = nextData[d].map((i: ScheduleItem) => {
-                  if (i.id === selectedItem.id) {
-                    return {
-                      ...i,
-                      exceptionDates: [...(i.exceptionDates || []), selectedDate],
-                    };
-                  }
-                  return i;
-                });
+        setScheduleData((prevData: Record<string, ScheduleItem[]>) => {
+          const nextData = { ...prevData };
+          if (mode === "single") {
+            Object.keys(nextData).forEach((d) => {
+              nextData[d] = nextData[d].map((i: ScheduleItem) => {
+                if (i.id === selectedItem.id) {
+                  return {
+                    ...i,
+                    exceptionDates: [...(i.exceptionDates || []), selectedDate],
+                  };
+                }
+                return i;
               });
-            } else {
-              Object.keys(nextData).forEach((d) => {
-                nextData[d] = nextData[d].filter(
-                  (i: ScheduleItem) => i.id !== selectedItem.id,
-                );
-              });
-            }
-            return nextData;
-          });
-        }
+            });
+          } else {
+            // ローカルにある可能性を考慮して無条件でフィルタリング
+            Object.keys(nextData).forEach((d) => {
+              nextData[d] = nextData[d].filter(
+                (i: ScheduleItem) => i.id !== selectedItem.id,
+              );
+            });
+          }
+          return nextData;
+        });
 
         setHasUnsavedChanges(true);
         isSavingRef.current = false;

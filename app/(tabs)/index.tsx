@@ -2183,6 +2183,7 @@ function IndexContent() {
           tagMaster={tagMaster}
           setTagMaster={setTagMaster}
           setHasUnsavedChanges={setHasUnsavedChanges}
+          sharedRooms={sharedRooms}
         />
       )}
       <LayerManagementModal
