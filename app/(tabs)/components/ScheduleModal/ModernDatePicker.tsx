@@ -15,19 +15,23 @@ import { styles } from "./ScheduleModal.styles"; // 🌟 さっき作ったス�
 export const formatTime = (d: Date) =>
   `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 
-export const ModernDatePicker = ({
-  value,
-  mode,
-  onChange,
-  themeColor,
-  icon,
-}: {
+// 🌟 TypeScriptの型を綺麗に分離
+interface ModernDatePickerProps {
   value: Date;
   mode: "date" | "time";
   onChange: (d: Date) => void;
   themeColor: string;
   icon?: keyof typeof Ionicons.glyphMap;
-}) => {
+}
+
+// 🌟 限界突破：コンポーネント全体を React.memo で包み、無駄な再描画を完全ブロック！
+export const ModernDatePicker = React.memo(({
+  value,
+  mode,
+  onChange,
+  themeColor,
+  icon,
+}: ModernDatePickerProps) => {
   const [show, setShow] = useState(false);
 
   const formattedValue =
@@ -122,4 +126,4 @@ export const ModernDatePicker = ({
       )}
     </>
   );
-};
+});

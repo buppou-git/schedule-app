@@ -1205,6 +1205,119 @@ export default function ScheduleModal({
   ]);
 
 
+  // 🌟 限界突破の最終兵器2：簡易モード（SimpleMode）の激重UIも完全キャッシュ化！
+  const simpleModeOptions = useMemo(() => {
+    return (
+      <>
+        {/* 3. 日時・時間設定エリア（カード形式） */}
+        <View style={styles.simpleDateTimeCard}>
+          <View style={styles.timeRow}>
+            <View style={styles.timeLabelContainer}>
+              <Text style={[styles.timeLabelText, { color: uiThemeColor }]}>開始</Text>
+            </View>
+            <View style={styles.timePickerGroup}>
+              <ModernDatePicker value={formData.startDate} mode="date" onChange={(d) => updateForm({ startDate: d })} themeColor={uiThemeColor} />
+              <ModernDatePicker value={formData.startTime} mode="time" onChange={(d) => updateForm({ startTime: d })} themeColor={uiThemeColor} />
+            </View>
+          </View>
+          <View style={styles.timeDivider} />
+          <View style={styles.timeRow}>
+            <View style={styles.timeLabelContainer}>
+              <Text style={styles.timeLabelText}>終了</Text>
+            </View>
+            <View style={styles.timePickerGroup}>
+              <ModernDatePicker value={formData.endDate} mode="date" onChange={(d) => updateForm({ endDate: d })} themeColor={uiThemeColor} />
+              <ModernDatePicker value={formData.endTime} mode="time" onChange={(d) => updateForm({ endTime: d })} themeColor={uiThemeColor} />
+            </View>
+          </View>
+        </View>
+
+        {/* 🌟 4. カレンダー（レイヤー）選択エリア */}
+        <View style={styles.simpleCategorySection}>
+          <Text style={styles.simpleCategoryTitle}>カレンダー</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ width: "100%" }}>
+            {Object.keys(layerMaster)
+              .filter((name) => name !== "祝日" && name !== "外部予定")
+              .map((layerName) => {
+                const layerColor = layerMaster[layerName] || uiThemeColor;
+                const isSelected = selectedLayer === layerName;
+                return (
+                  <TouchableOpacity
+                    key={layerName}
+                    activeOpacity={0.7}
+                    style={[
+                      styles.simpleCategoryChip,
+                      { borderColor: layerColor + "40" },
+                      isSelected && { backgroundColor: layerColor, borderColor: layerColor },
+                    ]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setSelectedLayer(layerName);
+                      updateForm({ tag: "" });
+                      if (layerName === "家計簿") updateForm({ isExpense: true });
+                    }}
+                  >
+                    <Text style={[styles.simpleCategoryChipText, { color: layerColor }, isSelected && { color: "#FFF" }]}>
+                      {layerName}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+          </ScrollView>
+        </View>
+
+        {/* 4. オプションボタン（ToDo & 金額） */}
+        <View style={styles.simpleActionRow}>
+          <TouchableOpacity
+            style={[styles.simpleOptBtn, formData.isTodo && { backgroundColor: "#34C759", borderColor: "#34C759" }]}
+            onPress={() => updateForm({ isTodo: !formData.isTodo })}
+          >
+            <Ionicons name="checkbox" size={22} color={formData.isTodo ? "#FFF" : "#8E8E93"} />
+            <Text style={[styles.simpleOptBtnText, formData.isTodo && { color: "#FFF" }]}>ToDoに追加</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.simpleOptBtn, formData.isExpense && { backgroundColor: "#FFCC00", borderColor: "#FFCC00" }]}
+            onPress={() => updateForm({ isExpense: !formData.isExpense })}
+          >
+            <Ionicons name="wallet" size={22} color={formData.isExpense ? "#FFF" : "#FFCC00"} />
+            <Text style={[styles.simpleOptBtnText, formData.isExpense && { color: "#FFF" }]}>支出を記録</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* 5. 条件付き金額入力エリア */}
+        {formData.isExpense && (
+          <View style={styles.simpleAmountSection}>
+            <Text style={styles.amountSymbol}>¥</Text>
+            <TextInput
+              style={styles.simpleHeroAmountInput}
+              placeholder="0"
+              placeholderTextColor="#C7C7CC"
+              keyboardType="numeric"
+              value={formData.amount}
+              onChangeText={(t) => updateForm({ amount: t })}
+            />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.miniCategoryScroll}>
+              {["食費", "日用品", "交通費", "交際費", "趣味", "固定費"].map((cat) => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[styles.miniChip, formData.category === cat && { backgroundColor: "#FFCC00" }]}
+                  onPress={() => updateForm({ category: cat })}
+                >
+                  <Text style={[styles.miniChipText, formData.category === cat && { color: "#FFF" }]}>{cat}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+      </>
+    );
+  }, [
+    formData.startDate, formData.startTime, formData.endDate, formData.endTime,
+    formData.isTodo, formData.isExpense, formData.amount, formData.category,
+    selectedLayer, layerMaster, uiThemeColor, currentQuickTags, updateForm,
+  ]);
+
+
   return (
     <Modal
       visible={visible}
@@ -1257,237 +1370,13 @@ export default function ScheduleModal({
                         placeholder="予定のタイトルを入力"
                         placeholderTextColor="#C7C7CC"
                         autoFocus
-                        value={formData.title} // 🌟
+                        value={formData.title} // 🌟 ここが毎文字変わっても下には影響しない！
                         onChangeText={(t) => updateForm({ title: t })} // 🌟
                         multiline={false}
                       />
 
-                      {/* 3. 日時・時間設定エリア（カード形式） */}
-                      <View style={styles.simpleDateTimeCard}>
-                        <View style={styles.timeRow}>
-                          <View style={styles.timeLabelContainer}>
-                            <Text
-                              style={[
-                                styles.timeLabelText,
-                                { color: uiThemeColor },
-                              ]}
-                            >
-                              開始
-                            </Text>
-                          </View>
-                          <View style={styles.timePickerGroup}>
-                            <ModernDatePicker
-                              value={formData.startDate} // 🌟
-                              mode="date"
-                              onChange={(d) => updateForm({ startDate: d })} // 🌟
-                              themeColor={uiThemeColor}
-                            />
-                            <ModernDatePicker
-                              value={formData.startTime} // 🌟
-                              mode="time"
-                              onChange={(d) => updateForm({ startTime: d })} // 🌟
-                              themeColor={uiThemeColor}
-                            />
-                          </View>
-                        </View>
-                        <View style={styles.timeDivider} />
-                        <View style={styles.timeRow}>
-                          {/* 🌟 「終了」の文字 */}
-                          <View style={styles.timeLabelContainer}>
-                            <Text style={styles.timeLabelText}>終了</Text>
-                          </View>
-                          <View style={styles.timePickerGroup}>
-                            <ModernDatePicker
-                              value={formData.endDate} // 🌟
-                              mode="date"
-                              onChange={(d) => updateForm({ endDate: d })} // 🌟
-                              themeColor={uiThemeColor}
-                            />
-                            <ModernDatePicker
-                              value={formData.endTime} // 🌟
-                              mode="time"
-                              onChange={(d) => updateForm({ endTime: d })} // 🌟
-                              themeColor={uiThemeColor}
-                            />
-                          </View>
-                        </View>
-                      </View>
-
-                      {/* 🌟 4. カレンダー（レイヤー）選択エリア */}
-                      <View style={styles.simpleCategorySection}>
-                        <Text style={styles.simpleCategoryTitle}>
-                          カレンダー
-                        </Text>
-                        <ScrollView
-                          horizontal
-                          showsHorizontalScrollIndicator={false}
-                          style={{ width: "100%" }}
-                        >
-                          {Object.keys(layerMaster)
-                            .filter(
-                              (name) => name !== "祝日" && name !== "外部予定",
-                            )
-                            .map((layerName) => {
-                              const layerColor =
-                                layerMaster[layerName] || uiThemeColor;
-
-                              // 🟢 修正：formData.category ではなく、正しく selectedLayer と比較する！
-                              const isSelected = selectedLayer === layerName;
-
-                              return (
-                                <TouchableOpacity
-                                  key={layerName}
-                                  activeOpacity={0.7}
-                                  style={[
-                                    styles.simpleCategoryChip,
-                                    { borderColor: layerColor + "40" },
-                                    isSelected && {
-                                      backgroundColor: layerColor,
-                                      borderColor: layerColor,
-                                    },
-                                  ]}
-                                  onPress={() => {
-                                    Haptics.impactAsync(
-                                      Haptics.ImpactFeedbackStyle.Light,
-                                    );
-                                    // 🟢 修正：レイヤーを正しく切り替える！
-                                    setSelectedLayer(layerName);
-
-                                    // 🌟 魔法の追加1：カレンダーを変えたら、裏に残っている別のタグを消す！
-                                    updateForm({ tag: "" });
-
-                                    // ※家計簿レイヤーを選んだら、ついでに支出ボタンをONにしてあげる
-                                    if (layerName === "家計簿") {
-                                      updateForm({ isExpense: true });
-                                    }
-                                  }}
-                                >
-                                  <Text
-                                    style={[
-                                      styles.simpleCategoryChipText,
-                                      { color: layerColor },
-                                      isSelected && { color: "#FFF" },
-                                    ]}
-                                  >
-                                    {layerName}
-                                  </Text>
-                                </TouchableOpacity>
-                              );
-                            })}
-                        </ScrollView>
-                      </View>
-
-                      {/* 4. オプションボタン（ToDo & 金額） */}
-                      <View style={styles.simpleActionRow}>
-                        {/* ToDo切り替えボタン */}
-                        <TouchableOpacity
-                          style={[
-                            styles.simpleOptBtn,
-                            formData.isTodo && {
-                              backgroundColor: "#34C759",
-                              borderColor: "#34C759",
-                            },
-                          ]}
-                          onPress={() =>
-                            updateForm({ isTodo: !formData.isTodo })
-                          } // 🌟
-                        >
-                          <Ionicons
-                            name="checkbox"
-                            size={22}
-                            color={formData.isTodo ? "#FFF" : "#8E8E93"}
-                          />
-                          <Text
-                            style={[
-                              styles.simpleOptBtnText,
-                              formData.isTodo && { color: "#FFF" },
-                            ]}
-                          >
-                            ToDoに追加
-                          </Text>
-                        </TouchableOpacity>
-
-                        {/* 金額入力切り替えボタン */}
-                        <TouchableOpacity
-                          style={[
-                            styles.simpleOptBtn,
-                            formData.isExpense && {
-                              backgroundColor: "#FFCC00",
-                              borderColor: "#FFCC00",
-                            },
-                          ]}
-                          onPress={() =>
-                            updateForm({ isExpense: !formData.isExpense })
-                          } // 🌟
-                        >
-                          <Ionicons
-                            name="wallet"
-                            size={22}
-                            color={formData.isExpense ? "#FFF" : "#FFCC00"}
-                          />
-                          <Text
-                            style={[
-                              styles.simpleOptBtnText,
-                              formData.isExpense && { color: "#FFF" },
-                            ]}
-                          >
-                            支出を記録
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-
-                      {/* 5. 条件付き金額入力エリア（支出ONの時だけふわっと出す） */}
-                      {formData.isExpense && (
-                        <View style={styles.simpleAmountSection}>
-                          <Text style={styles.amountSymbol}>¥</Text>
-                          <TextInput
-                            style={styles.simpleHeroAmountInput}
-                            placeholder="0"
-                            placeholderTextColor="#C7C7CC"
-                            keyboardType="numeric"
-                            value={formData.amount} // 🌟
-                            onChangeText={(t) => updateForm({ amount: t })} // 🌟
-                          />
-                          <ScrollView
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                            style={styles.miniCategoryScroll}
-                          >
-                            {[
-                              "食費",
-                              "日用品",
-                              "交通費",
-                              "交際費",
-                              "趣味",
-                              "固定費",
-                            ].map((cat) => (
-                              <TouchableOpacity
-                                key={cat}
-                                style={[
-                                  styles.miniChip,
-                                  formData.category === cat && {
-                                    // 🌟
-                                    backgroundColor: "#FFCC00",
-                                  },
-                                ]}
-                                onPress={() => updateForm({ category: cat })} // 🌟
-                              >
-                                <Text
-                                  style={[
-                                    styles.miniChipText,
-                                    formData.category === cat && {
-                                      // 🌟
-                                      color: "#FFF",
-                                    },
-                                  ]}
-                                >
-                                  {cat}
-                                </Text>
-                              </TouchableOpacity>
-                            ))}
-                          </ScrollView>
-                        </View>
-                      )}
+                      {/* 🌟 キャッシュ化された重いUIの塊を呼び出すだけ！ */}
+                      {simpleModeOptions}
 
                       {/* 6. 下部アクション */}
                       <View style={styles.simpleBottomActions}>
