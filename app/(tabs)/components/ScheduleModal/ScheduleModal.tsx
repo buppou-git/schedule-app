@@ -632,7 +632,9 @@ export default function ScheduleModal({
       const itemData = {
         title: formData.title,
         tag: finalTag,
-        tags: [finalTag],
+        // 🌟 修正1：tags配列に「カレンダーの種類(selectedLayer)」を必ず含める！
+        // これがないと、属性（タグ）をつけた時にフィルター機能が親レイヤーを認識できず非表示になります。
+        tags: formData.tag.trim() ? [selectedLayer, formData.tag.trim()] : [selectedLayer], 
         amount: parseInt(formData.amount) || 0,
         isEvent: formData.isEvent,
         isTodo: formData.isTodo,
@@ -664,21 +666,21 @@ export default function ScheduleModal({
       const startForExport = formData.isAllDay
         ? formData.startDate
         : new Date(
-          formData.startDate.getFullYear(),
-          formData.startDate.getMonth(),
-          formData.startDate.getDate(),
-          formData.startTime.getHours(),
-          formData.startTime.getMinutes(),
-        );
+            formData.startDate.getFullYear(),
+            formData.startDate.getMonth(),
+            formData.startDate.getDate(),
+            formData.startTime.getHours(),
+            formData.startTime.getMinutes(),
+          );
       const endForExport = formData.isAllDay
         ? formData.endDate
         : new Date(
-          formData.endDate.getFullYear(),
-          formData.endDate.getMonth(),
-          formData.endDate.getDate(),
-          formData.endTime.getHours(),
-          formData.endTime.getMinutes(),
-        );
+            formData.endDate.getFullYear(),
+            formData.endDate.getMonth(),
+            formData.endDate.getDate(),
+            formData.endTime.getHours(),
+            formData.endTime.getMinutes(),
+          );
 
       const returnedId = await exportToStandardCalendar(
         formData.title,
@@ -694,9 +696,9 @@ export default function ScheduleModal({
       const newEventId = Date.now().toString();
       const targetDocId = selectedItem ? selectedItem.id : newEventId;
 
-      // 🌟 魔法の修正：共有判定を sharedRooms ベースにし、保存パスを完全修正！
-      const isShared = Object.keys(sharedRooms).includes(finalTag);
-      const wasShared = selectedItem
+      // 🌟 修正2：共有判定を「属性名(finalTag)」ではなく「大元のカレンダーの種類(selectedLayer)」で行う！
+      const isShared = Object.keys(sharedRooms).includes(selectedLayer);
+      const wasShared = selectedItem 
         ? (selectedItem.tags || [selectedItem.tag || ""]).some((tag) => Object.keys(sharedRooms).includes(tag))
         : false;
 
@@ -709,7 +711,8 @@ export default function ScheduleModal({
       // 古い共有予定を消す（共有からローカルへ、または別の共有レイヤーへ移動した時）
       if (selectedItem && wasShared) {
         const oldLayer = (selectedItem.tags || [selectedItem.tag || ""]).find((tag) => Object.keys(sharedRooms).includes(tag));
-        if (oldLayer && (!isShared || oldLayer !== finalTag)) {
+        // 🌟 修正3：ここも selectedLayer に直す
+        if (oldLayer && (!isShared || oldLayer !== selectedLayer)) {
           const oldRoomId = sharedRooms[oldLayer];
           if (oldRoomId) {
             batch.delete(doc(db, "rooms", oldRoomId, "schedules", selectedItem.id));
@@ -720,7 +723,7 @@ export default function ScheduleModal({
 
       // 今回、共有レイヤーに保存する場合
       if (isShared) {
-        const targetRoomId = sharedRooms[finalTag];
+        const targetRoomId = sharedRooms[selectedLayer]; // 🌟 修正4：保存先も selectedLayer に直す
         if (targetRoomId) {
           batch.set(doc(db, "rooms", targetRoomId, "schedules", targetDocId), {
             ...selectedItem, // 既存データを引き継ぐ
