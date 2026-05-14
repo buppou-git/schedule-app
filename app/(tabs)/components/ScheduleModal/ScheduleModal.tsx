@@ -486,20 +486,17 @@ const ScheduleModal = ({
   };
 
   const executeSave = async (mode: "normal" | "all" | "single") => {
-    // 🌟 1. 保存中なら処理をブロック（光の速さのRefで二重押しを完全無効化！）
+    // 🌟 1. 保存中なら処理をブロック（二重押しを完全無効化）
     if (isSaving || isSavingRef.current) return;
 
     if (!formData.title)
       return Alert.alert("エラー", "タイトルを入力してください");
 
     isSavingRef.current = true;
-    setIsSaving(true); // 🌟 2. 保存開始！ローディングをONにする
+    setIsSaving(true); // 🌟 2. ボタンをローディング状態にする
 
-    // 🌟 アニメーション衝突・キャンセルバグを避けるため、まず画面を閉じる
-    onClose();
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    // ❌ ここにあった onClose() を一番最後に移動しました！
 
-    // 🌟 InteractionManagerではなく、キャンセルされない確実なsetTimeoutを使う！
     setTimeout(async () => {
       try {
         const r = {
@@ -626,7 +623,7 @@ const ScheduleModal = ({
         );
         const allDone = pureTodos.length > 0 && pureTodos.every((t) => t.isDone);
 
-        // 🌟 タイムゾーンバグ防止！世界時間への変換(toISOString)を使わずに「日本時間のまま」確実な日付文字列を生成！
+        // 🌟 タイムゾーンバグ防止！
         const sYear = formData.startDate.getFullYear();
         const sMonth = String(formData.startDate.getMonth() + 1).padStart(2, "0");
         const sDay = String(formData.startDate.getDate()).padStart(2, "0");
@@ -753,27 +750,27 @@ const ScheduleModal = ({
           });
         }
 
-        // 🌟 完全なる再描画トリガー！
+        // 🌟 データの更新処理（安全・確実な配列コピー）
         setScheduleData((prevData: Record<string, ScheduleItem[]>) => {
-          const nextData: Record<string, ScheduleItem[]> = {};
-
-          Object.keys(prevData).forEach((key) => {
-            nextData[key] = [...prevData[key]];
-          });
+          const nextData = { ...prevData };
 
           // 古いデータの削除処理（移動や削除でも残骸を残さない）
           if (selectedItem) {
             if (mode === "single") {
               Object.keys(nextData).forEach((d) => {
-                nextData[d] = nextData[d].map((i) =>
-                  i.id === selectedItem.id
-                    ? { ...i, exceptionDates: [...(i.exceptionDates || []), selectedDate] }
-                    : i
-                );
+                if (nextData[d].some((i) => i.id === selectedItem.id)) {
+                  nextData[d] = nextData[d].map((i) =>
+                    i.id === selectedItem.id
+                      ? { ...i, exceptionDates: [...(i.exceptionDates || []), selectedDate] }
+                      : i
+                  );
+                }
               });
             } else {
               Object.keys(nextData).forEach((d) => {
-                nextData[d] = nextData[d].filter((i) => i.id !== selectedItem.id);
+                if (nextData[d].some((i) => i.id === selectedItem.id)) {
+                  nextData[d] = nextData[d].filter((i) => i.id !== selectedItem.id);
+                }
               });
             }
           }
@@ -792,7 +789,7 @@ const ScheduleModal = ({
           if (!nextData[sStr]) {
             nextData[sStr] = [newItem];
           } else {
-            // 安全のため重複を排除してから追加
+            // 🌟 追加する日付の配列だけを新しくしてReactに検知させる！
             nextData[sStr] = [...nextData[sStr].filter(i => i.id !== newItem.id), newItem];
           }
 
@@ -800,6 +797,11 @@ const ScheduleModal = ({
         });
 
         setHasUnsavedChanges(true);
+
+        // 🌟🌟🌟 すべての処理が完全に終わったここで、画面を閉じる！！ 🌟🌟🌟
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        onClose();
+
       } catch (error) {
         console.error("Save Error:", error);
         Alert.alert(
@@ -810,7 +812,7 @@ const ScheduleModal = ({
         isSavingRef.current = false;
         setIsSaving(false);
       }
-    }, 50); // 🌟 安全な50ms遅延
+    }, 50);
   };
 
   const handleDeletePress = () => {
@@ -832,8 +834,7 @@ const ScheduleModal = ({
     isSavingRef.current = true;
     setIsSaving(true);
 
-    onClose();
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    // ❌ ここにあった onClose() を一番最後に移動しました！
 
     setTimeout(async () => {
       try {
@@ -876,35 +877,40 @@ const ScheduleModal = ({
         }
 
         setScheduleData((prevData: Record<string, ScheduleItem[]>) => {
-          const nextData: Record<string, ScheduleItem[]> = {};
-
-          Object.keys(prevData).forEach((key) => {
-            nextData[key] = [...prevData[key]];
-          });
+          const nextData = { ...prevData };
 
           if (mode === "single") {
             Object.keys(nextData).forEach((d) => {
-              nextData[d] = nextData[d].map((i: ScheduleItem) => {
-                if (i.id === selectedItem.id) {
-                  return {
-                    ...i,
-                    exceptionDates: [...(i.exceptionDates || []), selectedDate],
-                  };
-                }
-                return i;
-              });
+              if (nextData[d].some((i) => i.id === selectedItem.id)) {
+                nextData[d] = nextData[d].map((i: ScheduleItem) => {
+                  if (i.id === selectedItem.id) {
+                    return {
+                      ...i,
+                      exceptionDates: [...(i.exceptionDates || []), selectedDate],
+                    };
+                  }
+                  return i;
+                });
+              }
             });
           } else {
             Object.keys(nextData).forEach((d) => {
-              nextData[d] = nextData[d].filter(
-                (i: ScheduleItem) => i.id !== selectedItem.id,
-              );
+              if (nextData[d].some((i) => i.id === selectedItem.id)) {
+                nextData[d] = nextData[d].filter(
+                  (i: ScheduleItem) => i.id !== selectedItem.id,
+                );
+              }
             });
           }
           return nextData;
         });
 
         setHasUnsavedChanges(true);
+
+        // 🌟🌟🌟 すべての処理が完全に終わったここで、画面を閉じる！！ 🌟🌟🌟
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        onClose();
+
       } catch (error: unknown) {
         console.error("Delete Error:", error);
         Alert.alert(
