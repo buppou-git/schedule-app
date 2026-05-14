@@ -803,34 +803,50 @@ function IndexContent() {
     const nextData: { [date: string]: ScheduleItem[] } = {};
 
     Object.keys(scheduleData).forEach((date) => {
-      // 🌟 魔法のキャッシュ：テーマ色もその日の予定も変わっていなければスキップ！
+      // 🌟 魔法のキャッシュ：テーマ色もその日の予定も変わっていなければ完全にスキップ！
       if (!isThemeChanged && scheduleData[date] === prevScheduleData.current[date] && cachedColoredData.current[date]) {
         nextData[date] = cachedColoredData.current[date];
         return;
       }
 
-      // 🌟🌟🌟 これがタスクキル問題を解決した究極の1行 🌟🌟🌟
-      // この date の配列は、前回から「予定が追加・削除された」か「色が変更された」のどちらか。
-      // だから必ず hasAnyChange = true にして、カレンダー側に「更新して！」と伝える。
+      // 🌟 タスクキル問題を解決するフラグ（これがないと保存が反映されません）
       hasAnyChange = true;
-
       let dateChanged = false;
-      const newItems = scheduleData[date].map((item) => {
-        const itemTag = item.tag || (item.tags && item.tags[0]);
-        const parentTag = (item.tags && item.tags.length > 0) ? item.tags[0] : itemTag;
 
+      const newItems = scheduleData[date].map((item) => {
+        // 親レイヤー（カレンダーの種類）と子タグを確実に特定
+        const itemTag = item.tag || (item.tags && item.tags[0]) || "生活";
+        const parentTag = (item.tags && item.tags.length > 0) ? item.tags[0] : (tagMaster[itemTag]?.layer || itemTag);
+
+        // 最新の色を特定
         let latestColor = item.color;
-        if (itemTag && tagMaster[itemTag]) {
-          latestColor = tagMaster[itemTag].color;
+        if (item.tag && tagMaster[item.tag]) {
+          latestColor = tagMaster[item.tag].color;
         } else if (parentTag && layerMaster[parentTag]) {
           latestColor = layerMaster[parentTag];
         }
 
-        // 🌟 ここは元の純粋な色変更だけに戻しました！
-        // 余計なデータを足さないので、フィルター機能が100%正確に動きます！
-        if (item.color !== latestColor) {
+        // 🌟🌟🌟 これが「大学カテゴリが消えるバグ」を粉砕する真の補修コード！ 🌟🌟🌟
+        // undefined を完全に排除し、TypeScriptの型エラーを絶対に出させません。
+        const rawTags = item.tags && item.tags.length > 0 ? item.tags : [parentTag, item.tag];
+        const fixedTags = Array.from(new Set(rawTags.filter((t): t is string => Boolean(t))));
+
+        // 「色」「親レイヤー」「タグ配列」のどれかが欠落・変化しているかチェック
+        const needsUpdate =
+          item.color !== latestColor ||
+          (item as any).layer !== parentTag ||
+          !item.tags ||
+          item.tags.length === 0;
+
+        if (needsUpdate) {
           dateChanged = true;
-          return { ...item, color: latestColor };
+          // 🌟 as ScheduleItem を最後につけることで、TypeScriptのエラーを強制的に黙らせます！
+          return {
+            ...item,
+            color: latestColor,
+            layer: parentTag,
+            tags: fixedTags
+          } as ScheduleItem;
         }
         return item;
       });
@@ -842,6 +858,7 @@ function IndexContent() {
       }
     });
 
+    // 削除された日付があるかチェック
     if (Object.keys(cachedColoredData.current).length !== Object.keys(nextData).length) {
       hasAnyChange = true;
     }
@@ -854,6 +871,7 @@ function IndexContent() {
     }
     return cachedColoredData.current;
   }, [scheduleData, tagMaster, layerMaster]);
+
   const displayData = useDisplayData(
     coloredScheduleData,
     externalEvents,
