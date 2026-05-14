@@ -487,14 +487,15 @@ const ScheduleModal = ({
   };
 
   const executeSave = async (mode: "normal" | "all" | "single") => {
+    // 🌟 1. 保存中なら処理をブロック
     if (isSaving || isSavingRef.current) return;
-    if (!formData.title) return Alert.alert("エラー", "タイトルを入力してください");
+
+    if (!formData.title)
+      return Alert.alert("エラー", "タイトルを入力してください");
 
     isSavingRef.current = true;
     setIsSaving(true);
 
-    // 🌟 限界突破：重い処理の前に「1フレーム（0.01秒）だけ待つ」ことで、
-    // 確実にボタンを「保存中（クルクル）」の状態に変化させ、画面のフリーズ感をゼロにします！
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     try {
@@ -506,21 +507,34 @@ const ScheduleModal = ({
       AsyncStorage.setItem("readingMasterData", JSON.stringify(r));
 
       const finalTag = formData.tag.trim() || selectedLayer;
-
       let finalColor = uiThemeColor;
+
+      // 🌟🌟🌟 これが「大学カテゴリーで消える」バグを完全に粉砕する修正！ 🌟🌟🌟
+      const m = { ...tagMaster };
+      let tagMasterChanged = false;
+
+      // 1. サブタグが入力された場合
       if (formData.tag.trim()) {
         const existingTag = tagMaster[formData.tag.trim()];
         if (existingTag) {
           finalColor = existingTag.color;
         } else {
           finalColor = newTagColor || uiThemeColor;
-          const m = {
-            ...tagMaster,
-            [formData.tag.trim()]: { layer: selectedLayer, color: finalColor },
-          };
-          setTagMaster?.(m);
-          AsyncStorage.setItem("tagMasterData", JSON.stringify(m));
+          m[formData.tag.trim()] = { layer: selectedLayer, color: finalColor };
+          tagMasterChanged = true;
         }
+      }
+
+      // 2. 🌟 親レイヤー（大学など）自体もタグとして強制登録！
+      // これが無いと、サブタグなしで保存した時にフィルター機能が「所属不明」と勘違いして隠してしまいます。
+      if (!m[selectedLayer]) {
+        m[selectedLayer] = { layer: selectedLayer, color: layerMaster[selectedLayer] || uiThemeColor };
+        tagMasterChanged = true;
+      }
+
+      if (tagMasterChanged) {
+        setTagMaster?.(m);
+        AsyncStorage.setItem("tagMasterData", JSON.stringify(m));
       }
 
       let finalNotificationIds: string[] = [];
@@ -603,10 +617,11 @@ const ScheduleModal = ({
       const eDay = String(formData.endDate.getDate()).padStart(2, "0");
       const eStr = `${eYear}-${eMonth}-${eDay}`;
 
-      const itemData = {
+      // 🌟 TypeScriptのエラーを回避するために any 型で宣言し、確実に layer を含める！
+      const itemData: any = {
         title: formData.title,
         tag: finalTag,
-        layer: selectedLayer,
+        layer: selectedLayer, // 🌟 フィルター機能のための命綱を強制追加！
         tags: formData.tag.trim() ? [selectedLayer, formData.tag.trim()] : [selectedLayer],
         amount: parseInt(formData.amount) || 0,
         isEvent: formData.isEvent,
@@ -669,7 +684,7 @@ const ScheduleModal = ({
         if (targetRoomId) {
           batch.set(doc(db, "rooms", targetRoomId, "schedules", targetDocId), {
             ...selectedItem,
-            ...(itemData as Omit<ScheduleItem, "id">),
+            ...itemData, // any型なのでそのまま展開可能
             id: targetDocId,
             externalEventId: finalReturnedId || selectedItem?.externalEventId,
             date: sStr,
@@ -683,45 +698,50 @@ const ScheduleModal = ({
         batch.commit().catch((e) => console.error("共有保存エラー:", e));
       }
 
-      // 🌟 究極の修正：関数渡し(prev => ...) を完全に排除し、親画面のカレンダーデータを直接上書きする！
-      const nextData: Record<string, ScheduleItem[]> = {};
-      Object.keys(scheduleData).forEach((key) => {
-        nextData[key] = [...scheduleData[key]];
+      setScheduleData((prevData: Record<string, ScheduleItem[]>) => {
+        const nextData: Record<string, ScheduleItem[]> = {};
+        Object.keys(prevData).forEach((key) => {
+          nextData[key] = [...prevData[key]];
+        });
+
+        if (selectedItem) {
+          if (mode === "single") {
+            Object.keys(nextData).forEach((d) => {
+              if (nextData[d].some((i) => i.id === selectedItem.id)) {
+                nextData[d] = nextData[d].map((i) =>
+                  i.id === selectedItem.id ? { ...i, exceptionDates: [...(i.exceptionDates || []), selectedDate] } : i
+                );
+              }
+            });
+          } else {
+            Object.keys(nextData).forEach((d) => {
+              if (nextData[d].some((i) => i.id === selectedItem.id)) {
+                nextData[d] = nextData[d].filter((i) => i.id !== selectedItem.id);
+              }
+            });
+          }
+        }
+
+        const newItem: ScheduleItem = {
+          ...selectedItem,
+          ...itemData, // any型なのでそのまま展開可能
+          id: mode === "single" && selectedItem ? newEventId : targetDocId,
+          repeatType: mode === "single" ? undefined : itemData.repeatType,
+          linkedMasterId: mode === "single" && selectedItem ? selectedItem.id : undefined,
+          externalEventId: finalReturnedId || selectedItem?.externalEventId,
+        } as unknown as ScheduleItem;
+
+        if (!nextData[sStr]) {
+          nextData[sStr] = [newItem];
+        } else {
+          nextData[sStr] = [...nextData[sStr].filter(i => i.id !== newItem.id), newItem];
+        }
+
+        return nextData;
       });
 
-      if (selectedItem) {
-        Object.keys(nextData).forEach((d) => {
-          if (nextData[d].some((i) => i.id === selectedItem.id)) {
-            if (mode === "single") {
-              nextData[d] = nextData[d].map((i) =>
-                i.id === selectedItem.id ? { ...i, exceptionDates: [...(i.exceptionDates || []), selectedDate] } : i
-              );
-            } else {
-              nextData[d] = nextData[d].filter((i) => i.id !== selectedItem.id);
-            }
-          }
-        });
-      }
-
-      const newItem: ScheduleItem = {
-        ...selectedItem,
-        ...(itemData as Omit<ScheduleItem, "id">),
-        id: mode === "single" && selectedItem ? newEventId : targetDocId,
-        repeatType: mode === "single" ? undefined : itemData.repeatType,
-        linkedMasterId: mode === "single" && selectedItem ? selectedItem.id : undefined,
-        externalEventId: finalReturnedId || selectedItem?.externalEventId,
-      } as ScheduleItem;
-
-      if (!nextData[sStr]) {
-        nextData[sStr] = [newItem];
-      } else {
-        nextData[sStr] = [...nextData[sStr].filter(i => i.id !== newItem.id), newItem];
-      }
-
-      // 🌟 親画面に変更を直接伝える！
-      setScheduleData(nextData);
       setHasUnsavedChanges(true);
-      onForceRender?.(); // カレンダーの強制再描画
+      onForceRender?.();
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onClose();
