@@ -4,11 +4,10 @@ import * as Calendar from "expo-calendar";
 import * as Haptics from "expo-haptics";
 import React, {
   useCallback,
-  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
-  useState,
+  useState
 } from "react";
 
 // 🌟 通知の脳みそをインポート
@@ -264,8 +263,9 @@ export default function ScheduleModal({
 
     if (isInitialized.current) return;
 
-    // 🌟 InteractionManager を使って、アニメーション終了後に中身を描画する
-    const task = InteractionManager.runAfterInteractions(() => {
+    // 🌟 限界突破1：悪名高いフリーズの原因「InteractionManager」を完全に削除！
+    // 代わりに極小の setTimeout を使い、画面がパッと出た瞬間に裏で素早くデータをセットします。
+    setTimeout(() => {
       const layers = Object.keys(layerMaster);
       const def = layers.length > 0 ? layers[0] : "生活";
 
@@ -376,12 +376,8 @@ export default function ScheduleModal({
       setIsCreatingNewTag(false);
 
       isInitialized.current = true;
-      setIsReady(true); // 🌟 ここで「準備完了」の合図を出す
-    });
-
-    // 🌟 task (InteractionManager) の後始末
-    return () => task.cancel();
-    // 🌟 改善3: 激重の原因だった layerMaster と tagMaster を監視対象から外す！
+      setIsReady(true);
+    }, 10);
   }, [visible, selectedItem, activeMode, selectedDate]);
 
   const toHiragana = (str: string) =>
@@ -391,9 +387,12 @@ export default function ScheduleModal({
       )
       .toLowerCase();
 
-  // 🌟 限界突破1：flat()を廃止し、最新の150件だけを高速スキャンする
+  // =========================================================
+  // 🌟 究極の爆速化2：激重の原因となっていた `useDeferredValue` を完全削除！
+  // =========================================================
   const allTitles = useMemo(() => {
-    if (!visible) return [];
+    // 🌟 画面の準備ができるまで重い計算を完全にサボる！
+    if (!visible || !isReady) return [];
     const titles = new Set<string>();
 
     // 日付順に並べたキー（日付）を取得
@@ -413,15 +412,12 @@ export default function ScheduleModal({
     }
 
     return Array.from(titles);
-    // 🌟 依存から scheduleData を外すことで、入力中の余計な再計算を防ぎます
-  }, [visible]);
+  }, [visible, isReady]); // 🌟 ここに isReady を追加！
 
-  // 🌟 限界突破2-A：入力中の文字を「裏側で」評価するように設定
-  const deferredTitle = useDeferredValue(formData.title);
-
-  // 🌟 フリーズ解消1：useDeferredValueの副作用を封じ、サジェストをシンプルで超高速な状態に戻す！
+  // 🌟 useDeferredValue は削除し、サジェストも極限までシンプルに！
+  // （※ const deferredTitle = ... の行は完全に消去しました！）
   const suggestions = useMemo(() => {
-    const s = formData.title.trim(); // 🌟 formData に戻す
+    const s = formData.title.trim();
     if (!s || !isReady) return [];
 
     const r = toHiragana(s);
