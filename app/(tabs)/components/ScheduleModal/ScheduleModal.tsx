@@ -758,50 +758,48 @@ const ScheduleModal = ({
 
       InteractionManager.runAfterInteractions(() => {
         setScheduleData((prevData: Record<string, ScheduleItem[]>) => {
-          const nextData = { ...prevData };
+          // 🌟 限界突破：Reactに「完全に新しいデータだよ！」と強制認識させる最強のコピー！
+          const nextData: Record<string, ScheduleItem[]> = {};
 
-          // 元々ローカルだったデータを消す（編集の時）
-          if (selectedItem && !wasShared) {
+          // 🌟 まず古いデータを「中身の配列ごと」完全に新品としてコピー
+          Object.keys(prevData).forEach((key) => {
+            nextData[key] = [...prevData[key]];
+          });
+
+          // 🌟 編集前のデータを一度削除（共有・非共有に関わらず確実に消す）
+          if (selectedItem) {
             if (mode === "single") {
               Object.keys(nextData).forEach((d) => {
                 nextData[d] = nextData[d].map((i) =>
                   i.id === selectedItem.id
-                    ? {
-                      ...i,
-                      exceptionDates: [
-                        ...(i.exceptionDates || []),
-                        selectedDate,
-                      ],
-                    }
-                    : i,
+                    ? { ...i, exceptionDates: [...(i.exceptionDates || []), selectedDate] }
+                    : i
                 );
               });
             } else {
               Object.keys(nextData).forEach((d) => {
-                nextData[d] = nextData[d].filter(
-                  (i) => i.id !== selectedItem.id,
-                );
+                nextData[d] = nextData[d].filter((i) => i.id !== selectedItem.id);
               });
             }
           }
 
-          // 今回ローカルに保存する場合のみ追加（共有の場合はFirebaseが自動同期する）
-          if (!isShared) {
-            const newItem: ScheduleItem = {
-              ...selectedItem,
-              ...(itemData as Omit<ScheduleItem, "id">),
-              id: mode === "single" && selectedItem ? newEventId : targetDocId,
-              repeatType: mode === "single" ? undefined : itemData.repeatType,
-              linkedMasterId:
-                mode === "single" && selectedItem ? selectedItem.id : undefined,
-              externalEventId: finalReturnedId || selectedItem?.externalEventId,
-            } as ScheduleItem;
+          // 🌟 共有・非共有に関わらず、手元のカレンダーに即座に追加する！
+          const newItem: ScheduleItem = {
+            ...selectedItem,
+            ...(itemData as Omit<ScheduleItem, "id">),
+            id: mode === "single" && selectedItem ? newEventId : targetDocId,
+            repeatType: mode === "single" ? undefined : itemData.repeatType,
+            linkedMasterId: mode === "single" && selectedItem ? selectedItem.id : undefined,
+            externalEventId: finalReturnedId || selectedItem?.externalEventId,
+          } as ScheduleItem;
 
-            if (!nextData[sStr]) nextData[sStr] = [];
+          if (!nextData[sStr]) {
+            nextData[sStr] = [newItem];
+          } else {
             nextData[sStr] = [...nextData[sStr], newItem];
           }
 
-          return nextData;
+          return nextData; // 🌟 これで100%カレンダーが再描画されます！
         });
 
         setHasUnsavedChanges(true);
@@ -884,28 +882,28 @@ const ScheduleModal = ({
 
       InteractionManager.runAfterInteractions(() => {
         setScheduleData((prevData: Record<string, ScheduleItem[]>) => {
-          const nextData = { ...prevData };
+          // 🌟 削除の時も同様に完全に新しいデータとして作り直す！
+          const nextData: Record<string, ScheduleItem[]> = {};
+
+          Object.keys(prevData).forEach((key) => {
+            nextData[key] = [...prevData[key]];
+          });
+
           if (mode === "single") {
             Object.keys(nextData).forEach((d) => {
               nextData[d] = nextData[d].map((i: ScheduleItem) => {
-                if (i.id === selectedItem.id) {
-                  return {
-                    ...i,
-                    exceptionDates: [...(i.exceptionDates || []), selectedDate],
-                  };
+                if (i.id === selectedItem.id) { 
+                  return { ...i, exceptionDates: [...(i.exceptionDates || []), selectedDate] }; 
                 }
                 return i;
               });
             });
           } else {
-            // ローカルにある可能性を考慮して無条件でフィルタリング
             Object.keys(nextData).forEach((d) => {
-              nextData[d] = nextData[d].filter(
-                (i: ScheduleItem) => i.id !== selectedItem.id,
-              );
+              nextData[d] = nextData[d].filter((i: ScheduleItem) => i.id !== selectedItem.id);
             });
           }
-          return nextData;
+          return nextData; // 🌟 これで100%カレンダーから消えます！
         });
 
         setHasUnsavedChanges(true);
