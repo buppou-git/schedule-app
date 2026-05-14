@@ -487,16 +487,16 @@ const ScheduleModal = ({
   };
 
   const executeSave = async (mode: "normal" | "all" | "single") => {
-    // 🌟 1. 保存中なら処理をブロック（二重押しを完全無効化）
     if (isSaving || isSavingRef.current) return;
-
-    if (!formData.title)
-      return Alert.alert("エラー", "タイトルを入力してください");
+    if (!formData.title) return Alert.alert("エラー", "タイトルを入力してください");
 
     isSavingRef.current = true;
-    setIsSaving(true); // 🌟 2. ボタンをローディング状態にする
+    setIsSaving(true);
 
-    // 🌟 限界突破：強制終了を防ぐため、setTimeoutを完全に排除し、安全な同期処理を行う！
+    // 🌟 限界突破：重い処理の前に「1フレーム（0.01秒）だけ待つ」ことで、
+    // 確実にボタンを「保存中（クルクル）」の状態に変化させ、画面のフリーズ感をゼロにします！
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
     try {
       const r = {
         ...readingMaster,
@@ -544,12 +544,7 @@ const ScheduleModal = ({
               triggerDate.setHours(21, 0, 0, 0);
             }
           } else {
-            triggerDate.setHours(
-              formData.startTime.getHours(),
-              formData.startTime.getMinutes(),
-              0,
-              0,
-            );
+            triggerDate.setHours(formData.startTime.getHours(), formData.startTime.getMinutes(), 0, 0);
             if (option === "10min") triggerDate.setMinutes(triggerDate.getMinutes() - 10);
             else if (option === "30min") triggerDate.setMinutes(triggerDate.getMinutes() - 30);
             else if (option === "1hour") triggerDate.setHours(triggerDate.getHours() - 1);
@@ -598,7 +593,6 @@ const ScheduleModal = ({
       const pureTodos = updatedSubTasks.filter((t) => !t.isExpense && !t.isIncome);
       const allDone = pureTodos.length > 0 && pureTodos.every((t) => t.isDone);
 
-      // 🌟 タイムゾーンのズレを完全に防ぐ、確実な日付文字列生成
       const sYear = formData.startDate.getFullYear();
       const sMonth = String(formData.startDate.getMonth() + 1).padStart(2, "0");
       const sDay = String(formData.startDate.getDate()).padStart(2, "0");
@@ -632,7 +626,7 @@ const ScheduleModal = ({
         reminderOptions: selectedReminders,
         customReminderTimes: customReminderTimes.map((d) => d.toISOString()),
         subTasks: updatedSubTasks,
-        date: sStr, // 🌟 これが無いとカレンダーが表示をサボる場合があります！
+        date: sStr,
       };
 
       const startForExport = formData.isAllDay
@@ -685,55 +679,49 @@ const ScheduleModal = ({
       }
 
       if (hasCloudAction) {
-        batch.commit().catch((e) => {
-          console.error("共有保存エラー:", e);
+        batch.commit().catch((e) => console.error("共有保存エラー:", e));
+      }
+
+      // 🌟 究極の修正：関数渡し(prev => ...) を完全に排除し、親画面のカレンダーデータを直接上書きする！
+      const nextData: Record<string, ScheduleItem[]> = {};
+      Object.keys(scheduleData).forEach((key) => {
+        nextData[key] = [...scheduleData[key]];
+      });
+
+      if (selectedItem) {
+        Object.keys(nextData).forEach((d) => {
+          if (nextData[d].some((i) => i.id === selectedItem.id)) {
+            if (mode === "single") {
+              nextData[d] = nextData[d].map((i) =>
+                i.id === selectedItem.id ? { ...i, exceptionDates: [...(i.exceptionDates || []), selectedDate] } : i
+              );
+            } else {
+              nextData[d] = nextData[d].filter((i) => i.id !== selectedItem.id);
+            }
+          }
         });
       }
 
-      // 🌟 ローカルのカレンダーデータを安全かつ確実に更新！
-      setScheduleData((prevData: Record<string, ScheduleItem[]>) => {
-        const nextData = { ...prevData };
+      const newItem: ScheduleItem = {
+        ...selectedItem,
+        ...(itemData as Omit<ScheduleItem, "id">),
+        id: mode === "single" && selectedItem ? newEventId : targetDocId,
+        repeatType: mode === "single" ? undefined : itemData.repeatType,
+        linkedMasterId: mode === "single" && selectedItem ? selectedItem.id : undefined,
+        externalEventId: finalReturnedId || selectedItem?.externalEventId,
+      } as ScheduleItem;
 
-        if (selectedItem) {
-          if (mode === "single") {
-            Object.keys(nextData).forEach((d) => {
-              if (nextData[d].some((i) => i.id === selectedItem.id)) {
-                nextData[d] = nextData[d].map((i) =>
-                  i.id === selectedItem.id ? { ...i, exceptionDates: [...(i.exceptionDates || []), selectedDate] } : i
-                );
-              }
-            });
-          } else {
-            Object.keys(nextData).forEach((d) => {
-              if (nextData[d].some((i) => i.id === selectedItem.id)) {
-                nextData[d] = nextData[d].filter((i) => i.id !== selectedItem.id);
-              }
-            });
-          }
-        }
+      if (!nextData[sStr]) {
+        nextData[sStr] = [newItem];
+      } else {
+        nextData[sStr] = [...nextData[sStr].filter(i => i.id !== newItem.id), newItem];
+      }
 
-        const newItem: ScheduleItem = {
-          ...selectedItem,
-          ...(itemData as Omit<ScheduleItem, "id">),
-          id: mode === "single" && selectedItem ? newEventId : targetDocId,
-          repeatType: mode === "single" ? undefined : itemData.repeatType,
-          linkedMasterId: mode === "single" && selectedItem ? selectedItem.id : undefined,
-          externalEventId: finalReturnedId || selectedItem?.externalEventId,
-        } as ScheduleItem;
-
-        if (!nextData[sStr]) {
-          nextData[sStr] = [newItem];
-        } else {
-          nextData[sStr] = [...nextData[sStr].filter(i => i.id !== newItem.id), newItem];
-        }
-
-        return nextData;
-      });
-
+      // 🌟 親画面に変更を直接伝える！
+      setScheduleData(nextData);
       setHasUnsavedChanges(true);
-      onForceRender?.(); // 🌟 カレンダーの再描画を強制
+      onForceRender?.(); // カレンダーの強制再描画
 
-      // 🌟🌟🌟 すべての処理が完全に終わった「ここ」で画面を閉じる！！ 🌟🌟🌟
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onClose();
 
@@ -765,6 +753,9 @@ const ScheduleModal = ({
     isSavingRef.current = true;
     setIsSaving(true);
 
+    // 🌟 UI更新のために1フレーム待つ
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
     try {
       if (selectedItem.externalEventId) {
         try { await Calendar.deleteEventAsync(selectedItem.externalEventId); } catch (e) { }
@@ -790,34 +781,35 @@ const ScheduleModal = ({
         }
       }
 
-      setScheduleData((prevData: Record<string, ScheduleItem[]>) => {
-        const nextData = { ...prevData };
-
-        if (mode === "single") {
-          Object.keys(nextData).forEach((d) => {
-            if (nextData[d].some((i) => i.id === selectedItem.id)) {
-              nextData[d] = nextData[d].map((i: ScheduleItem) => {
-                if (i.id === selectedItem.id) {
-                  return { ...i, exceptionDates: [...(i.exceptionDates || []), selectedDate] };
-                }
-                return i;
-              });
-            }
-          });
-        } else {
-          Object.keys(nextData).forEach((d) => {
-            if (nextData[d].some((i) => i.id === selectedItem.id)) {
-              nextData[d] = nextData[d].filter((i: ScheduleItem) => i.id !== selectedItem.id);
-            }
-          });
-        }
-        return nextData;
+      // 🌟 関数渡し(prev => ...) を完全に排除！
+      const nextData: Record<string, ScheduleItem[]> = {};
+      Object.keys(scheduleData).forEach((key) => {
+        nextData[key] = [...scheduleData[key]];
       });
 
-      setHasUnsavedChanges(true);
-      onForceRender?.(); // 🌟 カレンダーの再描画を強制
+      if (mode === "single") {
+        Object.keys(nextData).forEach((d) => {
+          if (nextData[d].some((i) => i.id === selectedItem.id)) {
+            nextData[d] = nextData[d].map((i: ScheduleItem) => {
+              if (i.id === selectedItem.id) {
+                return { ...i, exceptionDates: [...(i.exceptionDates || []), selectedDate] };
+              }
+              return i;
+            });
+          }
+        });
+      } else {
+        Object.keys(nextData).forEach((d) => {
+          if (nextData[d].some((i) => i.id === selectedItem.id)) {
+            nextData[d] = nextData[d].filter((i: ScheduleItem) => i.id !== selectedItem.id);
+          }
+        });
+      }
 
-      // 🌟🌟🌟 すべての処理が完全に終わった「ここ」で画面を閉じる！！ 🌟🌟🌟
+      setScheduleData(nextData);
+      setHasUnsavedChanges(true);
+      onForceRender?.();
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       onClose();
 
