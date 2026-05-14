@@ -606,6 +606,7 @@ const ScheduleModal = ({
       const itemData = {
         title: formData.title,
         tag: finalTag,
+        layer: selectedLayer,
         tags: formData.tag.trim() ? [selectedLayer, formData.tag.trim()] : [selectedLayer],
         amount: parseInt(formData.amount) || 0,
         isEvent: formData.isEvent,

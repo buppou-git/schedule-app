@@ -803,17 +803,16 @@ function IndexContent() {
     const nextData: { [date: string]: ScheduleItem[] } = {};
 
     Object.keys(scheduleData).forEach((date) => {
-      // 🌟 魔法のキャッシュ：テーマ色もその日の予定も変わっていなければ完全にスキップ！
+      // 🌟 魔法のキャッシュ：テーマ色もその日の予定も変わっていなければスキップ
       if (!isThemeChanged && scheduleData[date] === prevScheduleData.current[date] && cachedColoredData.current[date]) {
         nextData[date] = cachedColoredData.current[date];
         return;
       }
 
-      // 🌟 タスクキル問題を解決するフラグ（これがないと保存が反映されません）
       hasAnyChange = true;
       let dateChanged = false;
 
-      const newItems = scheduleData[date].map((item) => {
+      const newItems = scheduleData[date].map((item: any) => {
         // 親レイヤー（カレンダーの種類）と子タグを確実に特定
         const itemTag = item.tag || (item.tags && item.tags[0]) || "生活";
         const parentTag = (item.tags && item.tags.length > 0) ? item.tags[0] : (tagMaster[itemTag]?.layer || itemTag);
@@ -826,29 +825,20 @@ function IndexContent() {
           latestColor = layerMaster[parentTag];
         }
 
-        // 🌟🌟🌟 これが「大学カテゴリが消えるバグ」を粉砕する真の補修コード！ 🌟🌟🌟
-        // undefined を完全に排除し、TypeScriptの型エラーを絶対に出させません。
-        const rawTags = item.tags && item.tags.length > 0 ? item.tags : [parentTag, item.tag];
-        const fixedTags = Array.from(new Set(rawTags.filter((t): t is string => Boolean(t))));
-
-        // 「色」「親レイヤー」「タグ配列」のどれかが欠落・変化しているかチェック
-        const needsUpdate =
-          item.color !== latestColor ||
-          (item as any).layer !== parentTag ||
-          !item.tags ||
-          item.tags.length === 0;
-
-        if (needsUpdate) {
+        // 🌟🌟🌟 フィルターで消えるバグの真犯人を粉砕！ 🌟🌟🌟
+        // 既存の予定データに「layer」ラベルが貼られていない場合、無条件で補修してあげる！
+        if (item.color !== latestColor || item.layer !== parentTag || !item.tags) {
           dateChanged = true;
-          // 🌟 as ScheduleItem を最後につけることで、TypeScriptのエラーを強制的に黙らせます！
-          return {
-            ...item,
-            color: latestColor,
-            layer: parentTag,
-            tags: fixedTags
+          const rawTags = item.tags && item.tags.length > 0 ? item.tags : [parentTag, itemTag];
+          const fixedTags = Array.from(new Set(rawTags.filter((t: any) => Boolean(t))));
+          return { 
+            ...item, 
+            color: latestColor, 
+            layer: parentTag, // 🌟 フィルター機能のための命綱！
+            tags: fixedTags 
           } as ScheduleItem;
         }
-        return item;
+        return item; 
       });
 
       if (dateChanged) {
@@ -858,7 +848,6 @@ function IndexContent() {
       }
     });
 
-    // 削除された日付があるかチェック
     if (Object.keys(cachedColoredData.current).length !== Object.keys(nextData).length) {
       hasAnyChange = true;
     }
@@ -871,7 +860,7 @@ function IndexContent() {
     }
     return cachedColoredData.current;
   }, [scheduleData, tagMaster, layerMaster]);
-
+  
   const displayData = useDisplayData(
     coloredScheduleData,
     externalEvents,
