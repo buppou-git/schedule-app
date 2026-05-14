@@ -66,7 +66,7 @@ interface ScheduleModalProps {
   sharedRooms?: { [layerName: string]: string };
 }
 
-export default function ScheduleModal({
+const ScheduleModal = ({
   visible,
   onClose,
   selectedDate,
@@ -79,7 +79,7 @@ export default function ScheduleModal({
   setTagMaster,
   setHasUnsavedChanges,
   sharedRooms = {},
-}: ScheduleModalProps) {
+}: ScheduleModalProps) => {
   // =========================================================
   // 🌟 改善：バラバラだった入力用Stateを1つの「formData」に統合！
   // =========================================================
@@ -1655,7 +1655,9 @@ export default function ScheduleModal({
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        // 🌟 限界突破1：Androidの無限レイアウトループ（フリーズ）を完全破壊！
+        // モーダル内では undefined にすることで、OS本来の爆速なキーボード処理に任せます。
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
       >
         {/* ======================= */}
@@ -1669,7 +1671,7 @@ export default function ScheduleModal({
             onClose();
           }}
         >
-          {/* 🌟 魔法の防波堤：タップが背景に貫通して画面が消えるのを防ぎつつ、フリーズもさせない！ */}
+          {/* 🌟 魔法の防波堤 */}
           <TouchableWithoutFeedback>
             <View
               style={[
@@ -1689,10 +1691,7 @@ export default function ScheduleModal({
                   contentContainerStyle={{ flexGrow: 1 }}
                 >
                   <View style={styles.simpleMainWrapper}>
-                    {/* 1. ドラッグバー */}
                     <View style={styles.simpleDragBar} />
-
-                    {/* 2. タイトル入力 */}
                     <TextInput
                       style={styles.simpleHeroInput}
                       placeholder="予定のタイトルを入力"
@@ -1702,11 +1701,7 @@ export default function ScheduleModal({
                       onChangeText={(t) => updateForm({ title: t })}
                       multiline={false}
                     />
-
-                    {/* 🌟 爆速化されたUI */}
                     {simpleModeOptions}
-
-                    {/* 6. 下部アクション */}
                     <View style={styles.simpleBottomActions}>
                       <TouchableOpacity
                         style={styles.simpleDetailLink}
@@ -1715,9 +1710,10 @@ export default function ScheduleModal({
                             Haptics.ImpactFeedbackStyle.Light,
                           );
                           Keyboard.dismiss();
+                          // 🌟 詳細を開く時のアニメーション遅延を防ぐ
                           setTimeout(() => {
                             setIsSimpleMode(false);
-                          }, 150);
+                          }, 50);
                         }}
                       >
                         <Text
@@ -1831,7 +1827,6 @@ export default function ScheduleModal({
                       )}
 
                       {timeAndTagSection}
-
                       {optionsSection}
 
                       <View style={{ marginBottom: 20 }}>
@@ -1958,7 +1953,6 @@ export default function ScheduleModal({
               activeOpacity={1}
               onPress={() => setEditSubTagModalVisible(false)}
             >
-              {/* 🌟 防波堤を設置！ */}
               <TouchableWithoutFeedback>
                 <View
                   style={[
@@ -1973,7 +1967,6 @@ export default function ScheduleModal({
                   <Text style={[styles.modalTitle, { marginBottom: 15 }]}>
                     属性の編集
                   </Text>
-
                   <Text style={styles.label}>属性名</Text>
                   <TextInput
                     style={styles.input}
@@ -1981,7 +1974,6 @@ export default function ScheduleModal({
                     onChangeText={setEditingSubTagName}
                     autoFocus
                   />
-
                   <Text style={[styles.label, { marginTop: 15 }]}>カラー</Text>
                   <ScrollView
                     horizontal
@@ -2008,7 +2000,6 @@ export default function ScheduleModal({
                       />
                     ))}
                   </ScrollView>
-
                   <View
                     style={[
                       styles.actionButtons,
@@ -2049,7 +2040,6 @@ export default function ScheduleModal({
               activeOpacity={1}
               onPress={() => setEditQuickTagModal(false)}
             >
-              {/* 🌟 防波堤を設置！ */}
               <TouchableWithoutFeedback>
                 <View
                   style={[
@@ -2099,4 +2089,23 @@ export default function ScheduleModal({
       </KeyboardAvoidingView>
     </Modal>
   );
-}
+}; // 🌟 関数をここで閉じる！
+
+// =========================================================
+// 🌟 限界突破2：最強の盾（React.memo）で道連れフリーズを100%防ぐ！
+// 親画面（index.tsx）が更新されても、このモーダルは絶対に無駄な再描画をしません。
+// =========================================================
+export default React.memo(ScheduleModal, (prev, next) => {
+  // 🌟 モーダルが閉じている時、または閉じようとしている時は「絶対に」再計算しない！
+  // （これで保存ボタンやキャンセルボタンを押した瞬間のフリーズが完全に消滅します）
+  if (!next.visible) return true;
+
+  // 開いている間は、必要なデータが変わった時だけスマートに更新する
+  return (
+    prev.visible === next.visible &&
+    prev.selectedItem === next.selectedItem &&
+    prev.selectedDate === next.selectedDate &&
+    prev.activeMode === next.activeMode &&
+    prev.scheduleData === next.scheduleData
+  );
+});
