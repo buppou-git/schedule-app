@@ -803,11 +803,16 @@ function IndexContent() {
     const nextData: { [date: string]: ScheduleItem[] } = {};
 
     Object.keys(scheduleData).forEach((date) => {
-      // 🌟 魔法のキャッシュ：テーマ色もその日の予定も変わっていなければ、数千回の計算を完全にスキップ！
+      // 🌟 魔法のキャッシュ：テーマ色もその日の予定も変わっていなければ完全にスキップ！
       if (!isThemeChanged && scheduleData[date] === prevScheduleData.current[date] && cachedColoredData.current[date]) {
         nextData[date] = cachedColoredData.current[date];
         return;
       }
+
+      // 🌟🌟🌟 ここが真犯人でした！🌟🌟🌟
+      // 配列の中身が変わった（予定の追加・移動・削除があった）場合は、無条件で「変更あり」フラグを立てる！
+      // これが無いと、追加や削除が「古いキャッシュ」に上書きされて消滅（タスクキルするまで見えない）してしまいます。
+      hasAnyChange = true;
 
       let dateChanged = false;
       const newItems = scheduleData[date].map((item) => {
@@ -830,7 +835,6 @@ function IndexContent() {
 
       if (dateChanged) {
         nextData[date] = newItems;
-        hasAnyChange = true;
       } else {
         nextData[date] = scheduleData[date];
       }
@@ -2225,6 +2229,7 @@ function IndexContent() {
           setTagMaster={setTagMaster}
           setHasUnsavedChanges={setHasUnsavedChanges}
           sharedRooms={sharedRooms}
+          onForceRender={() => setCalendarResetKey(prev => prev + 1)}
         />
       )}
       <LayerManagementModal
