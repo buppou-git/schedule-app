@@ -803,32 +803,49 @@ function IndexContent() {
     const nextData: { [date: string]: ScheduleItem[] } = {};
 
     Object.keys(scheduleData).forEach((date) => {
-      // 🌟 魔法のキャッシュ：テーマ色もその日の予定も変わっていなければ完全にスキップ！
+      // 魔法のキャッシュ：テーマ色もその日の予定も変わっていなければスキップ
       if (!isThemeChanged && scheduleData[date] === prevScheduleData.current[date] && cachedColoredData.current[date]) {
         nextData[date] = cachedColoredData.current[date];
         return;
       }
 
-      // 🌟🌟🌟 ここが真犯人でした！🌟🌟🌟
-      // 配列の中身が変わった（予定の追加・移動・削除があった）場合は、無条件で「変更あり」フラグを立てる！
-      // これが無いと、追加や削除が「古いキャッシュ」に上書きされて消滅（タスクキルするまで見えない）してしまいます。
       hasAnyChange = true;
-
       let dateChanged = false;
-      const newItems = scheduleData[date].map((item) => {
-        const itemTag = item.tag || (item.tags && item.tags[0]);
-        const parentTag = (item.tags && item.tags.length > 0) ? item.tags[0] : itemTag;
 
+      const newItems = scheduleData[date].map((item) => {
+        // 親レイヤー（カレンダー）と子タグを確実に特定
+        const itemTag = item.tag || (item.tags && item.tags[0]) || "生活";
+        const parentTag = (item.tags && item.tags.length > 0) ? item.tags[0] : (tagMaster[itemTag]?.layer || itemTag);
+
+        // 最新の色を特定
         let latestColor = item.color;
-        if (itemTag && tagMaster[itemTag]) {
-          latestColor = tagMaster[itemTag].color;
+        if (item.tag && tagMaster[item.tag]) {
+          latestColor = tagMaster[item.tag].color;
         } else if (parentTag && layerMaster[parentTag]) {
           latestColor = layerMaster[parentTag];
         }
 
-        if (item.color !== latestColor) {
+        // 🌟🌟🌟 フィルター不具合を直す最強の補修コード 🌟🌟🌟
+        // 欠落している「layer」や「tags」を完璧に補修・注入する！
+        // （「as string[]」をつけることでTypeScriptのエラーも完全に消えます！）
+        const fixedTags = (item.tags && item.tags.length > 0)
+          ? item.tags
+          : Array.from(new Set([parentTag, item.tag].filter(Boolean) as string[]));
+
+        const needsUpdate =
+          item.color !== latestColor ||
+          (item as any).layer !== parentTag ||
+          !item.tags ||
+          item.tags.length === 0;
+
+        if (needsUpdate) {
           dateChanged = true;
-          return { ...item, color: latestColor };
+          return {
+            ...item,
+            color: latestColor,
+            layer: parentTag, // 🌟 フィルター機能のための命綱！
+            tags: fixedTags   // 🌟 検索・フィルター用のタグ配列も完全補修！
+          };
         }
         return item;
       });
@@ -840,7 +857,6 @@ function IndexContent() {
       }
     });
 
-    // 削除された日付があるかチェック
     if (Object.keys(cachedColoredData.current).length !== Object.keys(nextData).length) {
       hasAnyChange = true;
     }
@@ -853,7 +869,6 @@ function IndexContent() {
     }
     return cachedColoredData.current;
   }, [scheduleData, tagMaster, layerMaster]);
-
   const displayData = useDisplayData(
     coloredScheduleData,
     externalEvents,
