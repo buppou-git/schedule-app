@@ -30,7 +30,6 @@ import { TimeSection } from "./TimeSection";
 import {
   ActivityIndicator,
   Alert,
-  InteractionManager,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -496,81 +495,88 @@ const ScheduleModal = ({
     isSavingRef.current = true;
     setIsSaving(true); // 🌟 2. 保存開始！ローディングをONにする
 
-    try {
-      const r = {
-        ...readingMaster,
-        [formData.title.trim()]: toHiragana(formData.title.trim()),
-      };
-      setReadingMaster(r);
-      AsyncStorage.setItem("readingMasterData", JSON.stringify(r));
+    // 🌟 アニメーション衝突・キャンセルバグを避けるため、まず画面を閉じる
+    onClose();
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      const finalTag = formData.tag.trim() || selectedLayer;
+    // 🌟 InteractionManagerではなく、キャンセルされない確実なsetTimeoutを使う！
+    setTimeout(async () => {
+      try {
+        const r = {
+          ...readingMaster,
+          [formData.title.trim()]: toHiragana(formData.title.trim()),
+        };
+        setReadingMaster(r);
+        AsyncStorage.setItem("readingMasterData", JSON.stringify(r));
 
-      let finalColor = uiThemeColor;
-      if (formData.tag.trim()) {
-        const existingTag = tagMaster[formData.tag.trim()];
-        if (existingTag) {
-          finalColor = existingTag.color;
-        } else {
-          finalColor = newTagColor || uiThemeColor;
-          const m = {
-            ...tagMaster,
-            [formData.tag.trim()]: { layer: selectedLayer, color: finalColor },
-          };
-          setTagMaster?.(m);
-          AsyncStorage.setItem("tagMasterData", JSON.stringify(m));
-        }
-      }
+        const finalTag = formData.tag.trim() || selectedLayer;
 
-      let finalNotificationIds: string[] = [];
-      if (
-        selectedItem?.notificationIds &&
-        selectedItem.notificationIds.length > 0
-      ) {
-        for (const oldId of selectedItem.notificationIds) {
-          await cancelItemNotification(oldId);
-        }
-      }
-
-      if (selectedReminders.length > 0) {
-        for (const option of selectedReminders) {
-          if (option === "custom") continue;
-          let triggerDate = new Date(formData.startDate);
-          if (formData.isAllDay) {
-            if (option === "morning") triggerDate.setHours(7, 0, 0, 0);
-            else if (option === "dayBefore") {
-              triggerDate.setDate(triggerDate.getDate() - 1);
-              triggerDate.setHours(21, 0, 0, 0);
-            } else if (option === "2daysBefore") {
-              triggerDate.setDate(triggerDate.getDate() - 2);
-              triggerDate.setHours(21, 0, 0, 0);
-            }
+        let finalColor = uiThemeColor;
+        if (formData.tag.trim()) {
+          const existingTag = tagMaster[formData.tag.trim()];
+          if (existingTag) {
+            finalColor = existingTag.color;
           } else {
-            triggerDate.setHours(
-              formData.startTime.getHours(),
-              formData.startTime.getMinutes(),
-              0,
-              0,
-            );
-            if (option === "10min")
-              triggerDate.setMinutes(triggerDate.getMinutes() - 10);
-            else if (option === "30min")
-              triggerDate.setMinutes(triggerDate.getMinutes() - 30);
-            else if (option === "1hour")
-              triggerDate.setHours(triggerDate.getHours() - 1);
-            else if (option === "morning") triggerDate.setHours(7, 0, 0, 0);
-            else if (option === "dayBefore") {
-              triggerDate.setDate(triggerDate.getDate() - 1);
-              triggerDate.setHours(21, 0, 0, 0);
-            }
+            finalColor = newTagColor || uiThemeColor;
+            const m = {
+              ...tagMaster,
+              [formData.tag.trim()]: { layer: selectedLayer, color: finalColor },
+            };
+            setTagMaster?.(m);
+            AsyncStorage.setItem("tagMasterData", JSON.stringify(m));
           }
+        }
 
-          if (triggerDate > new Date()) {
-            const id = await scheduleItemNotification(
-              formData.title,
-              triggerDate,
-            );
-            if (id) finalNotificationIds.push(id);
+        let finalNotificationIds: string[] = [];
+        if (
+          selectedItem?.notificationIds &&
+          selectedItem.notificationIds.length > 0
+        ) {
+          for (const oldId of selectedItem.notificationIds) {
+            await cancelItemNotification(oldId);
+          }
+        }
+
+        if (selectedReminders.length > 0) {
+          for (const option of selectedReminders) {
+            if (option === "custom") continue;
+            let triggerDate = new Date(formData.startDate);
+            if (formData.isAllDay) {
+              if (option === "morning") triggerDate.setHours(7, 0, 0, 0);
+              else if (option === "dayBefore") {
+                triggerDate.setDate(triggerDate.getDate() - 1);
+                triggerDate.setHours(21, 0, 0, 0);
+              } else if (option === "2daysBefore") {
+                triggerDate.setDate(triggerDate.getDate() - 2);
+                triggerDate.setHours(21, 0, 0, 0);
+              }
+            } else {
+              triggerDate.setHours(
+                formData.startTime.getHours(),
+                formData.startTime.getMinutes(),
+                0,
+                0,
+              );
+              if (option === "10min")
+                triggerDate.setMinutes(triggerDate.getMinutes() - 10);
+              else if (option === "30min")
+                triggerDate.setMinutes(triggerDate.getMinutes() - 30);
+              else if (option === "1hour")
+                triggerDate.setHours(triggerDate.getHours() - 1);
+              else if (option === "morning") triggerDate.setHours(7, 0, 0, 0);
+              else if (option === "dayBefore") {
+                triggerDate.setDate(triggerDate.getDate() - 1);
+                triggerDate.setHours(21, 0, 0, 0);
+              }
+            }
+
+            if (triggerDate > new Date()) {
+              const id = await scheduleItemNotification(
+                formData.title,
+                triggerDate,
+              );
+              if (id) finalNotificationIds.push(id);
+            }
           }
         }
 
@@ -585,188 +591,177 @@ const ScheduleModal = ({
             }
           }
         }
-      }
 
-      const updatedSubTasks = await Promise.all(
-        subTasks.map(async (task) => {
-          if (task.notificationId) {
-            await cancelItemNotification(task.notificationId);
-          }
-          let newNotifId = undefined;
-          if (
-            task.hasDateTime &&
-            task.endTime &&
-            task.reminderOption &&
-            task.reminderOption !== "none"
-          ) {
-            let triggerDate = new Date(task.endTime);
-            if (task.reminderOption === "1hour")
-              triggerDate.setHours(triggerDate.getHours() - 1);
-            else if (task.reminderOption === "1day")
-              triggerDate.setDate(triggerDate.getDate() - 1);
-            if (triggerDate > new Date()) {
-              const id = await scheduleItemNotification(
-                `子タスク: ${task.title}`,
-                triggerDate,
+        const updatedSubTasks = await Promise.all(
+          subTasks.map(async (task) => {
+            if (task.notificationId) {
+              await cancelItemNotification(task.notificationId);
+            }
+            let newNotifId = undefined;
+            if (
+              task.hasDateTime &&
+              task.endTime &&
+              task.reminderOption &&
+              task.reminderOption !== "none"
+            ) {
+              let triggerDate = new Date(task.endTime);
+              if (task.reminderOption === "1hour")
+                triggerDate.setHours(triggerDate.getHours() - 1);
+              else if (task.reminderOption === "1day")
+                triggerDate.setDate(triggerDate.getDate() - 1);
+              if (triggerDate > new Date()) {
+                const id = await scheduleItemNotification(
+                  `子タスク: ${task.title}`,
+                  triggerDate,
+                );
+                if (id) newNotifId = id;
+              }
+            }
+            return { ...task, notificationId: newNotifId };
+          }),
+        );
+
+        const pureTodos = updatedSubTasks.filter(
+          (t) => !t.isExpense && !t.isIncome,
+        );
+        const allDone = pureTodos.length > 0 && pureTodos.every((t) => t.isDone);
+
+        // 🌟 タイムゾーンバグ防止！世界時間への変換(toISOString)を使わずに「日本時間のまま」確実な日付文字列を生成！
+        const sYear = formData.startDate.getFullYear();
+        const sMonth = String(formData.startDate.getMonth() + 1).padStart(2, "0");
+        const sDay = String(formData.startDate.getDate()).padStart(2, "0");
+        const sStr = `${sYear}-${sMonth}-${sDay}`;
+
+        const eYear = formData.endDate.getFullYear();
+        const eMonth = String(formData.endDate.getMonth() + 1).padStart(2, "0");
+        const eDay = String(formData.endDate.getDate()).padStart(2, "0");
+        const eStr = `${eYear}-${eMonth}-${eDay}`;
+
+        const itemData = {
+          title: formData.title,
+          tag: finalTag,
+          tags: formData.tag.trim()
+            ? [selectedLayer, formData.tag.trim()]
+            : [selectedLayer],
+          amount: parseInt(formData.amount) || 0,
+          isEvent: formData.isEvent,
+          isTodo: formData.isTodo,
+          isExpense: formData.isExpense,
+          isDone: allDone ? true : selectedItem ? selectedItem.isDone : false,
+          color: finalColor,
+          category: formData.isExpense ? formData.category : undefined,
+          repeatType:
+            formData.repeatType !== "none" ? formData.repeatType : undefined,
+          repeatDays:
+            formData.repeatType === "custom" ? formData.repeatDays : undefined,
+          repeatInterval:
+            formData.repeatType === "custom"
+              ? formData.repeatInterval
+              : undefined,
+          isAllDay: formData.isAllDay,
+          startDate: sStr,
+          endDate: eStr,
+          startTime: formData.isAllDay
+            ? undefined
+            : formatTime(formData.startTime),
+          endTime: formData.isAllDay ? undefined : formatTime(formData.endTime),
+          notificationIds: finalNotificationIds,
+          reminderOptions: selectedReminders,
+          customReminderTimes: customReminderTimes.map((d) => d.toISOString()),
+          subTasks: updatedSubTasks,
+        };
+
+        const startForExport = formData.isAllDay
+          ? formData.startDate
+          : new Date(
+            formData.startDate.getFullYear(),
+            formData.startDate.getMonth(),
+            formData.startDate.getDate(),
+            formData.startTime.getHours(),
+            formData.startTime.getMinutes(),
+          );
+        const endForExport = formData.isAllDay
+          ? formData.endDate
+          : new Date(
+            formData.endDate.getFullYear(),
+            formData.endDate.getMonth(),
+            formData.endDate.getDate(),
+            formData.endTime.getHours(),
+            formData.endTime.getMinutes(),
+          );
+
+        const returnedId = await exportToStandardCalendar(
+          formData.title,
+          startForExport,
+          endForExport,
+          formData.isAllDay,
+          selectedItem?.externalEventId,
+        );
+
+        let finalReturnedId = returnedId;
+
+        const newEventId = Date.now().toString();
+        const targetDocId = selectedItem ? selectedItem.id : newEventId;
+
+        const isShared = Object.keys(sharedRooms).includes(selectedLayer);
+        const wasShared = selectedItem
+          ? (selectedItem.tags || [selectedItem.tag || ""]).some((tag) =>
+            Object.keys(sharedRooms).includes(tag),
+          )
+          : false;
+
+        let hasCloudAction = false;
+        const batch = writeBatch(db);
+
+        if (selectedItem && wasShared) {
+          const oldLayer = (selectedItem.tags || [selectedItem.tag || ""]).find(
+            (tag) => Object.keys(sharedRooms).includes(tag),
+          );
+          if (oldLayer && (!isShared || oldLayer !== selectedLayer)) {
+            const oldRoomId = sharedRooms[oldLayer];
+            if (oldRoomId) {
+              batch.delete(
+                doc(db, "rooms", oldRoomId, "schedules", selectedItem.id),
               );
-              if (id) newNotifId = id;
+              hasCloudAction = true;
             }
           }
-          return { ...task, notificationId: newNotifId };
-        }),
-      );
+        }
 
-      const pureTodos = updatedSubTasks.filter(
-        (t) => !t.isExpense && !t.isIncome,
-      );
-      const allDone = pureTodos.length > 0 && pureTodos.every((t) => t.isDone);
-
-      const sStr = formData.startDate.toISOString().split("T")[0];
-      const itemData = {
-        title: formData.title,
-        tag: finalTag,
-        // 🌟 修正1：tags配列に「カレンダーの種類(selectedLayer)」を必ず含める！
-        // これがないと、属性（タグ）をつけた時にフィルター機能が親レイヤーを認識できず非表示になります。
-        tags: formData.tag.trim()
-          ? [selectedLayer, formData.tag.trim()]
-          : [selectedLayer],
-        amount: parseInt(formData.amount) || 0,
-        isEvent: formData.isEvent,
-        isTodo: formData.isTodo,
-        isExpense: formData.isExpense,
-        isDone: allDone ? true : selectedItem ? selectedItem.isDone : false,
-        color: finalColor,
-        category: formData.isExpense ? formData.category : undefined,
-        repeatType:
-          formData.repeatType !== "none" ? formData.repeatType : undefined,
-        repeatDays:
-          formData.repeatType === "custom" ? formData.repeatDays : undefined,
-        repeatInterval:
-          formData.repeatType === "custom"
-            ? formData.repeatInterval
-            : undefined,
-        isAllDay: formData.isAllDay,
-        startDate: sStr,
-        endDate: formData.endDate.toISOString().split("T")[0],
-        startTime: formData.isAllDay
-          ? undefined
-          : formatTime(formData.startTime),
-        endTime: formData.isAllDay ? undefined : formatTime(formData.endTime),
-        notificationIds: finalNotificationIds,
-        reminderOptions: selectedReminders,
-        customReminderTimes: customReminderTimes.map((d) => d.toISOString()),
-        subTasks: updatedSubTasks,
-      };
-
-      const startForExport = formData.isAllDay
-        ? formData.startDate
-        : new Date(
-          formData.startDate.getFullYear(),
-          formData.startDate.getMonth(),
-          formData.startDate.getDate(),
-          formData.startTime.getHours(),
-          formData.startTime.getMinutes(),
-        );
-      const endForExport = formData.isAllDay
-        ? formData.endDate
-        : new Date(
-          formData.endDate.getFullYear(),
-          formData.endDate.getMonth(),
-          formData.endDate.getDate(),
-          formData.endTime.getHours(),
-          formData.endTime.getMinutes(),
-        );
-
-      const returnedId = await exportToStandardCalendar(
-        formData.title,
-        startForExport,
-        endForExport,
-        formData.isAllDay,
-        selectedItem?.externalEventId,
-      );
-
-      // 外部カレンダー連携で返ってきたIDがあればセット
-      let finalReturnedId = returnedId;
-
-      const newEventId = Date.now().toString();
-      const targetDocId = selectedItem ? selectedItem.id : newEventId;
-
-      // 🌟 修正2：共有判定を「属性名(finalTag)」ではなく「大元のカレンダーの種類(selectedLayer)」で行う！
-      const isShared = Object.keys(sharedRooms).includes(selectedLayer);
-      const wasShared = selectedItem
-        ? (selectedItem.tags || [selectedItem.tag || ""]).some((tag) =>
-          Object.keys(sharedRooms).includes(tag),
-        )
-        : false;
-
-      // ==========================================
-      // ① Firebase（クラウド）の保存処理
-      // ==========================================
-      let hasCloudAction = false;
-      const batch = writeBatch(db);
-
-      // 古い共有予定を消す（共有からローカルへ、または別の共有レイヤーへ移動した時）
-      if (selectedItem && wasShared) {
-        const oldLayer = (selectedItem.tags || [selectedItem.tag || ""]).find(
-          (tag) => Object.keys(sharedRooms).includes(tag),
-        );
-        // 🌟 修正3：ここも selectedLayer に直す
-        if (oldLayer && (!isShared || oldLayer !== selectedLayer)) {
-          const oldRoomId = sharedRooms[oldLayer];
-          if (oldRoomId) {
-            batch.delete(
-              doc(db, "rooms", oldRoomId, "schedules", selectedItem.id),
-            );
+        if (isShared) {
+          const targetRoomId = sharedRooms[selectedLayer];
+          if (targetRoomId) {
+            batch.set(doc(db, "rooms", targetRoomId, "schedules", targetDocId), {
+              ...selectedItem,
+              ...(itemData as Omit<ScheduleItem, "id">),
+              id: targetDocId,
+              externalEventId: finalReturnedId || selectedItem?.externalEventId,
+              date: sStr,
+              updatedAt: new Date().toISOString(),
+            });
             hasCloudAction = true;
           }
         }
-      }
 
-      // 今回、共有レイヤーに保存する場合
-      if (isShared) {
-        const targetRoomId = sharedRooms[selectedLayer]; // 🌟 修正4：保存先も selectedLayer に直す
-        if (targetRoomId) {
-          batch.set(doc(db, "rooms", targetRoomId, "schedules", targetDocId), {
-            ...selectedItem, // 既存データを引き継ぐ
-            ...(itemData as Omit<ScheduleItem, "id">),
-            id: targetDocId,
-            externalEventId: finalReturnedId || selectedItem?.externalEventId,
-            date: sStr,
-            updatedAt: new Date().toISOString(),
+        if (hasCloudAction) {
+          batch.commit().catch((e) => {
+            console.error("共有保存エラー:", e);
+            Alert.alert(
+              "エラー",
+              "共有データの保存に失敗しました。電波状況を確認してください。",
+            );
           });
-          hasCloudAction = true;
         }
-      }
 
-      // 【✅ 爆速 ＋ アラート付き】
-      if (hasCloudAction) {
-        batch.commit().catch((e) => {
-          console.error("共有保存エラー:", e);
-          // 裏側でエラーになった時だけ、こっそりアラートを出す
-          Alert.alert(
-            "エラー",
-            "共有データの保存に失敗しました。電波状況を確認してください。",
-          );
-        });
-      }
-
-      // ==========================================
-      // ② ローカルデータの更新と画面閉じる処理
-      // ==========================================
-      onClose();
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      InteractionManager.runAfterInteractions(() => {
+        // 🌟 完全なる再描画トリガー！
         setScheduleData((prevData: Record<string, ScheduleItem[]>) => {
-          // 🌟 限界突破：Reactに「完全に新しいデータだよ！」と強制認識させる最強のコピー！
           const nextData: Record<string, ScheduleItem[]> = {};
 
-          // 🌟 まず古いデータを「中身の配列ごと」完全に新品としてコピー
           Object.keys(prevData).forEach((key) => {
             nextData[key] = [...prevData[key]];
           });
 
-          // 🌟 編集前のデータを一度削除（共有・非共有に関わらず確実に消す）
+          // 古いデータの削除処理（移動や削除でも残骸を残さない）
           if (selectedItem) {
             if (mode === "single") {
               Object.keys(nextData).forEach((d) => {
@@ -783,38 +778,39 @@ const ScheduleModal = ({
             }
           }
 
-          // 🌟 共有・非共有に関わらず、手元のカレンダーに即座に追加する！
+          // 新しいデータの追加
           const newItem: ScheduleItem = {
             ...selectedItem,
             ...(itemData as Omit<ScheduleItem, "id">),
             id: mode === "single" && selectedItem ? newEventId : targetDocId,
             repeatType: mode === "single" ? undefined : itemData.repeatType,
-            linkedMasterId: mode === "single" && selectedItem ? selectedItem.id : undefined,
+            linkedMasterId:
+              mode === "single" && selectedItem ? selectedItem.id : undefined,
             externalEventId: finalReturnedId || selectedItem?.externalEventId,
           } as ScheduleItem;
 
           if (!nextData[sStr]) {
             nextData[sStr] = [newItem];
           } else {
-            nextData[sStr] = [...nextData[sStr], newItem];
+            // 安全のため重複を排除してから追加
+            nextData[sStr] = [...nextData[sStr].filter(i => i.id !== newItem.id), newItem];
           }
 
-          return nextData; // 🌟 これで100%カレンダーが再描画されます！
+          return nextData;
         });
 
         setHasUnsavedChanges(true);
+      } catch (error) {
+        console.error("Save Error:", error);
+        Alert.alert(
+          "保存エラー",
+          "予定の保存に失敗しました。通信環境を確認してください。",
+        );
+      } finally {
         isSavingRef.current = false;
         setIsSaving(false);
-      });
-    } catch (error) {
-      console.error("Save Error:", error);
-      Alert.alert(
-        "保存エラー",
-        "予定の保存に失敗しました。通信環境を確認してください。",
-      );
-      isSavingRef.current = false;
-      setIsSaving(false);
-    }
+      }
+    }, 50); // 🌟 安全な50ms遅延
   };
 
   const handleDeletePress = () => {
@@ -836,53 +832,50 @@ const ScheduleModal = ({
     isSavingRef.current = true;
     setIsSaving(true);
 
-    try {
-      if (selectedItem.externalEventId) {
-        try {
-          await Calendar.deleteEventAsync(selectedItem.externalEventId);
-        } catch (e) { }
-      }
+    onClose();
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
 
-      const wasShared =
-        selectedItem.tags?.some((tag) =>
-          Object.keys(sharedRooms).includes(tag),
-        ) || Object.keys(sharedRooms).includes(selectedItem.tag || "");
-
-      if (mode !== "single") {
-        if (selectedItem.notificationIds) {
-          for (const id of selectedItem.notificationIds)
-            await cancelItemNotification(id);
+    setTimeout(async () => {
+      try {
+        if (selectedItem.externalEventId) {
+          try {
+            await Calendar.deleteEventAsync(selectedItem.externalEventId);
+          } catch (e) { }
         }
-        if (selectedItem.subTasks) {
-          for (const task of selectedItem.subTasks) {
-            if (task.notificationId)
-              await cancelItemNotification(task.notificationId);
+
+        const wasShared =
+          selectedItem.tags?.some((tag) =>
+            Object.keys(sharedRooms).includes(tag),
+          ) || Object.keys(sharedRooms).includes(selectedItem.tag || "");
+
+        if (mode !== "single") {
+          if (selectedItem.notificationIds) {
+            for (const id of selectedItem.notificationIds)
+              await cancelItemNotification(id);
+          }
+          if (selectedItem.subTasks) {
+            for (const task of selectedItem.subTasks) {
+              if (task.notificationId)
+                await cancelItemNotification(task.notificationId);
+            }
+          }
+          if (wasShared) {
+            const oldLayer = (selectedItem.tags || [selectedItem.tag || ""]).find(
+              (tag) => Object.keys(sharedRooms).includes(tag),
+            );
+            const roomId = oldLayer ? sharedRooms[oldLayer] : null;
+            if (roomId) {
+              deleteDoc(
+                doc(db, "rooms", roomId, "schedules", selectedItem.id),
+              ).catch((e) => {
+                console.error("共有データ削除エラー:", e);
+                Alert.alert("エラー", "共有データの削除に失敗しました。");
+              });
+            }
           }
         }
 
-        // 【✅ 爆速 ＋ アラート付き】
-        if (wasShared) {
-          const oldLayer = (selectedItem.tags || [selectedItem.tag || ""]).find(
-            (tag) => Object.keys(sharedRooms).includes(tag),
-          );
-          const roomId = oldLayer ? sharedRooms[oldLayer] : null;
-          if (roomId) {
-            deleteDoc(
-              doc(db, "rooms", roomId, "schedules", selectedItem.id),
-            ).catch((e) => {
-              console.error("共有データ削除エラー:", e);
-              Alert.alert("エラー", "共有データの削除に失敗しました。");
-            });
-          }
-        }
-      }
-
-      onClose();
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-
-      InteractionManager.runAfterInteractions(() => {
         setScheduleData((prevData: Record<string, ScheduleItem[]>) => {
-          // 🌟 削除の時も同様に完全に新しいデータとして作り直す！
           const nextData: Record<string, ScheduleItem[]> = {};
 
           Object.keys(prevData).forEach((key) => {
@@ -892,33 +885,37 @@ const ScheduleModal = ({
           if (mode === "single") {
             Object.keys(nextData).forEach((d) => {
               nextData[d] = nextData[d].map((i: ScheduleItem) => {
-                if (i.id === selectedItem.id) { 
-                  return { ...i, exceptionDates: [...(i.exceptionDates || []), selectedDate] }; 
+                if (i.id === selectedItem.id) {
+                  return {
+                    ...i,
+                    exceptionDates: [...(i.exceptionDates || []), selectedDate],
+                  };
                 }
                 return i;
               });
             });
           } else {
             Object.keys(nextData).forEach((d) => {
-              nextData[d] = nextData[d].filter((i: ScheduleItem) => i.id !== selectedItem.id);
+              nextData[d] = nextData[d].filter(
+                (i: ScheduleItem) => i.id !== selectedItem.id,
+              );
             });
           }
-          return nextData; // 🌟 これで100%カレンダーから消えます！
+          return nextData;
         });
 
         setHasUnsavedChanges(true);
+      } catch (error: unknown) {
+        console.error("Delete Error:", error);
+        Alert.alert(
+          "削除エラー",
+          "削除中に問題が発生しました。もう一度お試しください。",
+        );
+      } finally {
         isSavingRef.current = false;
         setIsSaving(false);
-      });
-    } catch (error: unknown) {
-      console.error("Delete Error:", error);
-      Alert.alert(
-        "削除エラー",
-        "削除中に問題が発生しました。もう一度お試しください。",
-      );
-      isSavingRef.current = false;
-      setIsSaving(false);
-    }
+      }
+    }, 50);
   };
 
   const timeAndTagSection = useMemo(() => {
