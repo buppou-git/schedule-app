@@ -40,8 +40,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+  View
 } from "react-native";
 
 interface ScheduleModalProps {
@@ -1203,6 +1202,16 @@ export default function ScheduleModal({
 
   // 🌟 限界突破の最終兵器2：簡易モード（SimpleMode）の激重UIも完全キャッシュ化！
   const simpleModeOptions = useMemo(() => {
+    // 🌟 究極の爆速化3：画面が開くアニメーションが終わるまで、重いUIを一切作らない！
+    // これにより「開く瞬間の数秒のフリーズ」が完全に消滅します。
+    if (!isReady) {
+      return (
+        <View style={{ height: 300, justifyContent: "center", alignItems: "center" }}>
+          <ActivityIndicator size="large" color={uiThemeColor} />
+        </View>
+      );
+    }
+
     return (
       <>
         {/* 3. 日時・時間設定エリア（カード形式） */}
@@ -1308,6 +1317,7 @@ export default function ScheduleModal({
       </>
     );
   }, [
+    isReady, // 🌟 これを絶対に忘れない！
     formData.startDate, formData.startTime, formData.endDate, formData.endTime,
     formData.isTodo, formData.isExpense, formData.amount, formData.category,
     selectedLayer, layerMaster, uiThemeColor, currentQuickTags, updateForm,
@@ -1319,7 +1329,7 @@ export default function ScheduleModal({
       visible={visible}
       animationType="none"
       transparent={true}
-      onRequestClose={onClose} // 🌟 追加: Androidの戻るボタンで閉じる対応
+      onRequestClose={onClose}
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -1328,230 +1338,198 @@ export default function ScheduleModal({
         <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
-          // 🌟 変更: 外側をタップしたら「キーボードを閉じる」＋「画面を閉じる」
           onPress={() => {
             Keyboard.dismiss();
             onClose();
           }}
         >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View
-              style={[
-                styles.modalContent,
-                {
-                  borderTopWidth: 8,
-                  borderTopColor: uiThemeColor,
-                  maxHeight: "85%",
-                  height: undefined,
-                },
-              ]}
-            >
-              {isSimpleMode ? (
-                // ==========================================
-                // 🟢 【大幅改善】新・簡易追加画面
-                // ==========================================
-                <ScrollView
-                  showsVerticalScrollIndicator={false}
-                  keyboardShouldPersistTaps="handled"
-                  contentContainerStyle={{ flexGrow: 1 }}
-                >
-                  <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                    <View style={styles.simpleMainWrapper}>
-                      {/* 1. ドラッグバー */}
-                      <View style={styles.simpleDragBar} />
+          <View
+            style={[
+              styles.modalContent,
+              {
+                borderTopWidth: 8,
+                borderTopColor: uiThemeColor,
+                maxHeight: "85%",
+                height: undefined,
+              },
+            ]}
+          >
+            {isSimpleMode ? (
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{ flexGrow: 1 }}
+              >
+                <View style={styles.simpleMainWrapper}>
+                  {/* 1. ドラッグバー */}
+                  <View style={styles.simpleDragBar} />
 
-                      {/* 2. タイトル入力（大部分を占める大きな入力欄） */}
-                      <TextInput
-                        style={styles.simpleHeroInput}
-                        placeholder="予定のタイトルを入力"
-                        placeholderTextColor="#C7C7CC"
-                        autoFocus
-                        value={formData.title} // 🌟 ここが毎文字変わっても下には影響しない！
-                        onChangeText={(t) => updateForm({ title: t })} // 🌟
-                        multiline={false}
-                      />
+                  {/* 2. タイトル入力 */}
+                  <TextInput
+                    style={styles.simpleHeroInput}
+                    placeholder="予定のタイトルを入力"
+                    placeholderTextColor="#C7C7CC"
+                    autoFocus
+                    value={formData.title}
+                    onChangeText={(t) => updateForm({ title: t })}
+                    multiline={false}
+                  />
 
-                      {/* 🌟 キャッシュ化された重いUIの塊を呼び出すだけ！ */}
-                      {simpleModeOptions}
+                  {/* 🌟 爆速化されたUI */}
+                  {simpleModeOptions}
 
-                      {/* 6. 下部アクション */}
-                      <View style={styles.simpleBottomActions}>
-                        <TouchableOpacity
-                          style={styles.simpleDetailLink}
-                          onPress={() => {
-                            Haptics.impactAsync(
-                              Haptics.ImpactFeedbackStyle.Light,
-                            );
+                  {/* 6. 下部アクション */}
+                  <View style={styles.simpleBottomActions}>
+                    <TouchableOpacity
+                      style={styles.simpleDetailLink}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        Keyboard.dismiss();
+                        setTimeout(() => {
+                          setIsSimpleMode(false);
+                        }, 150);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.simpleDetailLinkText,
+                          { color: uiThemeColor },
+                        ]}
+                      >
+                        詳細設定を表示
+                      </Text>
+                    </TouchableOpacity>
 
-                            // 🌟 魔法の修正1：先にキーボードを閉じて、アニメーションの衝突を防ぐ！
-                            Keyboard.dismiss();
-
-                            // 🌟 0.15秒（キーボードが下がる時間）だけ待ってから、重い詳細画面を描画する
-                            setTimeout(() => {
-                              setIsSimpleMode(false);
-                            }, 150);
+                    <TouchableOpacity
+                      onPress={handleSavePress}
+                      disabled={isSaving}
+                      style={[
+                        styles.saveBtn,
+                        {
+                          backgroundColor: isSaving ? "#C7C7CC" : uiThemeColor,
+                        },
+                      ]}
+                    >
+                      {isSaving ? (
+                        <ActivityIndicator size="small" color="#FFF" />
+                      ) : (
+                        <Text style={styles.saveBtnText}>保存して閉じる</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </ScrollView>
+            ) : (
+              <>
+                {!isReady ? (
+                  <View style={{ flex: 1, justifyContent: "center" }}>
+                    <ActivityIndicator size="large" color={uiThemeColor} />
+                  </View>
+                ) : (
+                  <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                    keyboardDismissMode="on-drag"
+                  >
+                    <View style={{ marginBottom: 20 }}>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          marginBottom: 8,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 14,
+                            fontWeight: "700",
+                            color: "#8E8E93",
                           }}
                         >
-                          <Text
-                            style={[
-                              styles.simpleDetailLinkText,
-                              { color: uiThemeColor },
-                            ]}
-                          >
-                            詳細設定を表示
-                          </Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          onPress={handleSavePress}
-                          disabled={isSaving} // 🌟 保存中はボタンを無効化
+                          {selectedItem ? "詳細を編集" : "新規作成 (詳細)"}
+                        </Text>
+                        <Text
                           style={[
-                            styles.saveBtn,
+                            styles.dateBadge,
                             {
-                              backgroundColor: isSaving
-                                ? "#C7C7CC"
-                                : uiThemeColor,
-                            }, // 🌟 保存中はグレーにする
+                              backgroundColor: uiThemeColor + "15",
+                              color: uiThemeColor,
+                              fontWeight: "bold",
+                              overflow: "hidden",
+                            },
                           ]}
                         >
-                          {isSaving ? (
-                            <ActivityIndicator size="small" color="#FFF" /> // 🌟 スピナーを表示
-                          ) : (
-                            <Text style={styles.saveBtnText}>
-                              保存して閉じる
-                            </Text>
-                          )}
-                        </TouchableOpacity>
+                          {selectedDate}
+                        </Text>
                       </View>
+                      <TextInput
+                        style={{
+                          fontSize: 26,
+                          fontWeight: "800",
+                          color: "#1C1C1E",
+                          paddingVertical: 12,
+                          borderBottomWidth: 1.5,
+                          borderBottomColor: "#F2F2F7",
+                        }}
+                        placeholder="予定のタイトルを入力"
+                        placeholderTextColor="#C7C7CC"
+                        value={formData.title}
+                        onChangeText={(t) => updateForm({ title: t })}
+                      />
                     </View>
-                  </TouchableWithoutFeedback>
-                </ScrollView>
-              ) : (
-                // ==========================================
-                // 🔵 B. 詳細画面（今までの ScrollView など）
-                // ==========================================
-                <>
-                  {!isReady ? (
-                    <View style={{ flex: 1, justifyContent: "center" }}>
-                      <ActivityIndicator size="large" color={uiThemeColor} />
+
+                    {suggestions.length > 0 && (
+                      <View style={styles.suggestionWrapper}>
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                        >
+                          {suggestions.map((s, i) => (
+                            <TouchableOpacity
+                              key={i}
+                              style={styles.suggestionBadge}
+                              onPress={() => updateForm({ title: s })}
+                            >
+                              <Text style={styles.suggestionText}>{s}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      </View>
+                    )}
+
+                    {timeAndTagSection}
+
+                    {optionsSection}
+
+                    <View style={{ marginBottom: 20 }}>
+                      <SubTaskSection
+                        showSubTasks={showSubTasks}
+                        setShowSubTasks={setShowSubTasks}
+                        subTasks={subTasks}
+                        setSubTasks={setSubTasks}
+                        uiThemeColor={uiThemeColor}
+                        selectedDate={selectedDate}
+                        currentQuickTags={currentQuickTags}
+                        updateForm={updateForm}
+                      />
                     </View>
-                  ) : (
-                    <ScrollView
-                      showsVerticalScrollIndicator={false}
-                      keyboardShouldPersistTaps="handled"
-                      keyboardDismissMode="on-drag"
-                    >
-                      {/* ========================================== */}
-                      {/* 1. タイトル入力エリア */}
-                      {/* ========================================== */}
-                      <View style={{ marginBottom: 20 }}>
-                        <View
-                          style={{
-                            flexDirection: "row",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            marginBottom: 8,
-                          }}
-                        >
-                          <Text
-                            style={{
-                              fontSize: 14,
-                              fontWeight: "700",
-                              color: "#8E8E93",
-                            }}
-                          >
-                            {selectedItem ? "詳細を編集" : "新規作成 (詳細)"}
-                          </Text>
-                          <Text
-                            style={[
-                              styles.dateBadge,
-                              {
-                                backgroundColor: uiThemeColor + "15",
-                                color: uiThemeColor,
-                                fontWeight: "bold",
-                                overflow: "hidden",
-                              },
-                            ]}
-                          >
-                            {selectedDate}
-                          </Text>
-                        </View>
-                        <TextInput
-                          style={{
-                            fontSize: 26,
-                            fontWeight: "800",
-                            color: "#1C1C1E",
-                            paddingVertical: 12,
-                            borderBottomWidth: 1.5,
-                            borderBottomColor: "#F2F2F7",
-                          }}
-                          placeholder="予定のタイトルを入力"
-                          placeholderTextColor="#C7C7CC"
-                          value={formData.title}
-                          onChangeText={(t) => updateForm({ title: t })}
-                        />
-                      </View>
 
-                      {/* サジェスト表示 */}
-                      {suggestions.length > 0 && (
-                        <View style={styles.suggestionWrapper}>
-                          <ScrollView
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                          >
-                            {suggestions.map((s, i) => (
-                              <TouchableOpacity
-                                key={i}
-                                style={styles.suggestionBadge}
-                                onPress={() => updateForm({ title: s })}
-                              >
-                                <Text style={styles.suggestionText}>{s}</Text>
-                              </TouchableOpacity>
-                            ))}
-                          </ScrollView>
-                        </View>
-                      )}
-                      {/* ========================================== */}
-                      {/* 2. 日時・カレンダー種類（別コンポーネント） */}
-                      {/* ========================================== */}
-                      {timeAndTagSection}
-
-                      {/* ========================================== */}
-                      {/* 3. オプション設定（Apple風の角丸カード） */}
-                      {/* ========================================== */}
-                      {optionsSection}
-
-                      {/* ========================================== */}
-                      {/* 4. サブタスク（買い物リストなど） */}
-                      {/* ========================================== */}
-                      <View style={{ marginBottom: 20 }}>
-                        <SubTaskSection
-                          showSubTasks={showSubTasks}
-                          setShowSubTasks={setShowSubTasks}
-                          subTasks={subTasks}
-                          setSubTasks={setSubTasks}
-                          uiThemeColor={uiThemeColor}
-                          selectedDate={selectedDate}
-                          currentQuickTags={currentQuickTags}
-                          updateForm={updateForm}
-                        />
-                      </View>
-
-                      {/* ========================================== */}
-                      {/* 5. アクションボタン */}
-                      {/* ========================================== */}
-                      <View style={{ gap: 12, marginBottom: 20 }}>
-                        {/* メインの保存ボタン */}
-                        <TouchableOpacity
-                          onPress={handleSavePress}
-                          style={{
-                            backgroundColor: uiThemeColor,
-                            width: "100%",
-                            paddingVertical: 16,
-                            borderRadius: 16,
-                            alignItems: "center",
-                          }}
-                        >
+                    <View style={{ gap: 12, marginBottom: 20 }}>
+                      <TouchableOpacity
+                        onPress={handleSavePress}
+                        disabled={isSaving}
+                        style={{
+                          backgroundColor: isSaving ? "#C7C7CC" : uiThemeColor,
+                          width: "100%",
+                          paddingVertical: 16,
+                          borderRadius: 16,
+                          alignItems: "center",
+                        }}
+                      >
+                        {isSaving ? (
+                          <ActivityIndicator size="small" color="#FFF" />
+                        ) : (
                           <Text
                             style={{
                               color: "#FFF",
@@ -1561,79 +1539,74 @@ export default function ScheduleModal({
                           >
                             保存して閉じる
                           </Text>
-                        </TouchableOpacity>
+                        )}
+                      </TouchableOpacity>
 
-                        {/* キャンセルボタン */}
-                        <TouchableOpacity
-                          onPress={onClose}
+                      <TouchableOpacity
+                        onPress={onClose}
+                        style={{
+                          width: "100%",
+                          paddingVertical: 14,
+                          alignItems: "center",
+                        }}
+                      >
+                        <Text
                           style={{
-                            width: "100%",
-                            paddingVertical: 14,
-                            alignItems: "center",
+                            color: "#8E8E93",
+                            fontSize: 16,
+                            fontWeight: "bold",
                           }}
                         >
-                          <Text
-                            style={{
-                              color: "#8E8E93",
-                              fontSize: 16,
-                              fontWeight: "bold",
-                            }}
-                          >
-                            キャンセル
-                          </Text>
-                        </TouchableOpacity>
+                          キャンセル
+                        </Text>
+                      </TouchableOpacity>
 
-                        {/* 削除ボタン（編集モードの時だけ） */}
-                        {selectedItem && (
-                          <TouchableOpacity
-                            onPress={handleDeletePress}
-                            // 🌟 保存中（削除中）はボタンを無効化
-                            disabled={isSaving}
-                            style={{
-                              width: "100%",
-                              paddingVertical: 16,
-                              // 🌟 削除中ならもっと薄いグレーにする
-                              backgroundColor: isSaving
-                                ? "#E5E5EA"
-                                : "#FF3B3015",
-                              borderRadius: 16,
-                              alignItems: "center",
-                              marginTop: 10,
-                              flexDirection: "row",
-                              justifyContent: "center",
-                            }}
-                          >
-                            {isSaving ? (
-                              // 🌟 削除中も「くるくる」を表示
-                              <ActivityIndicator size="small" color="#FF3B30" />
-                            ) : (
-                              <>
-                                <Ionicons
-                                  name="trash-outline"
-                                  size={18}
-                                  color="#FF3B30"
-                                  style={{ marginRight: 6 }}
-                                />
-                                <Text
-                                  style={{
-                                    color: "#FF3B30",
-                                    fontSize: 16,
-                                    fontWeight: "bold",
-                                  }}
-                                >
-                                  この予定を削除する
-                                </Text>
-                              </>
-                            )}
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    </ScrollView>
-                  )}
-                </>
-              )}
-            </View>
-          </TouchableWithoutFeedback>
+                      {selectedItem && (
+                        <TouchableOpacity
+                          onPress={handleDeletePress}
+                          disabled={isSaving}
+                          style={{
+                            width: "100%",
+                            paddingVertical: 16,
+                            backgroundColor: isSaving
+                              ? "#E5E5EA"
+                              : "#FF3B3015",
+                            borderRadius: 16,
+                            alignItems: "center",
+                            marginTop: 10,
+                            flexDirection: "row",
+                            justifyContent: "center",
+                          }}
+                        >
+                          {isSaving ? (
+                            <ActivityIndicator size="small" color="#FF3B30" />
+                          ) : (
+                            <>
+                              <Ionicons
+                                name="trash-outline"
+                                size={18}
+                                color="#FF3B30"
+                                style={{ marginRight: 6 }}
+                              />
+                              <Text
+                                style={{
+                                  color: "#FF3B30",
+                                  fontSize: 16,
+                                  fontWeight: "bold",
+                                }}
+                              >
+                                この予定を削除する
+                              </Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </ScrollView>
+                )}
+              </>
+            )}
+          </View>
         </TouchableOpacity>
 
         {editSubTagModalVisible && (
@@ -1725,7 +1698,6 @@ export default function ScheduleModal({
           </Modal>
         )}
 
-        {/* 🌟 追加：カテゴリ（プリセット）の名称編集モーダル */}
         {editQuickTagModal && (
           <Modal visible={editQuickTagModal} transparent animationType="fade">
             <TouchableOpacity
