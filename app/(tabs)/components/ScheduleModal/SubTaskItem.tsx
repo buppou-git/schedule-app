@@ -1,13 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useMemo } from "react";
 import {
-    FlatList, // 🌟 追加！
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SubTask } from "../../../../types"; // 🌟 パス調整
 import { ModernDatePicker } from "./ModernDatePicker";
@@ -34,24 +34,27 @@ export const SubTaskItem = React.memo(
     // 🌟 全てのイベントハンドラをキャッシュ
     const handleTitleChange = useCallback(
       (t: string) => onUpdate(task.id, { title: t }),
-      [task.id, onUpdate]
+      [task.id, onUpdate],
     );
 
     const handleAmountChange = useCallback(
       (t: string) => onUpdate(task.id, { amount: parseInt(t) || 0 }),
-      [task.id, onUpdate]
+      [task.id, onUpdate],
     );
 
     const handleDoneToggle = useCallback(
       () => onUpdate(task.id, { isDone: !task.isDone }),
-      [task.id, task.isDone, onUpdate]
+      [task.id, task.isDone, onUpdate],
     );
 
     const handleIncomeToggle = useCallback(
       (v: boolean) => {
-        onUpdate(task.id, { isIncome: v, isExpense: v ? false : task.isExpense });
+        onUpdate(task.id, {
+          isIncome: v,
+          isExpense: v ? false : task.isExpense,
+        });
       },
-      [task.id, task.isExpense, onUpdate]
+      [task.id, task.isExpense, onUpdate],
     );
 
     const handleAddDeadline = useCallback(() => {
@@ -64,20 +67,23 @@ export const SubTaskItem = React.memo(
 
     const handleRemoveDeadline = useCallback(
       () => onUpdate(task.id, { hasDateTime: false }),
-      [task.id, onUpdate]
+      [task.id, onUpdate],
     );
 
     const handleDeadlineDateChange = useCallback(
       (d: Date) => onUpdate(task.id, { deadlineDate: d }),
-      [task.id, onUpdate]
+      [task.id, onUpdate],
     );
 
     const handleDeadlineTimeChange = useCallback(
       (d: Date) => onUpdate(task.id, { endTime: d }),
-      [task.id, onUpdate]
+      [task.id, onUpdate],
     );
 
-    const handleDelete = useCallback(() => onDelete(task.id), [task.id, onDelete]);
+    const handleDelete = useCallback(
+      () => onDelete(task.id),
+      [task.id, onDelete],
+    );
 
     const borderColor = useMemo(() => {
       if (task.isExpense) return "#FF9500";
@@ -109,8 +115,10 @@ export const SubTaskItem = React.memo(
           </TouchableOpacity>
         );
       },
-      [task.category, task.id, onUpdate]
+      [task.category, task.id, onUpdate],
     );
+
+    // 🌟 FlatList用の描画関数（renderCategoryItem）は重いので削除しました！
 
     return (
       <View
@@ -131,16 +139,39 @@ export const SubTaskItem = React.memo(
                 <Ionicons name="close-circle" size={20} color="#FF3B30" />
               </TouchableOpacity>
             </View>
-            
-            {/* 🌟 ここを FlatList に完全移行！ */}
-            <FlatList
+
+            {/* 🌟 激重の原因だった FlatList を削除し、超軽量な ScrollView に変更！ */}
+            <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              data={currentQuickTags}
-              keyExtractor={(item) => item}
-              renderItem={renderCategoryItem}
               style={localStyles.categoryScroll}
-            />
+            >
+              {currentQuickTags.map((cat) => {
+                const isSelected = task.category === cat;
+                return (
+                  <TouchableOpacity
+                    key={cat}
+                    onPress={() =>
+                      onUpdate(task.id, { category: cat, title: cat })
+                    }
+                    style={[
+                      styles.miniReminderChip,
+                      localStyles.chipBase,
+                      isSelected && localStyles.chipSelected,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        localStyles.chipText,
+                        isSelected && localStyles.chipTextSelected,
+                      ]}
+                    >
+                      {cat}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
 
             <View style={localStyles.amountInputRow}>
               <Ionicons
@@ -165,7 +196,10 @@ export const SubTaskItem = React.memo(
           // ==========================================
           <View>
             <View style={localStyles.taskRow}>
-              <TouchableOpacity onPress={handleDoneToggle} style={localStyles.checkbox}>
+              <TouchableOpacity
+                onPress={handleDoneToggle}
+                style={localStyles.checkbox}
+              >
                 <Ionicons
                   name={task.isDone ? "checkbox" : "square-outline"}
                   size={24}
@@ -183,7 +217,10 @@ export const SubTaskItem = React.memo(
                 value={task.title}
                 onChangeText={handleTitleChange}
               />
-              <TouchableOpacity onPress={handleDelete} style={localStyles.deleteIcon}>
+              <TouchableOpacity
+                onPress={handleDelete}
+                style={localStyles.deleteIcon}
+              >
                 <Ionicons name="close-circle" size={20} color="#FF3B30" />
               </TouchableOpacity>
             </View>
@@ -192,7 +229,9 @@ export const SubTaskItem = React.memo(
               <View
                 style={[
                   localStyles.incomeToggle,
-                  task.isIncome ? localStyles.incomeBgActive : localStyles.incomeBgInactive,
+                  task.isIncome
+                    ? localStyles.incomeBgActive
+                    : localStyles.incomeBgInactive,
                 ]}
               >
                 <Ionicons
@@ -222,7 +261,9 @@ export const SubTaskItem = React.memo(
                   style={[styles.microChip, localStyles.addDeadlineBtn]}
                   onPress={handleAddDeadline}
                 >
-                  <Text style={localStyles.addDeadlineText}>+ ⏱️ 締切を設定</Text>
+                  <Text style={localStyles.addDeadlineText}>
+                    + ⏱️ 締切を設定
+                  </Text>
                 </TouchableOpacity>
               ) : (
                 <View style={localStyles.deadlineRow}>
@@ -248,33 +289,77 @@ export const SubTaskItem = React.memo(
         )}
       </View>
     );
-  }
+  },
 );
 
 const localStyles = StyleSheet.create({
   cardPadding: { paddingVertical: 12 },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
   categoryLabel: { fontSize: 11, fontWeight: "bold", color: "#8E8E93" },
   categoryScroll: { marginBottom: 15 },
-  chipBase: { marginRight: 8, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 6 },
+  chipBase: {
+    marginRight: 8,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
   chipSelected: { backgroundColor: "#FF9500", borderColor: "#FF9500" },
   chipText: { fontSize: 11, fontWeight: "bold", color: "#8E8E93" },
   chipTextSelected: { color: "#FFF" },
-  amountInputRow: { flexDirection: "row", alignItems: "center", backgroundColor: "#F2F2F7", padding: 12, borderRadius: 14 },
+  amountInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F2F2F7",
+    padding: 12,
+    borderRadius: 14,
+  },
   walletIcon: { marginRight: 8 },
-  amountInput: { flex: 1, fontSize: 18, fontWeight: "bold", textAlign: "right", color: "#1C1C1E" },
-  yenLabel: { fontSize: 14, fontWeight: "bold", color: "#1C1C1E", marginLeft: 6 },
+  amountInput: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: "bold",
+    textAlign: "right",
+    color: "#1C1C1E",
+  },
+  yenLabel: {
+    fontSize: 14,
+    fontWeight: "bold",
+    color: "#1C1C1E",
+    marginLeft: 6,
+  },
   taskRow: { flexDirection: "row", alignItems: "center", marginBottom: 10 },
   checkbox: { marginRight: 10 },
   taskInput: { flex: 1, fontSize: 16, minHeight: 32, paddingVertical: 4 },
   taskInputDone: { textDecorationLine: "line-through", color: "#8E8E93" },
   deleteIcon: { marginLeft: 8 },
-  optionsRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
-  incomeToggle: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  optionsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 8,
+  },
+  incomeToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
   incomeBgActive: { backgroundColor: "#34C75915" },
   incomeBgInactive: { backgroundColor: "#F2F2F7" },
   switchScale: { transform: [{ scale: 0.6 }], marginLeft: 2 },
-  incomeAmountInput: { width: 60, textAlign: "right", fontSize: 12, fontWeight: "bold", marginLeft: 4 },
+  incomeAmountInput: {
+    width: 60,
+    textAlign: "right",
+    fontSize: 12,
+    fontWeight: "bold",
+    marginLeft: 4,
+  },
   addDeadlineBtn: { paddingVertical: 6 },
   addDeadlineText: { fontSize: 11, color: "#8E8E93", fontWeight: "bold" },
   deadlineRow: { flexDirection: "row", alignItems: "center", gap: 6 },

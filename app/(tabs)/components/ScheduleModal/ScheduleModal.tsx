@@ -42,6 +42,7 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
+  unstable_batchedUpdates,
 } from "react-native";
 
 interface ScheduleModalProps {
@@ -253,130 +254,124 @@ export default function ScheduleModal({
   const [isSimpleMode, setIsSimpleMode] = useState(true);
 
   useEffect(() => {
-    // 画面が閉じている時はリセット
     if (!visible) {
       setIsReady(false);
       isInitialized.current = false;
-      setIsSimpleMode(true); // 🌟 これを追加！閉じるたびに確実に簡易画面に戻す
+      setIsSimpleMode(true);
       return;
     }
 
     if (isInitialized.current) return;
 
-    // 🌟 限界突破1：悪名高いフリーズの原因「InteractionManager」を完全に削除！
-    // 代わりに極小の setTimeout を使い、画面がパッと出た瞬間に裏で素早くデータをセットします。
     setTimeout(() => {
-      const layers = Object.keys(layerMaster);
-      const def = layers.length > 0 ? layers[0] : "生活";
+      // 🌟 限界突破：10個のバラバラの更新を「1回」に束ねる最強の魔法！
+      // これにより、開く瞬間の「10連続フリーズ」が消滅します！
+      unstable_batchedUpdates(() => {
+        const layers = Object.keys(layerMaster);
+        const def = layers.length > 0 ? layers[0] : "生活";
 
-      if (selectedItem) {
-        setIsSimpleMode(false);
+        if (selectedItem) {
+          setIsSimpleMode(false);
+          const parsedStartTime = new Date();
+          if (selectedItem.startTime) {
+            const [h, m] = selectedItem.startTime.split(":").map(Number);
+            parsedStartTime.setHours(h, m, 0, 0);
+          }
+          const parsedEndTime = new Date();
+          if (selectedItem.endTime) {
+            const [h, m] = selectedItem.endTime.split(":").map(Number);
+            parsedEndTime.setHours(h, m, 0, 0);
+          }
 
-        // 🌟 先に時間のパース（変換）だけやっておく
-        const parsedStartTime = new Date();
-        if (selectedItem.startTime) {
-          const [h, m] = selectedItem.startTime.split(":").map(Number);
-          parsedStartTime.setHours(h, m, 0, 0);
-        }
-        const parsedEndTime = new Date();
-        if (selectedItem.endTime) {
-          const [h, m] = selectedItem.endTime.split(":").map(Number);
-          parsedEndTime.setHours(h, m, 0, 0);
-        }
+          updateForm({
+            title: selectedItem.title || "",
+            amount:
+              selectedItem.amount > 0 ? selectedItem.amount.toString() : "",
+            isEvent: selectedItem.isEvent ?? true,
+            isTodo: selectedItem.isTodo ?? false,
+            isExpense: selectedItem.isExpense ?? false,
+            tag: selectedItem.tag || "",
+            tagColor: selectedItem.color || "#007AFF",
+            category: selectedItem.category || "食費",
+            isAllDay: selectedItem.isAllDay ?? true,
+            repeatType: selectedItem.repeatType || "none",
+            repeatDays: selectedItem.repeatDays || [],
+            repeatInterval: selectedItem.repeatInterval || 1,
+            startDate: new Date(selectedItem.startDate || selectedDate),
+            endDate: new Date(selectedItem.endDate || selectedDate),
+            startTime: parsedStartTime,
+            endTime: parsedEndTime,
+          });
 
-        // 🌟 1撃で15個の値をセット！
-        updateForm({
-          title: selectedItem.title || "",
-          amount: selectedItem.amount > 0 ? selectedItem.amount.toString() : "",
-          isEvent: selectedItem.isEvent ?? true,
-          isTodo: selectedItem.isTodo ?? false,
-          isExpense: selectedItem.isExpense ?? false,
-          tag: selectedItem.tag || "",
-          tagColor: selectedItem.color || "#007AFF",
-          category: selectedItem.category || "食費",
-          isAllDay: selectedItem.isAllDay ?? true,
-          repeatType: selectedItem.repeatType || "none",
-          repeatDays: selectedItem.repeatDays || [],
-          repeatInterval: selectedItem.repeatInterval || 1,
-          startDate: new Date(selectedItem.startDate || selectedDate),
-          endDate: new Date(selectedItem.endDate || selectedDate),
-          startTime: parsedStartTime,
-          endTime: parsedEndTime,
-        });
+          const savedLayer =
+            tagMaster?.[selectedItem.tag || ""]?.layer ||
+            (layerMaster[selectedItem.tag || ""] ? selectedItem.tag : def);
+          setSelectedLayer(savedLayer || def);
 
-        // 👇 formData 以外の「独立したState」を初期化
-        const savedLayer =
-          tagMaster?.[selectedItem.tag || ""]?.layer ||
-          (layerMaster[selectedItem.tag || ""] ? selectedItem.tag : def);
-        setSelectedLayer(savedLayer || def);
+          const hasOldNotification =
+            selectedItem.notificationIds &&
+            selectedItem.notificationIds.length > 0;
+          setSelectedReminders(
+            selectedItem.reminderOptions ||
+              (hasOldNotification ? ["exact"] : []),
+          );
 
-        const hasOldNotification =
-          selectedItem.notificationIds &&
-          selectedItem.notificationIds.length > 0;
-        setSelectedReminders(
-          selectedItem.reminderOptions || (hasOldNotification ? ["exact"] : []),
-        );
+          if (selectedItem.customReminderTimes) {
+            setCustomReminderTimes(
+              selectedItem.customReminderTimes.map((tStr) => new Date(tStr)),
+            );
+          } else {
+            setCustomReminderTimes([]);
+          }
+          setNewTagColor("");
 
-        if (selectedItem.customReminderTimes) {
-          setCustomReminderTimes(
-            selectedItem.customReminderTimes.map((tStr) => new Date(tStr)),
+          const savedSubTasks = selectedItem.subTasks || [];
+          setSubTasks(savedSubTasks);
+          setShowSubTasks(savedSubTasks.length > 0);
+
+          setInitialSnapshot(
+            JSON.stringify({
+              title: selectedItem.title || "",
+              amount: parseInt(selectedItem.amount?.toString() || "0"),
+              isTodo: selectedItem.isTodo ?? false,
+              subTasksData: savedSubTasks
+                .map((t: SubTask) => `${t.title}_${t.isDone}`)
+                .join(","),
+            }),
           );
         } else {
+          setIsSimpleMode(true);
+          updateForm({
+            title: "",
+            amount: "",
+            isEvent: activeMode === "calendar",
+            isTodo: activeMode === "todo",
+            isExpense: activeMode === "money",
+            tag: "",
+            tagColor: layerMaster[def] || "#007AFF",
+            category: "食費",
+            isAllDay: true,
+            repeatType: "none",
+            repeatDays: [],
+            repeatInterval: 1,
+            startDate: new Date(selectedDate),
+            endDate: new Date(selectedDate),
+            startTime: new Date(),
+            endTime: new Date(new Date().getTime() + 60 * 60 * 1000),
+          });
+
+          setSelectedLayer(def);
+          setSelectedReminders([]);
           setCustomReminderTimes([]);
+          setNewTagColor("");
+          setSubTasks([]);
+          setShowSubTasks(false);
         }
-        setNewTagColor("");
+        setIsCreatingNewTag(false);
 
-        // 🌟 復活：サブタスクとスナップショットの処理！
-        const savedSubTasks = selectedItem.subTasks || [];
-        setSubTasks(savedSubTasks);
-        setShowSubTasks(savedSubTasks.length > 0);
-
-        const snapshot = JSON.stringify({
-          title: selectedItem.title || "",
-          amount: parseInt(selectedItem.amount?.toString() || "0"),
-          isTodo: selectedItem.isTodo ?? false,
-          subTasksData: savedSubTasks
-            .map((t: SubTask) => `${t.title}_${t.isDone}`)
-            .join(","),
-        });
-        setInitialSnapshot(snapshot);
-      } else {
-        // ==========================================
-        // 🌟 新規作成時（elseの中身）も一撃でリセット！
-        // ==========================================
-        setIsSimpleMode(true);
-
-        updateForm({
-          title: "",
-          amount: "",
-          isEvent: activeMode === "calendar",
-          isTodo: activeMode === "todo",
-          isExpense: activeMode === "money",
-          tag: "",
-          tagColor: layerMaster[def] || "#007AFF",
-          category: "食費",
-          isAllDay: true,
-          repeatType: "none",
-          repeatDays: [],
-          repeatInterval: 1,
-          startDate: new Date(selectedDate),
-          endDate: new Date(selectedDate),
-          startTime: new Date(),
-          endTime: new Date(new Date().getTime() + 60 * 60 * 1000),
-        });
-
-        // 👇 残りの特殊な子たちを初期化
-        setSelectedLayer(def);
-        setSelectedReminders([]);
-        setCustomReminderTimes([]);
-        setNewTagColor("");
-        setSubTasks([]);
-        setShowSubTasks(false);
-      }
-      setIsCreatingNewTag(false);
-
-      isInitialized.current = true;
-      setIsReady(true);
+        isInitialized.current = true;
+        setIsReady(true);
+      }); // 🌟 束ねる魔法ここまで
     }, 10);
   }, [visible, selectedItem, activeMode, selectedDate]);
 
