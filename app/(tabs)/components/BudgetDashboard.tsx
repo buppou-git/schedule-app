@@ -164,9 +164,11 @@ export default function BudgetDashboard({
       return { start: formatDate(startDate), end: formatDate(endDate) };
     }
 
-    // 🌟 存在しない日付（例: 2月30日など）を防止する安全な計算
+    // 🌟 0（文字が全消しされた時）は、一時的に1日として計算しアプリのクラッシュを防ぐ
+    const calcDay = pDay === 0 ? 1 : pDay;
+
     const currentMonthLastDay = new Date(startYear, startMonth + 1, 0).getDate();
-    const actualPDay = Math.min(pDay, currentMonthLastDay);
+    const actualPDay = Math.min(calcDay, currentMonthLastDay);
 
     if (date.getDate() < actualPDay) {
       startMonth -= 1;
@@ -177,7 +179,7 @@ export default function BudgetDashboard({
     }
 
     const startMonthLastDay = new Date(startYear, startMonth + 1, 0).getDate();
-    const safeStartDay = Math.min(pDay, startMonthLastDay);
+    const safeStartDay = Math.min(calcDay, startMonthLastDay);
     const startDate = new Date(startYear, startMonth, safeStartDay);
 
     const endDate = new Date(startYear, startMonth + 1, safeStartDay - 1);
@@ -403,20 +405,21 @@ export default function BudgetDashboard({
 
     if (payday === 99) {
       // 🌟 月末リセットの場合
-      nextPaydayDate = new Date(today.getFullYear(), today.getMonth() + 1, 0); // 今月の月末
+      nextPaydayDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
       if (today.getDate() === nextPaydayDate.getDate()) {
-        nextPaydayDate = new Date(today.getFullYear(), today.getMonth() + 2, 0); // 来月の月末
+        nextPaydayDate = new Date(today.getFullYear(), today.getMonth() + 2, 0);
       }
     } else {
-      // 🌟 通常の日付リセットの場合（存在しない日付を除外）
+      // 🌟 通常の日付リセットの場合
+      const calcDay = payday === 0 ? 1 : payday; // 0の時は1として扱う
       const currentMonthLastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-      const safePayday = Math.min(payday, currentMonthLastDay);
+      const safePayday = Math.min(calcDay, currentMonthLastDay);
 
       nextPaydayDate = new Date(today.getFullYear(), today.getMonth(), safePayday);
 
       if (today.getDate() >= safePayday) {
         const nextMonthLastDay = new Date(today.getFullYear(), today.getMonth() + 2, 0).getDate();
-        const safeNextPayday = Math.min(payday, nextMonthLastDay);
+        const safeNextPayday = Math.min(calcDay, nextMonthLastDay);
         nextPaydayDate = new Date(today.getFullYear(), today.getMonth() + 1, safeNextPayday);
       }
     }
@@ -878,18 +881,32 @@ export default function BudgetDashboard({
               <TextInput
                 style={{ flex: 1, padding: 12, fontSize: 16, color: payday === 99 ? "#8E8E93" : "#1C1C1E" }}
                 keyboardType="numeric"
-                value={payday === 99 ? "月末" : payday.toString()}
+                // 🌟 0の時は空っぽとして表示させる
+                value={payday === 99 ? "月末" : (payday === 0 ? "" : payday.toString())}
                 onChangeText={(t) => {
-                  // 🌟 おかしな文字や数字を除外する最強のシステム
-                  const numStr = t.replace(/[^0-9]/g, ""); // 数字以外を瞬時に削除
-                  if (!numStr) return; // 空なら無視
+                  const numStr = t.replace(/[^0-9]/g, "");
+                  if (numStr === "") {
+                    setPayday(0); // 🌟 全消しされたら「0（空）」にする
+                    return;
+                  }
 
                   let val = parseInt(numStr, 10);
-                  if (val > 31) val = 31; // 31日より大きい数字は強制的に31にする
-                  if (val <= 0) val = 1;  // 0やマイナスの数字は強制的に1にする
+                  if (val > 31) {
+                    // 🌟 「30」から「26」にする時など、一時的に「32」になったら、新しく打った「2」を採用する魔法！
+                    val = parseInt(numStr.slice(-1), 10);
+                  }
 
                   setPayday(val);
-                  AsyncStorage.setItem("myPayday", val.toString());
+                  if (val > 0) {
+                    AsyncStorage.setItem("myPayday", val.toString());
+                  }
+                }}
+                onBlur={() => {
+                  // 🌟 入力エリアから離れた時、空っぽ（0）のままなら「1日」に戻してあげる
+                  if (payday === 0) {
+                    setPayday(1);
+                    AsyncStorage.setItem("myPayday", "1");
+                  }
                 }}
               />
               {payday !== 99 && <Text style={{ fontSize: 16, color: "#1C1C1E", paddingRight: 12, fontWeight: "bold" }}>日</Text>}

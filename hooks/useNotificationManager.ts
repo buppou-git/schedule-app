@@ -85,8 +85,8 @@ export const useNotificationManager = () => {
     // 新しい通知をセット
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: "今日の予定を確認しよう！📅",
-        body: "司令塔を開いて、今日のタスクとお金をチェックしましょう🚀",
+        title: "今日の予定を確認しよう！",
+        body: "アプリを開いて、今日のタスクとお金をチェックしましょう!",
         sound: true,
       },
       // 🌟 追加：通知の「通り道（channelId）」を指定してあげる

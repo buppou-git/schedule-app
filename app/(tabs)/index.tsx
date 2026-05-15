@@ -1500,7 +1500,7 @@ function IndexContent() {
         setPresets(parsedData.presets || {});
         setActiveTags(parsedData.activeTags || []);
 
-        Alert.alert("復元完了", "クラウドデータを正常に復元しました！🔓🚀");
+        Alert.alert("復元完了", "クラウドデータを正常に復元しました！");
         setConfigModalVisible(false);
       } else {
         Alert.alert(
