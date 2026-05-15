@@ -49,6 +49,7 @@ export interface ScheduleItem {
   repeatInterval?: number;
   detailNotes?: string;
   externalEventId?: string;
+  layer?: string;
 }
 
 // 🌟 タグとレイヤーのマスターデータの型定義

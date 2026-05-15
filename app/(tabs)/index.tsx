@@ -441,6 +441,7 @@ function IndexContent() {
       ...item,
       id: isCopy ? Date.now().toString() : item.id,
       tag: subTag || parentLayer,
+      layer: parentLayer,
       // 🌟 魔法の修正4：tags配列に「親レイヤー」を絶対に含める！（フィルター消滅バグを完全防止）
       tags: subTag && subTag !== parentLayer ? [parentLayer, subTag] : [parentLayer],
       color: newColor,
@@ -792,19 +793,27 @@ function IndexContent() {
   const prevScheduleData = useRef(scheduleData);
   const prevTagMaster = useRef(tagMaster);
   const prevLayerMaster = useRef(layerMaster);
+  const prevActiveTags = useRef(activeTags); // 🌟 追加：フィルター状態の変更を検知する
   const cachedColoredData = useRef<{ [date: string]: ScheduleItem[] }>({});
 
   const coloredScheduleData = useMemo(() => {
     const isThemeChanged = tagMaster !== prevTagMaster.current || layerMaster !== prevLayerMaster.current;
+    const isFilterChanged = activeTags !== prevActiveTags.current; // 🌟 追加：フィルターが変わったら再計算
+
     prevTagMaster.current = tagMaster;
     prevLayerMaster.current = layerMaster;
+    prevActiveTags.current = activeTags; // 🌟 追加
 
     let hasAnyChange = false;
     const nextData: { [date: string]: ScheduleItem[] } = {};
 
+    // 🌟 今のフィルターが「1つの親レイヤーのみ」で絞り込まれているか判定
+    const isSingleFilter = activeTags.length === 1;
+    const targetFilterLayer = isSingleFilter ? activeTags[0] : null;
+
     Object.keys(scheduleData).forEach((date) => {
-      // 🌟 魔法のキャッシュ：テーマ色もその日の予定も変わっていなければスキップ
-      if (!isThemeChanged && scheduleData[date] === prevScheduleData.current[date] && cachedColoredData.current[date]) {
+      // 🌟 フィルターも変わっていなければキャッシュをスキップ
+      if (!isThemeChanged && !isFilterChanged && scheduleData[date] === prevScheduleData.current[date] && cachedColoredData.current[date]) {
         nextData[date] = cachedColoredData.current[date];
         return;
       }
@@ -817,24 +826,31 @@ function IndexContent() {
         const itemTag = item.tag || (item.tags && item.tags[0]) || "生活";
         const parentTag = (item.tags && item.tags.length > 0) ? item.tags[0] : (tagMaster[itemTag]?.layer || itemTag);
 
-        // 最新の色を特定
-        let latestColor = item.color;
-        if (item.tag && tagMaster[item.tag]) {
-          latestColor = tagMaster[item.tag].color;
-        } else if (parentTag && layerMaster[parentTag]) {
-          latestColor = layerMaster[parentTag];
+        // 🌟🌟🌟 新機能：フィルター状態に応じた「色」と「表示名」の動的切り替え！ 🌟🌟🌟
+        let displayColor = item.color;
+        let displayTag = itemTag;
+
+        if (isSingleFilter && parentTag === targetFilterLayer) {
+          // 単一フィルター時（例：大学のみ表示）→ サブカテゴリ（ゼミ等）の色と名前を使う！
+          displayColor = (itemTag && tagMaster[itemTag]) ? tagMaster[itemTag].color : (layerMaster[parentTag] || item.color);
+          displayTag = itemTag || parentTag;
+        } else {
+          // 複数レイヤー表示時（オールレイヤー等）→ 親レイヤー（大学等）の色と名前で統一してスッキリ見せる！
+          displayColor = layerMaster[parentTag] || item.color;
+          displayTag = parentTag;
         }
 
-        // 🌟🌟🌟 フィルターで消えるバグの真犯人を粉砕！ 🌟🌟🌟
-        // 既存の予定データに「layer」ラベルが貼られていない場合、無条件で補修してあげる！
-        if (item.color !== latestColor || item.layer !== parentTag || !item.tags) {
+        const rawTags = item.tags && item.tags.length > 0 ? item.tags : [parentTag, itemTag];
+        const fixedTags = Array.from(new Set(rawTags.filter((t: any) => Boolean(t))));
+
+        // 🌟 画面表示用に item.tag と item.color を上書きして渡す
+        if (item.color !== displayColor || item.tag !== displayTag || item.layer !== parentTag || !item.tags) {
           dateChanged = true;
-          const rawTags = item.tags && item.tags.length > 0 ? item.tags : [parentTag, itemTag];
-          const fixedTags = Array.from(new Set(rawTags.filter((t: any) => Boolean(t))));
           return {
             ...item,
-            color: latestColor,
-            layer: parentTag, // 🌟 フィルター機能のための命綱！
+            color: displayColor,
+            tag: displayTag, // 🌟 フィルター状態によって「大学」や「ゼミ」に変化する
+            layer: parentTag,
             tags: fixedTags
           } as ScheduleItem;
         }
@@ -854,12 +870,12 @@ function IndexContent() {
 
     prevScheduleData.current = scheduleData;
 
-    if (hasAnyChange || isThemeChanged) {
+    if (hasAnyChange || isThemeChanged || isFilterChanged) {
       cachedColoredData.current = nextData;
       return nextData;
     }
     return cachedColoredData.current;
-  }, [scheduleData, tagMaster, layerMaster]);
+  }, [scheduleData, tagMaster, layerMaster, activeTags]); // 🌟 activeTags を依存配列に追加
 
   const displayData = useDisplayData(
     coloredScheduleData,
@@ -925,57 +941,94 @@ function IndexContent() {
       return;
     }
 
-    // 🌟 最強の判定
     if (item.id && String(item.id).startsWith("ext_")) {
       setSelectedExternalItem(item);
       setExternalModalVisible(true);
     } else {
-      // 普通の予定なら今までの編集モーダルを開く
-      setSelectedItem(item);
+      // 🌟 安全装置：表示用にタグ名がすり替わっているので、scheduleDataの奥底から「本物の元データ」を探し出して編集画面に渡す！
+      let originalItem = item;
+      for (const d of Object.keys(scheduleData)) {
+        const found = scheduleData[d].find((i) => i.id === item.id);
+        if (found) {
+          originalItem = found;
+          break;
+        }
+      }
+      setSelectedItem(originalItem);
       setModalVisible(true);
     }
   };
 
   const toggleTodo = (date: string, id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const newData = { ...scheduleData };
 
-    let targetItem: ScheduleItem | null = null;
+    let targetItemToSync: ScheduleItem | null = null;
     let originalDate = date;
 
-    // 🌟 1. まず指定された日付の中をピンポイントで探す（O(1)の爆速処理）
-    if (newData[date]) {
-      targetItem = newData[date].find((i) => i.id === id) || null;
-    }
+    // 🌟 配列の罠を防ぐための完全なディープコピー更新！
+    setScheduleData((prevData) => {
+      const nextData: Record<string, ScheduleItem[]> = {};
+      Object.keys(prevData).forEach((key) => {
+        nextData[key] = [...prevData[key]]; // 配列を新しくする
+      });
 
-    // 2. 万が一見つからなかった場合のみ、全体を検索する
-    if (!targetItem) {
-      for (const d of Object.keys(newData)) {
-        const found = newData[d].find((i) => i.id === id);
-        if (found) {
-          targetItem = found;
-          originalDate = d;
-          break; // 見つけたらすぐやめる
+      // 1. まず指定された日付の中を探す
+      if (nextData[date] && nextData[date].some((i) => i.id === id)) {
+        nextData[date] = nextData[date].map((item) => {
+          if (item.id === id) {
+            const updatedItem = { ...item };
+            if (updatedItem.repeatType) {
+              const completedDates = updatedItem.completedDates || [];
+              if (completedDates.includes(date)) {
+                updatedItem.completedDates = completedDates.filter((d) => d !== date);
+              } else {
+                updatedItem.completedDates = [...completedDates, date];
+              }
+            } else {
+              updatedItem.isDone = !updatedItem.isDone;
+            }
+            targetItemToSync = updatedItem;
+            return updatedItem;
+          }
+          return item;
+        });
+      } else {
+        // 2. 万が一見つからなかった場合のみ、全体を検索する
+        for (const d of Object.keys(nextData)) {
+          if (nextData[d].some((i) => i.id === id)) {
+            nextData[d] = nextData[d].map((item) => {
+              if (item.id === id) {
+                const updatedItem = { ...item };
+                if (updatedItem.repeatType) {
+                  const completedDates = updatedItem.completedDates || [];
+                  if (completedDates.includes(date)) {
+                    updatedItem.completedDates = completedDates.filter((dateStr) => dateStr !== date);
+                  } else {
+                    updatedItem.completedDates = [...completedDates, date];
+                  }
+                } else {
+                  updatedItem.isDone = !updatedItem.isDone;
+                }
+                targetItemToSync = updatedItem;
+                originalDate = d;
+                return updatedItem;
+              }
+              return item;
+            });
+            break;
+          }
         }
       }
-    }
+      return nextData;
+    });
 
-    if (!targetItem) return;
-
-    if (targetItem.repeatType) {
-      const completedDates = targetItem.completedDates || [];
-      if (completedDates.includes(date)) {
-        targetItem.completedDates = completedDates.filter((d) => d !== date);
-      } else {
-        targetItem.completedDates = [...completedDates, date];
+    // 🌟 同期処理は State の外側で行う
+    setTimeout(() => {
+      if (targetItemToSync) {
+        safeDebouncedSync(targetItemToSync, originalDate);
       }
-    } else {
-      targetItem.isDone = !targetItem.isDone;
-    }
-    safeDebouncedSync(targetItem, originalDate);
-
-    setScheduleData(newData);
-    setHasUnsavedChanges(true);
+      setHasUnsavedChanges(true);
+    }, 0);
   };
 
   const toggleSubTodo = async (
@@ -1488,13 +1541,20 @@ function IndexContent() {
       return;
     }
 
-    // 🌟 最強の判定
     if (item.id && String(item.id).startsWith("ext_")) {
       setSelectedExternalItem(item);
       setExternalModalVisible(true);
     } else {
-      // アプリ内で作成した予定は、今まで通り編集モーダルを開く
-      setQuickActionItem(item);
+      // 🌟 安全装置：こちらも同様に本物の元データを渡す
+      let originalItem = item;
+      for (const d of Object.keys(scheduleData)) {
+        const found = scheduleData[d].find((i) => i.id === item.id);
+        if (found) {
+          originalItem = found;
+          break;
+        }
+      }
+      setQuickActionItem(originalItem);
       setQuickActionVisible(true);
     }
   });
@@ -2379,11 +2439,13 @@ function IndexContent() {
             category,
             isExpense: Number(amount) > 0,
             isEvent: true, // 🌟 必須：「予定」として認識させる
+            layer: "外部予定",
             tags: ["外部予定"], // 🌟 これを追加することで DailyExpense 側に確実に反映される！
             color: "#FF2D55",
           });
 
           setScheduleData(newData);
+          setCalendarResetKey((prev) => prev + 1);
           setHasUnsavedChanges(true);
           setExternalModalVisible(false);
           Alert.alert("保存完了", "支出情報を予定に紐付けました。");
