@@ -807,10 +807,6 @@ function IndexContent() {
     let hasAnyChange = false;
     const nextData: { [date: string]: ScheduleItem[] } = {};
 
-    // 🌟 今のフィルターが「1つの親レイヤーのみ」で絞り込まれているか判定
-    const isSingleFilter = activeTags.length === 1;
-    const targetFilterLayer = isSingleFilter ? activeTags[0] : null;
-
     Object.keys(scheduleData).forEach((date) => {
       // 🌟 フィルターも変わっていなければキャッシュをスキップ
       if (!isThemeChanged && !isFilterChanged && scheduleData[date] === prevScheduleData.current[date] && cachedColoredData.current[date]) {
@@ -830,12 +826,12 @@ function IndexContent() {
         let displayColor = item.color;
         let displayTag = itemTag;
 
-        if (isSingleFilter && parentTag === targetFilterLayer) {
-          // 単一フィルター時（例：大学のみ表示）→ サブカテゴリ（ゼミ等）の色と名前を使う！
+        if (activeTags.length === 1 && activeTags[0] === parentTag) {
+          // 単一フィルター時（例：大学のみ表示）→ サブカテゴリ（ゼミ等）の色と名前をそのまま使う！
           displayColor = (itemTag && tagMaster[itemTag]) ? tagMaster[itemTag].color : (layerMaster[parentTag] || item.color);
           displayTag = itemTag || parentTag;
         } else {
-          // 複数レイヤー表示時（オールレイヤー等）→ 親レイヤー（大学等）の色と名前で統一してスッキリ見せる！
+          // 複数レイヤー表示時（オールレイヤー等）→ 親レイヤー（大学等）の色と名前に統一してスッキリ見せる！
           displayColor = layerMaster[parentTag] || item.color;
           displayTag = parentTag;
         }
@@ -876,6 +872,7 @@ function IndexContent() {
     }
     return cachedColoredData.current;
   }, [scheduleData, tagMaster, layerMaster, activeTags]); // 🌟 activeTags を依存配列に追加
+
 
   const displayData = useDisplayData(
     coloredScheduleData,
