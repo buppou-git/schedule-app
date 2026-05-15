@@ -831,14 +831,14 @@ function IndexContent() {
           dateChanged = true;
           const rawTags = item.tags && item.tags.length > 0 ? item.tags : [parentTag, itemTag];
           const fixedTags = Array.from(new Set(rawTags.filter((t: any) => Boolean(t))));
-          return { 
-            ...item, 
-            color: latestColor, 
+          return {
+            ...item,
+            color: latestColor,
             layer: parentTag, // 🌟 フィルター機能のための命綱！
-            tags: fixedTags 
+            tags: fixedTags
           } as ScheduleItem;
         }
-        return item; 
+        return item;
       });
 
       if (dateChanged) {
@@ -860,7 +860,7 @@ function IndexContent() {
     }
     return cachedColoredData.current;
   }, [scheduleData, tagMaster, layerMaster]);
-  
+
   const displayData = useDisplayData(
     coloredScheduleData,
     externalEvents,
@@ -1270,65 +1270,116 @@ function IndexContent() {
   };
 
   const handleQuickDelete = (item: ScheduleItem & { date?: string }) => {
-    Alert.alert("削除の確認", `「${item.title}」を削除しますか？`, [
-      { text: "キャンセル", style: "cancel" },
-      {
-        text: "削除",
-        style: "destructive",
-        onPress: async () => {
-          // 1. 通知のキャンセル
-          if (item.notificationIds) {
-            for (const id of item.notificationIds) {
-              await cancelItemNotification(id);
-            }
-          }
+    // 🌟 繰り返し予定の場合
+    if (item.repeatType) {
+      Alert.alert("繰り返しの削除", `「${item.title}」をどのように削除しますか？`, [
+        { text: "この予定のみ", onPress: () => executeQuickDelete(item, "single") },
+        { text: "これ以降すべて", onPress: () => executeQuickDelete(item, "following") },
+        { text: "すべての繰り返し", onPress: () => executeQuickDelete(item, "all"), style: "destructive" },
+        { text: "キャンセル", style: "cancel" },
+      ]);
+    } else {
+      // 🌟 通常の予定の場合
+      Alert.alert("削除の確認", `「${item.title}」を削除しますか？`, [
+        { text: "キャンセル", style: "cancel" },
+        { text: "削除", style: "destructive", onPress: () => executeQuickDelete(item, "normal") },
+      ]);
+    }
+  };
 
-          // 2. 共有タスクの場合、クラウド(Firestore)からも削除
-          if (isSharedItem(item)) {
-            try {
-              const itemTags = item.tags || (item.tag ? [item.tag] : []);
-              const sharedLayerName = itemTags.find((tag) =>
-                Object.keys(sharedRooms).includes(tag),
+  // 🌟 実際の削除処理を行う新しい関数（これも index.tsx 内に追加してください）
+  const executeQuickDelete = async (item: ScheduleItem & { date?: string }, mode: "normal" | "all" | "single" | "following") => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    const targetDate = item.date || selectedDate;
+
+    try {
+      // 1. 外部カレンダー連携があれば削除
+      if (item.externalEventId) {
+        try {
+          const Calendar = await import("expo-calendar");
+          await Calendar.deleteEventAsync(item.externalEventId);
+        } catch (e) { }
+      }
+
+      const wasShared = isSharedItem(item);
+      const isFullDelete = mode === "all" || mode === "normal" || (mode === "following" && item.startDate === targetDate);
+
+      // 2. 共有・通知のクリーンアップ（全削除系の場合）
+      if (isFullDelete) {
+        if (item.notificationIds) {
+          for (const id of item.notificationIds) await cancelItemNotification(id);
+        }
+        if (wasShared) {
+          const itemTags = item.tags || (item.tag ? [item.tag] : []);
+          const sharedLayerName = itemTags.find((tag) => Object.keys(sharedRooms).includes(tag));
+          if (sharedLayerName) {
+            const roomId = sharedRooms[sharedLayerName];
+            const { deleteDoc, doc } = await import("firebase/firestore");
+            await deleteDoc(doc(db, "rooms", roomId, "schedules", item.id));
+          }
+        }
+      } else if (mode === "following" && wasShared) {
+        // 🌟 共有予定の「これ以降すべて」：終了日を前日に書き換える
+        const targetDateObj = new Date(targetDate);
+        targetDateObj.setDate(targetDateObj.getDate() - 1);
+        const newEndDate = `${targetDateObj.getFullYear()}-${("0" + (targetDateObj.getMonth() + 1)).slice(-2)}-${("0" + targetDateObj.getDate()).slice(-2)}`;
+
+        const itemTags = item.tags || (item.tag ? [item.tag] : []);
+        const sharedLayerName = itemTags.find((tag) => Object.keys(sharedRooms).includes(tag));
+        if (sharedLayerName) {
+          const roomId = sharedRooms[sharedLayerName];
+          const { updateDoc, doc } = await import("firebase/firestore");
+          await updateDoc(doc(db, "rooms", roomId, "schedules", item.id), {
+            endDate: newEndDate,
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      }
+
+      // 3. ローカルのデータ更新（画面への即時反映）
+      setScheduleData((prevData: Record<string, ScheduleItem[]>) => {
+        const nextData: Record<string, ScheduleItem[]> = {};
+        Object.keys(prevData).forEach((key) => {
+          nextData[key] = [...prevData[key]];
+        });
+
+        if (mode === "single") {
+          // 今回のみ：例外日に追加
+          Object.keys(nextData).forEach((d) => {
+            if (nextData[d].some((i) => i.id === item.id)) {
+              nextData[d] = nextData[d].map((i) =>
+                i.id === item.id ? { ...i, exceptionDates: [...(i.exceptionDates || []), targetDate] } : i
               );
-              if (sharedLayerName) {
-                const targetRoomId = sharedRooms[sharedLayerName];
-                const { deleteDoc, doc } = await import("firebase/firestore");
-                // 正しいルームパスで削除を実行
-                await deleteDoc(
-                  doc(db, "rooms", targetRoomId, "schedules", item.id),
-                );
-              }
-            } catch (error) {
-              console.error("共有データの削除に失敗:", error);
             }
-          }
+          });
+        } else if (mode === "following") {
+          // これ以降すべて：終了日を書き換え
+          const targetDateObj = new Date(targetDate);
+          targetDateObj.setDate(targetDateObj.getDate() - 1);
+          const newEndDate = `${targetDateObj.getFullYear()}-${("0" + (targetDateObj.getMonth() + 1)).slice(-2)}-${("0" + targetDateObj.getDate()).slice(-2)}`;
 
-          // 3. ローカルデータの削除（filterを使うので newTitle は不要です！）
-          const newData = { ...scheduleData };
-          const targetDate = item.date || selectedDate;
-
-          if (
-            newData[targetDate] &&
-            newData[targetDate].some((i) => i.id === item.id)
-          ) {
-            newData[targetDate] = newData[targetDate].filter(
-              (i) => i.id !== item.id,
-            );
-          } else {
-            // フォールバック（全検索して削除）
-            for (const d of Object.keys(newData)) {
-              if (newData[d].some((i) => i.id === item.id)) {
-                newData[d] = newData[d].filter((i) => i.id !== item.id);
-                break;
-              }
+          Object.keys(nextData).forEach((d) => {
+            if (nextData[d].some((i) => i.id === item.id)) {
+              nextData[d] = nextData[d].map((i) => i.id === item.id ? { ...i, endDate: newEndDate } : i);
             }
-          }
+          });
+        } else {
+          // すべて削除
+          Object.keys(nextData).forEach((d) => {
+            nextData[d] = nextData[d].filter((i) => i.id !== item.id);
+          });
+        }
+        return nextData;
+      });
 
-          setScheduleData(newData);
-          setHasUnsavedChanges(true);
-        },
-      },
-    ]);
+      setHasUnsavedChanges(true);
+      setQuickActionVisible(false);
+      setCalendarResetKey(prev => prev + 1); // カレンダーの強制再描画
+
+    } catch (error) {
+      console.error("Quick Delete Error:", error);
+      Alert.alert("エラー", "削除に失敗しました。");
+    }
   };
 
   const handleRestore = async () => {
