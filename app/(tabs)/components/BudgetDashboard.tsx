@@ -153,17 +153,35 @@ export default function BudgetDashboard({
     const date = new Date(dateStr);
     let startYear = date.getFullYear();
     let startMonth = date.getMonth();
-    if (date.getDate() < pDay) {
+
+    const formatDate = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+    if (pDay === 99) {
+      // 🌟 月末リセットの場合（1日〜月末）
+      const startDate = new Date(startYear, startMonth, 1);
+      const endDate = new Date(startYear, startMonth + 1, 0); // 0を指定すると「月末日」になります
+      return { start: formatDate(startDate), end: formatDate(endDate) };
+    }
+
+    // 🌟 存在しない日付（例: 2月30日など）を防止する安全な計算
+    const currentMonthLastDay = new Date(startYear, startMonth + 1, 0).getDate();
+    const actualPDay = Math.min(pDay, currentMonthLastDay);
+
+    if (date.getDate() < actualPDay) {
       startMonth -= 1;
       if (startMonth < 0) {
         startMonth = 11;
         startYear -= 1;
       }
     }
-    const startDate = new Date(startYear, startMonth, pDay);
-    const endDate = new Date(startYear, startMonth + 1, pDay - 1);
-    const formatDate = (d: Date) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+    const startMonthLastDay = new Date(startYear, startMonth + 1, 0).getDate();
+    const safeStartDay = Math.min(pDay, startMonthLastDay);
+    const startDate = new Date(startYear, startMonth, safeStartDay);
+
+    const endDate = new Date(startYear, startMonth + 1, safeStartDay - 1);
+
     return { start: formatDate(startDate), end: formatDate(endDate) };
   };
 
@@ -381,18 +399,26 @@ export default function BudgetDashboard({
 
   const daysToPayday = useMemo(() => {
     const today = new Date(todayStr);
-    let nextPaydayDate = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      payday,
-    );
+    let nextPaydayDate;
 
-    if (today.getDate() >= payday) {
-      nextPaydayDate = new Date(
-        today.getFullYear(),
-        today.getMonth() + 1,
-        payday,
-      );
+    if (payday === 99) {
+      // 🌟 月末リセットの場合
+      nextPaydayDate = new Date(today.getFullYear(), today.getMonth() + 1, 0); // 今月の月末
+      if (today.getDate() === nextPaydayDate.getDate()) {
+        nextPaydayDate = new Date(today.getFullYear(), today.getMonth() + 2, 0); // 来月の月末
+      }
+    } else {
+      // 🌟 通常の日付リセットの場合（存在しない日付を除外）
+      const currentMonthLastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+      const safePayday = Math.min(payday, currentMonthLastDay);
+
+      nextPaydayDate = new Date(today.getFullYear(), today.getMonth(), safePayday);
+
+      if (today.getDate() >= safePayday) {
+        const nextMonthLastDay = new Date(today.getFullYear(), today.getMonth() + 2, 0).getDate();
+        const safeNextPayday = Math.min(payday, nextMonthLastDay);
+        nextPaydayDate = new Date(today.getFullYear(), today.getMonth() + 1, safeNextPayday);
+      }
     }
 
     const diffTime = nextPaydayDate.getTime() - today.getTime();
@@ -470,14 +496,14 @@ export default function BudgetDashboard({
       newList = wishlist.map((w) =>
         w.id === editingWishId
           ? {
-              ...w,
-              name: newWishName.trim(),
-              targetAmount,
-              icon: newWishIcon,
-              color: newWishColor,
-              autoDepositEnabled: newWishAutoDeposit,
-              autoDepositAmount: autoAmount,
-            }
+            ...w,
+            name: newWishName.trim(),
+            targetAmount,
+            icon: newWishIcon,
+            color: newWishColor,
+            autoDepositEnabled: newWishAutoDeposit,
+            autoDepositAmount: autoAmount,
+          }
           : w,
       );
     } else {
@@ -658,9 +684,9 @@ export default function BudgetDashboard({
         updatedWishlist = updatedWishlist.map((w) =>
           w.id === id
             ? {
-                ...w,
-                savedAmount: Math.min(w.targetAmount, w.savedAmount + amount),
-              }
+              ...w,
+              savedAmount: Math.min(w.targetAmount, w.savedAmount + amount),
+            }
             : w,
         );
       }
@@ -847,15 +873,45 @@ export default function BudgetDashboard({
           showsVerticalScrollIndicator={false}
         >
           <Text style={styles.settingLabel}>リセット日指定</Text>
-          <TextInput
-            style={styles.settingInput}
-            keyboardType="numeric"
-            value={payday.toString()}
-            onChangeText={(t) => {
-              setPayday(parseInt(t) || 25);
-              AsyncStorage.setItem("myPayday", t);
-            }}
-          />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 15 }}>
+            <View style={[styles.settingInput, { flex: 1, marginBottom: 0, flexDirection: "row", alignItems: "center", padding: 0 }]}>
+              <TextInput
+                style={{ flex: 1, padding: 12, fontSize: 16, color: payday === 99 ? "#8E8E93" : "#1C1C1E" }}
+                keyboardType="numeric"
+                value={payday === 99 ? "月末" : payday.toString()}
+                onChangeText={(t) => {
+                  // 🌟 おかしな文字や数字を除外する最強のシステム
+                  const numStr = t.replace(/[^0-9]/g, ""); // 数字以外を瞬時に削除
+                  if (!numStr) return; // 空なら無視
+
+                  let val = parseInt(numStr, 10);
+                  if (val > 31) val = 31; // 31日より大きい数字は強制的に31にする
+                  if (val <= 0) val = 1;  // 0やマイナスの数字は強制的に1にする
+
+                  setPayday(val);
+                  AsyncStorage.setItem("myPayday", val.toString());
+                }}
+              />
+              {payday !== 99 && <Text style={{ fontSize: 16, color: "#1C1C1E", paddingRight: 12, fontWeight: "bold" }}>日</Text>}
+            </View>
+            <TouchableOpacity
+              style={{
+                backgroundColor: payday === 99 ? themeColor : "#F2F2F7",
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: payday === 99 ? themeColor : "#E5E5EA",
+              }}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setPayday(99); // 🌟 99を「月末」の合図として保存する
+                AsyncStorage.setItem("myPayday", "99");
+              }}
+            >
+              <Text style={{ fontWeight: "bold", color: payday === 99 ? "#FFF" : "#8E8E93" }}>月末にする</Text>
+            </TouchableOpacity>
+          </View>
 
           <Text style={[styles.settingLabel, { marginTop: 10 }]}>
             予算スライダーの表示切替
@@ -1218,9 +1274,9 @@ export default function BudgetDashboard({
                               : key === "外部予定" // 🌟 ここを追加！
                                 ? "#FF2D55"
                                 : layerMaster[key] ||
-                                  CHART_PALETTE[index % CHART_PALETTE.length]
+                                CHART_PALETTE[index % CHART_PALETTE.length]
                             : tagMaster[key]?.color ||
-                              CHART_PALETTE[index % CHART_PALETTE.length],
+                            CHART_PALETTE[index % CHART_PALETTE.length],
                       legendFontColor: "#666",
                       legendFontSize: 11,
                     }))}
