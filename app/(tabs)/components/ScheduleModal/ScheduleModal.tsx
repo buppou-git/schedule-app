@@ -758,8 +758,9 @@ const ScheduleModal = ({
   const handleDeletePress = () => {
     if (selectedItem && selectedItem.repeatType) {
       Alert.alert("繰り返しの削除", "この予定をどのように削除しますか？", [
-        { text: "今回のみ", onPress: () => executeDelete("single") },
-        { text: "今後すべて", onPress: () => executeDelete("all") },
+        { text: "この予定のみ", onPress: () => executeDelete("single") },
+        { text: "これ以降すべて", onPress: () => executeDelete("following") },
+        { text: "すべての繰り返し", onPress: () => executeDelete("all"), style: "destructive" },
         { text: "キャンセル", style: "cancel" },
       ]);
     } else {
@@ -767,7 +768,7 @@ const ScheduleModal = ({
     }
   };
 
-  const executeDelete = async (mode: "normal" | "all" | "single") => {
+  const executeDelete = async (mode: "normal" | "all" | "single" | "following") => {
     if (!selectedItem) return;
     if (isSaving || isSavingRef.current) return;
 
@@ -784,7 +785,10 @@ const ScheduleModal = ({
 
       const wasShared = selectedItem.tags?.some((tag) => Object.keys(sharedRooms).includes(tag)) || Object.keys(sharedRooms).includes(selectedItem.tag || "");
 
-      if (mode !== "single") {
+      // 🌟 今回追加：「これ以降すべて」を選んだ場合で、しかもそれが「一番最初の予定」だった場合は「全削除」扱いにする
+      const isFullDelete = mode === "all" || mode === "normal" || (mode === "following" && selectedItem.startDate === selectedDate);
+
+      if (isFullDelete) {
         if (selectedItem.notificationIds) {
           for (const id of selectedItem.notificationIds) await cancelItemNotification(id);
         }
@@ -800,34 +804,78 @@ const ScheduleModal = ({
             deleteDoc(doc(db, "rooms", roomId, "schedules", selectedItem.id)).catch((e) => console.error("共有データ削除エラー:", e));
           }
         }
+      } else if (mode === "following") {
+        // 🌟 今回追加：「これ以降すべて」を選んだ場合、共有カレンダー上の「終了日（endDate）」を前日に書き換える！
+        if (wasShared) {
+          const targetDateObj = new Date(selectedDate);
+          targetDateObj.setDate(targetDateObj.getDate() - 1);
+          const newEndDate = `${targetDateObj.getFullYear()}-${("0" + (targetDateObj.getMonth() + 1)).slice(-2)}-${("0" + targetDateObj.getDate()).slice(-2)}`;
+
+          const oldLayer = (selectedItem.tags || [selectedItem.tag || ""]).find((tag) => Object.keys(sharedRooms).includes(tag));
+          const roomId = oldLayer ? sharedRooms[oldLayer] : null;
+          if (roomId) {
+            const { updateDoc } = await import("firebase/firestore");
+            updateDoc(doc(db, "rooms", roomId, "schedules", selectedItem.id), {
+              endDate: newEndDate,
+              updatedAt: new Date().toISOString(),
+            }).catch((e) => console.error("共有データ更新エラー:", e));
+          }
+        }
       }
 
-      // 🌟 関数渡し(prev => ...) を完全に排除！
-      const nextData: Record<string, ScheduleItem[]> = {};
-      Object.keys(scheduleData).forEach((key) => {
-        nextData[key] = [...scheduleData[key]];
-      });
+      setScheduleData((prevData: Record<string, ScheduleItem[]>) => {
+        const nextData: Record<string, ScheduleItem[]> = {};
+        Object.keys(prevData).forEach((key) => {
+          nextData[key] = [...prevData[key]];
+        });
 
-      if (mode === "single") {
-        Object.keys(nextData).forEach((d) => {
-          if (nextData[d].some((i) => i.id === selectedItem.id)) {
-            nextData[d] = nextData[d].map((i: ScheduleItem) => {
-              if (i.id === selectedItem.id) {
-                return { ...i, exceptionDates: [...(i.exceptionDates || []), selectedDate] };
+        if (mode === "single") {
+          // 「今回のみ」：例外日リスト（exceptionDates）に追加してその日だけ非表示に
+          Object.keys(nextData).forEach((d) => {
+            if (nextData[d].some((i) => i.id === selectedItem.id)) {
+              nextData[d] = nextData[d].map((i: ScheduleItem) => {
+                if (i.id === selectedItem.id) {
+                  return { ...i, exceptionDates: [...(i.exceptionDates || []), selectedDate] };
+                }
+                return i;
+              });
+            }
+          });
+        } else if (mode === "following") {
+          // 「これ以降すべて」：終了日（endDate）を選択された日の「前日」に書き換えてスパッと打ち切る！
+          if (selectedItem.startDate === selectedDate) {
+            Object.keys(nextData).forEach((d) => {
+              if (nextData[d].some((i) => i.id === selectedItem.id)) {
+                nextData[d] = nextData[d].filter((i: ScheduleItem) => i.id !== selectedItem.id);
               }
-              return i;
+            });
+          } else {
+            const targetDateObj = new Date(selectedDate);
+            targetDateObj.setDate(targetDateObj.getDate() - 1);
+            const newEndDate = `${targetDateObj.getFullYear()}-${("0" + (targetDateObj.getMonth() + 1)).slice(-2)}-${("0" + targetDateObj.getDate()).slice(-2)}`;
+
+            Object.keys(nextData).forEach((d) => {
+              if (nextData[d].some((i) => i.id === selectedItem.id)) {
+                nextData[d] = nextData[d].map((i: ScheduleItem) => {
+                  if (i.id === selectedItem.id) {
+                    return { ...i, endDate: newEndDate };
+                  }
+                  return i;
+                });
+              }
             });
           }
-        });
-      } else {
-        Object.keys(nextData).forEach((d) => {
-          if (nextData[d].some((i) => i.id === selectedItem.id)) {
-            nextData[d] = nextData[d].filter((i: ScheduleItem) => i.id !== selectedItem.id);
-          }
-        });
-      }
+        } else {
+          // 「すべての繰り返し」：全削除
+          Object.keys(nextData).forEach((d) => {
+            if (nextData[d].some((i) => i.id === selectedItem.id)) {
+              nextData[d] = nextData[d].filter((i: ScheduleItem) => i.id !== selectedItem.id);
+            }
+          });
+        }
+        return nextData;
+      });
 
-      setScheduleData(nextData);
       setHasUnsavedChanges(true);
       onForceRender?.();
 
