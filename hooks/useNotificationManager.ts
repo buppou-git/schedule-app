@@ -95,7 +95,7 @@ export const useNotificationManager = () => {
         hour: time.getHours(),
         minute: time.getMinutes(),
         repeats: true,
-      } as any,
+      } as Notifications.NotificationTriggerInput,
     });
 
     // 設定を保存
@@ -122,7 +122,7 @@ export const useNotificationManager = () => {
       trigger: {
         date: triggerDate,
         channelId: "default",
-      } as any,
+      } as Notifications.NotificationTriggerInput,
     });
     return id; // この受付番号（ID）をScheduleItemに保存します
   };

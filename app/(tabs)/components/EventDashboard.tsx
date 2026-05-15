@@ -9,8 +9,8 @@ interface EventDashboardProps {
   selectedDate: string;
   currentSolidColor: string;
   activeTags: string[];
-  tagMaster: any;
-  layerMaster: any;
+  tagMaster: Record<string, { layer: string; color: string }>;
+  layerMaster: Record<string, string>;
   formatEventTime: (item: ScheduleItem) => string;
   openEditModal: (item: ScheduleItem) => void;
   onLongPress: (item: ScheduleItem) => void;

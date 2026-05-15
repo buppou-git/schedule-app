@@ -618,7 +618,7 @@ const ScheduleModal = ({
       const eStr = `${eYear}-${eMonth}-${eDay}`;
 
       // 🌟 TypeScriptのエラーを回避するために any 型で宣言し、確実に layer を含める！
-      const itemData: any = {
+      const itemData: Omit<ScheduleItem, "id"> = {
         title: formData.title,
         tag: finalTag,
         layer: selectedLayer, // 🌟 フィルター機能のための命綱を強制追加！

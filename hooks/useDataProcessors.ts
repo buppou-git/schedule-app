@@ -7,7 +7,7 @@ export function useDisplayData(
   externalEvents: { [key: string]: ScheduleItem[] },
   roomSchedules: { [roomId: string]: { [date: string]: ScheduleItem[] } },
   activeTags: string[],
-  tagMaster: { [key: string]: any }
+  tagMaster: Record<string, { layer: string; color: string }>
 ) {
   // 💣 爆弾撤去 1: 「データの結合」は、予定が追加・編集された時だけ実行する！
   const mergedAllData = useMemo(() => {
@@ -84,7 +84,7 @@ export function useDailyItems(
   selectedDate: string,
   activeTags: string[],
   activeMode: string,
-  tagMaster: { [key: string]: any }
+  tagMaster: Record<string, { layer: string; color: string }>
 ) {
   return useMemo(() => {
     const items = expandedScheduleData[selectedDate] || [];

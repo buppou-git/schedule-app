@@ -50,6 +50,7 @@ export interface ScheduleItem {
   detailNotes?: string;
   externalEventId?: string;
   layer?: string;
+  date?: string;
 }
 
 // 🌟 タグとレイヤーのマスターデータの型定義

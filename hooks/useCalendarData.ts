@@ -6,8 +6,8 @@ export function useCalendarData(
   scheduleData: { [key: string]: ScheduleItem[] },
   activeMode: string,
   activeTags: string[],
-  layerMaster: any,
-  tagMaster: any,
+  layerMaster: Record<string, string>,
+  tagMaster: Record<string, { layer: string; color: string }>,
   selectedDate: string,
   hiddenExternalIds: string[] = []
 ) {
@@ -120,7 +120,8 @@ export function useCalendarData(
 
   // 🧠 2. カレンダーのドット（色）を計算するロジック
   const markedDatesBase = useMemo(() => {
-    const marked: any = {};
+    // 🌟 カレンダーのドットデータの型を厳密に定義！
+    const marked: Record<string, { dots: { color: string }[] }> = {};
     const activeTagsSet = new Set(activeTags);
     const isAllLayers = activeTags.length === 0;
 

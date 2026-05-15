@@ -793,22 +793,21 @@ function IndexContent() {
   const prevScheduleData = useRef(scheduleData);
   const prevTagMaster = useRef(tagMaster);
   const prevLayerMaster = useRef(layerMaster);
-  const prevActiveTags = useRef(activeTags); // 🌟 追加：フィルター状態の変更を検知する
+  const prevActiveTags = useRef(activeTags);
   const cachedColoredData = useRef<{ [date: string]: ScheduleItem[] }>({});
 
   const coloredScheduleData = useMemo(() => {
     const isThemeChanged = tagMaster !== prevTagMaster.current || layerMaster !== prevLayerMaster.current;
-    const isFilterChanged = activeTags !== prevActiveTags.current; // 🌟 追加：フィルターが変わったら再計算
+    const isFilterChanged = activeTags !== prevActiveTags.current;
 
     prevTagMaster.current = tagMaster;
     prevLayerMaster.current = layerMaster;
-    prevActiveTags.current = activeTags; // 🌟 追加
+    prevActiveTags.current = activeTags;
 
     let hasAnyChange = false;
     const nextData: { [date: string]: ScheduleItem[] } = {};
 
     Object.keys(scheduleData).forEach((date) => {
-      // 🌟 フィルターも変わっていなければキャッシュをスキップ
       if (!isThemeChanged && !isFilterChanged && scheduleData[date] === prevScheduleData.current[date] && cachedColoredData.current[date]) {
         nextData[date] = cachedColoredData.current[date];
         return;
@@ -817,38 +816,49 @@ function IndexContent() {
       hasAnyChange = true;
       let dateChanged = false;
 
-      const newItems = scheduleData[date].map((item: any) => {
-        // 親レイヤー（カレンダーの種類）と子タグを確実に特定
-        const itemTag = item.tag || (item.tags && item.tags[0]) || "生活";
+      // 🌟 mapの引数から any を排除し、ScheduleItem として厳密に扱う！
+      const newItems = scheduleData[date].map((item: ScheduleItem) => {
+        const itemTag = item.tag || (item.tags && item.tags.length > 1 ? item.tags[1] : item.tags?.[0]) || "生活";
         const parentTag = (item.tags && item.tags.length > 0) ? item.tags[0] : (tagMaster[itemTag]?.layer || itemTag);
 
-        // 🌟🌟🌟 新機能：フィルター状態に応じた「色」と「表示名」の動的切り替え！ 🌟🌟🌟
-        let displayColor = item.color;
-        let displayTag = itemTag;
-
-        if (activeTags.length === 1 && activeTags[0] === parentTag) {
-          // 単一フィルター時（例：大学のみ表示）→ サブカテゴリ（ゼミ等）の色と名前をそのまま使う！
-          displayColor = (itemTag && tagMaster[itemTag]) ? tagMaster[itemTag].color : (layerMaster[parentTag] || item.color);
-          displayTag = itemTag || parentTag;
-        } else {
-          // 複数レイヤー表示時（オールレイヤー等）→ 親レイヤー（大学等）の色と名前に統一してスッキリ見せる！
-          displayColor = layerMaster[parentTag] || item.color;
-          displayTag = parentTag;
+        let latestColor = item.color;
+        if (item.tag && tagMaster[item.tag]) {
+          latestColor = tagMaster[item.tag].color;
+        } else if (parentTag && layerMaster[parentTag]) {
+          latestColor = layerMaster[parentTag];
         }
 
-        const rawTags = item.tags && item.tags.length > 0 ? item.tags : [parentTag, itemTag];
-        const fixedTags = Array.from(new Set(rawTags.filter((t: any) => Boolean(t))));
+        let displayColor = latestColor;
+        let displayTags: string[] = []; // 🌟 stringの配列であることを厳密に定義！
 
-        // 🌟 画面表示用に item.tag と item.color を上書きして渡す
-        if (item.color !== displayColor || item.tag !== displayTag || item.layer !== parentTag || !item.tags) {
+        if (activeTags.length === 1 && activeTags[0] === parentTag) {
+          displayColor = (itemTag && tagMaster[itemTag]) ? tagMaster[itemTag].color : latestColor;
+          if (itemTag && itemTag !== parentTag) {
+            displayTags = [itemTag];
+          } else {
+            displayTags = [];
+          }
+        } else {
+          displayColor = layerMaster[parentTag] || latestColor;
+          displayTags = [parentTag];
+        }
+
+        const needsUpdate =
+          item.color !== displayColor ||
+          !item.tags ||
+          JSON.stringify(item.tags) !== JSON.stringify(displayTags);
+
+        if (needsUpdate) {
           dateChanged = true;
-          return {
+          // 🌟 TypeScriptが layer の存在を認めているため、エラー無く美しいオブジェクトを作れます
+          const updatedItem: ScheduleItem = {
             ...item,
             color: displayColor,
-            tag: displayTag, // 🌟 フィルター状態によって「大学」や「ゼミ」に変化する
+            tag: itemTag,
             layer: parentTag,
-            tags: fixedTags
-          } as ScheduleItem;
+            tags: displayTags
+          };
+          return updatedItem;
         }
         return item;
       });
@@ -871,8 +881,7 @@ function IndexContent() {
       return nextData;
     }
     return cachedColoredData.current;
-  }, [scheduleData, tagMaster, layerMaster, activeTags]); // 🌟 activeTags を依存配列に追加
-
+  }, [scheduleData, tagMaster, layerMaster, activeTags]);
 
   const displayData = useDisplayData(
     coloredScheduleData,
