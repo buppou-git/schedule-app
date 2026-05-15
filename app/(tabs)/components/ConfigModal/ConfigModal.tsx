@@ -1,4 +1,3 @@
-import * as Updates from 'expo-updates';
 import "react-native-get-random-values";
 
 import { Ionicons } from "@expo/vector-icons";
@@ -218,19 +217,9 @@ export default function ConfigModal({
                   </View>
 
                   <Text style={styles.copyright}>
-                    Developed by UniCal
+                    UniCal
                   </Text>
 
-                  <View style={{ marginTop: 30, alignItems: "center", paddingBottom: 20 }}>
-                    <Text style={{ fontSize: 12, color: "#8E8E93", fontWeight: "bold" }}>
-                      UniCal Version 1.0.0
-                    </Text>
-                    <Text style={{ fontSize: 10, color: "#C7C7CC", marginTop: 4 }}>
-                      {/* Update IDが存在すれば最初の8文字を表示し、無ければ「初期ビルド」と表示 */}
-                      Update ID: {Updates.updateId ? Updates.updateId.substring(0, 8) : "初期ビルド(Local)"}
-                    </Text>
-                  </View>
-                  
                 </ScrollView>
               )}
             </View>
