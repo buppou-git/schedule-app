@@ -446,25 +446,19 @@ export default function BudgetDashboard({
       isTodo: false,
       isExpense: false,
       isIncome: true,
+      startDate: todayStr, // 日別詳細でフィルタリングするキー
     };
 
-    // 🌟 ここが重要！
-    // 1. まず現在の全体データを取得して加工する
     const newData = {
       ...scheduleData,
       [todayStr]: [...(scheduleData[todayStr] || []), newItem],
     };
 
-    // 2. Zustand(useAppStore)のStateを更新
+    // 🌟 ZustandのStateを更新
     setScheduleData(newData);
-
-    // 3. 🌟 【最重要】Zustandの内部管理に関わらず、
-    //    AsyncStorageに「myScheduleData」という名前で直接保存する！
-    try {
-      await AsyncStorage.setItem("myScheduleData", JSON.stringify(newData));
-    } catch (e) {
-      console.error("保存失敗:", e);
-    }
+    
+    // 🌟 AsyncStorageに保存（キーを統一）
+    await AsyncStorage.setItem("myScheduleData", JSON.stringify(newData));
 
     setHasUnsavedChanges(true);
     setIsSalaryModalVisible(false);
