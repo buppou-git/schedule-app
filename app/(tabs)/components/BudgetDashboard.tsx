@@ -428,7 +428,7 @@ export default function BudgetDashboard({
     return Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
   }, [todayStr, payday]);
 
-  const executeSalaryRecord = async () => { // 🌟 asyncを追加
+  const executeSalaryRecord = async () => {
     const amount = parseInt(salaryInputAmount);
     if (isNaN(amount) || amount <= 0)
       return Alert.alert("エラー", "正しい金額を入力してください");
@@ -437,7 +437,7 @@ export default function BudgetDashboard({
       id: Date.now().toString(),
       category: "収入",
       tag: "給料",
-      tags: ["給料"], // 🌟 フィルターで拾われるために必須
+      tags: ["給料"],
       title: "給料",
       amount: amount,
       isDone: true,
@@ -448,15 +448,24 @@ export default function BudgetDashboard({
       isIncome: true,
     };
 
-    // 🌟 Stateとストレージを両方更新
+    // 🌟 ここが重要！
+    // 1. まず現在の全体データを取得して加工する
     const newData = {
       ...scheduleData,
       [todayStr]: [...(scheduleData[todayStr] || []), newItem],
     };
 
+    // 2. Zustand(useAppStore)のStateを更新
     setScheduleData(newData);
-    await AsyncStorage.setItem("scheduleData", JSON.stringify(newData)); // 🌟 永続化
-    
+
+    // 3. 🌟 【最重要】Zustandの内部管理に関わらず、
+    //    AsyncStorageに「myScheduleData」という名前で直接保存する！
+    try {
+      await AsyncStorage.setItem("myScheduleData", JSON.stringify(newData));
+    } catch (e) {
+      console.error("保存失敗:", e);
+    }
+
     setHasUnsavedChanges(true);
     setIsSalaryModalVisible(false);
     setSalaryInputAmount("");
@@ -2696,9 +2705,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "flex-end",
   },
-  savingsAmount: { 
+  savingsAmount: {
     fontSize: 26,         // 🌟 少し縮小
-    fontWeight: "900", 
+    fontWeight: "900",
     letterSpacing: 0.5,
     flexShrink: 1,        // 🌟 はみ出る前に縮む設定
   },
