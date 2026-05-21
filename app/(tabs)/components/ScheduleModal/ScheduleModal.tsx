@@ -104,7 +104,65 @@ const ScheduleModal = ({
 
   // 🌟 関数自体をメモ化して、子コンポーネントの無駄な再描画を防ぐ
   const updateForm = useCallback((updates: Partial<typeof formData>) => {
-    setFormData((prev) => ({ ...prev, ...updates }));
+    setFormData((prev) => {
+      let next = { ...prev, ...updates };
+
+      // 🌟🌟🌟 限界突破：日時が逆転しない＆自動連動する最強の補正システム！ 🌟🌟🌟
+      const normalizeDate = (d: Date) => {
+        const nd = new Date(d);
+        nd.setHours(0, 0, 0, 0);
+        return nd;
+      };
+
+      const startDay = normalizeDate(next.startDate);
+      const endDay = normalizeDate(next.endDate);
+
+      // ① 終日モードの場合（日付のみの連動・補正）
+      if (next.isAllDay) {
+        if (updates.startDate) {
+          // 開始日を変えたら、終了日も元の期間を保ってスライドさせる
+          const oldStartDay = normalizeDate(prev.startDate);
+          const oldEndDay = normalizeDate(prev.endDate);
+          const dayDiff = oldEndDay.getTime() - oldStartDay.getTime();
+          next.endDate = new Date(startDay.getTime() + Math.max(0, dayDiff));
+        } else if (startDay.getTime() > endDay.getTime()) {
+          // 終了日を過去に戻して逆転した場合の補正
+          next.startDate = new Date(next.endDate);
+        }
+      }
+      // ② 終日オフ（時間指定あり）の場合（時間を含めた連動・補正）
+      else {
+        const createDateTime = (d: Date, t: Date) => {
+          const dt = new Date(d);
+          dt.setHours(t.getHours(), t.getMinutes(), 0, 0);
+          return dt;
+        };
+
+        const oldStartDT = createDateTime(prev.startDate, prev.startTime);
+        const oldEndDT = createDateTime(prev.endDate, prev.endTime);
+
+        // 🌟 元の予定の長さ（ミリ秒）を記憶しておく。最低でも1時間（60*60*1000）を保証！
+        const duration = Math.max(oldEndDT.getTime() - oldStartDT.getTime(), 60 * 60 * 1000);
+
+        const startDT = createDateTime(next.startDate, next.startTime);
+        const endDT = createDateTime(next.endDate, next.endTime);
+
+        if (updates.startDate || updates.startTime) {
+          // 🌟 ここがご要望の機能！
+          // 開始日時を変えたら、終了日時も自動で「1時間後（または変更前の長さ）」にスライドする！
+          const newEndDT = new Date(startDT.getTime() + duration);
+          next.endDate = new Date(newEndDT);
+          next.endTime = new Date(newEndDT);
+        } else if (startDT.getTime() > endDT.getTime()) {
+          // 終了日時を過去に戻して逆転した場合、開始日時を「終了日時 - 元の長さ」に押し下げる！
+          const newStartDT = new Date(endDT.getTime() - duration);
+          next.startDate = new Date(newStartDT);
+          next.startTime = new Date(newStartDT);
+        }
+      }
+
+      return next;
+    });
   }, []);
 
   // =========================================================
@@ -1391,6 +1449,22 @@ const ScheduleModal = ({
       );
     return (
       <View style={styles.simpleDateTimeCard}>
+        {/* 🌟 終日トグルをここに追加！ */}
+        <View style={[styles.switchRow, { marginBottom: 12 }]}>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Ionicons name="time" size={18} color={uiThemeColor} style={{ marginRight: 8 }} />
+            <Text style={{ fontSize: 15, fontWeight: "bold", color: "#1C1C1E" }}>
+              終日
+            </Text>
+          </View>
+          <Switch
+            value={formData.isAllDay}
+            onValueChange={(v) => updateForm({ isAllDay: v })}
+            trackColor={{ false: "#C7C7CC", true: uiThemeColor }}
+            ios_backgroundColor="#E5E5EA"
+          />
+        </View>
+
         <View style={styles.timeRow}>
           <View style={styles.timeLabelContainer}>
             <Text style={[styles.timeLabelText, { color: uiThemeColor }]}>
@@ -1404,12 +1478,15 @@ const ScheduleModal = ({
               onChange={(d) => updateForm({ startDate: d })}
               themeColor={uiThemeColor}
             />
-            <ModernDatePicker
-              value={formData.startTime}
-              mode="time"
-              onChange={(d) => updateForm({ startTime: d })}
-              themeColor={uiThemeColor}
-            />
+            {/* 🌟 終日ONの時は、時間ピッカーを隠す！ */}
+            {!formData.isAllDay && (
+              <ModernDatePicker
+                value={formData.startTime}
+                mode="time"
+                onChange={(d) => updateForm({ startTime: d })}
+                themeColor={uiThemeColor}
+              />
+            )}
           </View>
         </View>
         <View style={styles.timeDivider} />
@@ -1424,12 +1501,15 @@ const ScheduleModal = ({
               onChange={(d) => updateForm({ endDate: d })}
               themeColor={uiThemeColor}
             />
-            <ModernDatePicker
-              value={formData.endTime}
-              mode="time"
-              onChange={(d) => updateForm({ endTime: d })}
-              themeColor={uiThemeColor}
-            />
+            {/* 🌟 終日ONの時は、時間ピッカーを隠す！ */}
+            {!formData.isAllDay && (
+              <ModernDatePicker
+                value={formData.endTime}
+                mode="time"
+                onChange={(d) => updateForm({ endTime: d })}
+                themeColor={uiThemeColor}
+              />
+            )}
           </View>
         </View>
       </View>
@@ -1441,6 +1521,7 @@ const ScheduleModal = ({
     formData.startTime,
     formData.endDate,
     formData.endTime,
+    formData.isAllDay, // 🌟 終日フラグが切り替わった時にUIを再描画する
     updateForm,
   ]);
 

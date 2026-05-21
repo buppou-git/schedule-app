@@ -667,7 +667,7 @@ export default function DailyExpense({
                       style={[styles.addExecuteBtn, { backgroundColor: c }]}
                       onPress={() => handleAddExpense(l, c)}
                     >
-                      <Ionicons name="checkmark-done" size={20} color="#FFF" />
+                      <Ionicons name="checkmark-sharp" size={20} color="#FFF" />
                     </TouchableOpacity>
                   </View>
                 </View>
