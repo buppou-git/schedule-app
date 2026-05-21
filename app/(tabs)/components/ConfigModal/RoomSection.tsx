@@ -1,17 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage"; // 🌟 色を保存するために追加
 import React, { useCallback, useState } from "react";
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    Share,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  Share,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
+import { PRESET_COLORS } from "../../../../utils/helpers"; // 🌟 カラーパレットを読み込み
 import { styles } from "./ConfigModal.styles";
 
 // 🌟 ConfigModal (親) から受け取るデータを定義
@@ -22,13 +24,15 @@ interface RoomSectionProps {
 
 export const RoomSection = React.memo(
   ({ sharedRooms, onAddSharedRoom }: RoomSectionProps) => {
-    // 🌟 部屋（Room）関連の 9つのState をこのファイルに集約
+    // 🌟 部屋（Room）関連のState
     const [createRoomVisible, setCreateRoomVisible] = useState(false);
     const [newRoomName, setNewRoomName] = useState("");
+    const [newRoomColor, setNewRoomColor] = useState(PRESET_COLORS[0]); // 🌟 作成時の色
 
     const [joinRoomVisible, setJoinRoomVisible] = useState(false);
     const [joinRoomId, setJoinRoomId] = useState("");
     const [joinRoomName, setJoinRoomName] = useState("");
+    const [joinRoomColor, setJoinRoomColor] = useState(PRESET_COLORS[0]); // 🌟 参加時の色
 
     const [shareRoomListVisible, setShareRoomListVisible] = useState(false);
 
@@ -37,7 +41,6 @@ export const RoomSection = React.memo(
     const [createdRoomName, setCreatedRoomName] = useState("");
     const [createdRoomId, setCreatedRoomId] = useState("");
 
-    // 🌟 各種関数も useCallback で包んで移動
     const handleShareRoom = useCallback(
       async (roomName: string, roomId: string) => {
         try {
@@ -53,14 +56,25 @@ export const RoomSection = React.memo(
       [],
     );
 
-    const handleCreateRoom = useCallback(() => {
+    const handleCreateRoom = useCallback(async () => {
       if (!newRoomName.trim()) return;
 
       const generatedRoomId =
         "room_" +
         Date.now().toString(36) +
         Math.random().toString(36).substring(2, 8);
+      
       onAddSharedRoom(newRoomName.trim(), generatedRoomId);
+
+      // 🌟 魔法の追加：裏側（AsyncStorage）に直接アクセスして、選んだ色を保存する！
+      try {
+        const storedStr = await AsyncStorage.getItem("layerMasterData");
+        const currentLayers = storedStr ? JSON.parse(storedStr) : {};
+        currentLayers[newRoomName.trim()] = newRoomColor;
+        await AsyncStorage.setItem("layerMasterData", JSON.stringify(currentLayers));
+      } catch (e) {
+        console.error("Color save error:", e);
+      }
 
       setCreatedRoomName(newRoomName.trim());
       setCreatedRoomId(generatedRoomId);
@@ -70,9 +84,9 @@ export const RoomSection = React.memo(
       setTimeout(() => {
         setShowCreatedRoomInfoVisible(true);
       }, 400);
-    }, [newRoomName, onAddSharedRoom]);
+    }, [newRoomName, newRoomColor, onAddSharedRoom]);
 
-    const handleJoinRoom = useCallback(() => {
+    const handleJoinRoom = useCallback(async () => {
       if (!joinRoomName.trim() || !joinRoomId.trim()) return;
 
       let extractedId = joinRoomId.trim();
@@ -81,11 +95,22 @@ export const RoomSection = React.memo(
       }
 
       onAddSharedRoom(joinRoomName.trim(), extractedId);
+
+      // 🌟 参加時も同じように色を保存する！
+      try {
+        const storedStr = await AsyncStorage.getItem("layerMasterData");
+        const currentLayers = storedStr ? JSON.parse(storedStr) : {};
+        currentLayers[joinRoomName.trim()] = joinRoomColor;
+        await AsyncStorage.setItem("layerMasterData", JSON.stringify(currentLayers));
+      } catch (e) {
+        console.error("Color save error:", e);
+      }
+
       setJoinRoomVisible(false);
       setJoinRoomId("");
       setJoinRoomName("");
-      Alert.alert("参加完了", "共有カレンダーをレイヤーに追加しました！");
-    }, [joinRoomId, joinRoomName, onAddSharedRoom]);
+      Alert.alert("参加完了", "共有カレンダーを追加しました！\n（※色が反映されない場合は一度アプリを再起動してください）");
+    }, [joinRoomId, joinRoomName, joinRoomColor, onAddSharedRoom]);
 
     return (
       <>
@@ -143,7 +168,7 @@ export const RoomSection = React.memo(
                 <View style={[styles.subModalContent, { marginBottom: 0 }]}>
                   <Text style={styles.title}>NEW SHARED ROOM</Text>
                   <Text style={styles.subTitle}>
-                    共有レイヤーの名前を決めてください
+                    共有レイヤーの名前とカラーを決めてください
                   </Text>
                   <TextInput
                     style={styles.inputField}
@@ -153,6 +178,35 @@ export const RoomSection = React.memo(
                     value={newRoomName}
                     onChangeText={setNewRoomName}
                   />
+
+                  {/* 🌟 カラーパレット追加 */}
+                  <Text style={[styles.sectionLabel, { marginTop: 15, marginLeft: 0 }]}>カラーを選択</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={{ marginBottom: 10 }}
+                  >
+                    {PRESET_COLORS.map((color) => (
+                      <TouchableOpacity
+                        key={color}
+                        style={[
+                          {
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            backgroundColor: color,
+                            marginRight: 10,
+                          },
+                          newRoomColor === color && {
+                            borderWidth: 3,
+                            borderColor: "#1C1C1E",
+                          },
+                        ]}
+                        onPress={() => setNewRoomColor(color)}
+                      />
+                    ))}
+                  </ScrollView>
+
                   <View style={styles.modalActionRow}>
                     <TouchableOpacity
                       onPress={() => setCreateRoomVisible(false)}
@@ -160,7 +214,7 @@ export const RoomSection = React.memo(
                       <Text style={styles.cancelText}>キャンセル</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={styles.saveBtn}
+                      style={[styles.saveBtn, { backgroundColor: newRoomColor }]} // 🌟 選んだ色がボタンにも反映される！
                       onPress={handleCreateRoom}
                     >
                       <Text style={styles.saveBtnText}>作成</Text>
@@ -186,7 +240,6 @@ export const RoomSection = React.memo(
                     style={styles.inputField}
                     placeholder="URL または ID"
                     placeholderTextColor="#C7C7CC"
-                    autoFocus
                     value={joinRoomId}
                     onChangeText={setJoinRoomId}
                   />
@@ -197,12 +250,41 @@ export const RoomSection = React.memo(
                     value={joinRoomName}
                     onChangeText={setJoinRoomName}
                   />
+
+                  {/* 🌟 参加時もカラーパレットで自分の好きな色を選べる！ */}
+                  <Text style={[styles.sectionLabel, { marginTop: 15, marginLeft: 0 }]}>カラーを選択</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={{ marginBottom: 10 }}
+                  >
+                    {PRESET_COLORS.map((color) => (
+                      <TouchableOpacity
+                        key={color}
+                        style={[
+                          {
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            backgroundColor: color,
+                            marginRight: 10,
+                          },
+                          joinRoomColor === color && {
+                            borderWidth: 3,
+                            borderColor: "#1C1C1E",
+                          },
+                        ]}
+                        onPress={() => setJoinRoomColor(color)}
+                      />
+                    ))}
+                  </ScrollView>
+
                   <View style={styles.modalActionRow}>
                     <TouchableOpacity onPress={() => setJoinRoomVisible(false)}>
                       <Text style={styles.cancelText}>キャンセル</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={styles.saveBtn}
+                      style={[styles.saveBtn, { backgroundColor: joinRoomColor }]} // 🌟 選んだ色が反映される！
                       onPress={handleJoinRoom}
                     >
                       <Text style={styles.saveBtnText}>参加</Text>
@@ -346,7 +428,7 @@ export const RoomSection = React.memo(
                 <TouchableOpacity
                   style={[
                     styles.saveBtn,
-                    { marginTop: 25, width: "100%", alignItems: "center" },
+                    { marginTop: 25, width: "100%", alignItems: "center", backgroundColor: "#1C1C1E" },
                   ]}
                   onPress={() => setShowCreatedRoomInfoVisible(false)}
                 >

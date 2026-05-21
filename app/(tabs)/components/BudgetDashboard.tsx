@@ -2052,11 +2052,17 @@ export default function BudgetDashboard({
               <Text style={styles.editTitle}>収入の記録</Text>
               <Text style={styles.settingLabel}>金額を入力</Text>
               <TextInput
-                style={styles.editInputAmount}
+                // 🌟 魔法の動的スタイル：7文字を超えたら、自動的にフォントサイズを 16 に小さくする！
+                style={[
+                  styles.editInputAmount,
+                  { fontSize: salaryInputAmount.length > 7 ? 16 : 24 }
+                ]}
                 keyboardType="numeric"
                 value={salaryInputAmount}
                 onChangeText={setSalaryInputAmount}
                 autoFocus
+                multiline={false}
+                maxLength={10}
               />
               <View
                 style={[
@@ -2503,13 +2509,19 @@ export default function BudgetDashboard({
                     今月の使えるお金から入金 (¥)
                   </Text>
                   <TextInput
-                    style={styles.editInputAmount}
+                    // 🌟 魔法の動的スタイル：こちらも7文字を超えたら自動縮小！
+                    style={[
+                      styles.editInputAmount,
+                      { fontSize: depositAmount.length > 7 ? 16 : 24 }
+                    ]}
                     keyboardType="numeric"
                     placeholder="0"
                     placeholderTextColor="#C7C7CC"
                     value={depositAmount}
                     onChangeText={setDepositAmount}
                     autoFocus
+                    multiline={false}
+                    maxLength={10}
                   />
                   <Text
                     style={{
@@ -2904,6 +2916,7 @@ const styles = StyleSheet.create({
     color: "#333",
   },
   editInputAmount: {
+    width: "100%",
     backgroundColor: "#F2F2F7",
     padding: 15,
     borderRadius: 15,
