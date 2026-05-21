@@ -434,6 +434,9 @@ export default function BudgetDashboard({
     if (isNaN(amount) || amount <= 0)
       return Alert.alert("エラー", "正しい金額を入力してください");
 
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
     const newItem: ScheduleItem = {
       id: Date.now().toString(),
       category: "収入",
