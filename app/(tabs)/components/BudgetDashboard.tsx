@@ -428,31 +428,38 @@ export default function BudgetDashboard({
     return Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
   }, [todayStr, payday]);
 
-  const executeSalaryRecord = () => {
+  const executeSalaryRecord = async () => { // 🌟 asyncを追加
     const amount = parseInt(salaryInputAmount);
     if (isNaN(amount) || amount <= 0)
       return Alert.alert("エラー", "正しい金額を入力してください");
+
     const newItem: ScheduleItem = {
       id: Date.now().toString(),
       category: "収入",
       tag: "給料",
-      tags: ["給料"],
+      tags: ["給料"], // 🌟 フィルターで拾われるために必須
       title: "給料",
       amount: amount,
-      isDone: false,
-      color: "#8E8E93",
+      isDone: true,
+      color: "#34C759",
       isEvent: false,
       isTodo: false,
       isExpense: false,
       isIncome: true,
     };
+
+    // 🌟 Stateとストレージを両方更新
     const newData = {
       ...scheduleData,
       [todayStr]: [...(scheduleData[todayStr] || []), newItem],
     };
+
     setScheduleData(newData);
-    setTimeout(() => setHasUnsavedChanges(true), 100);
+    await AsyncStorage.setItem("scheduleData", JSON.stringify(newData)); // 🌟 永続化
+    
+    setHasUnsavedChanges(true);
     setIsSalaryModalVisible(false);
+    setSalaryInputAmount("");
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
@@ -2689,7 +2696,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "flex-end",
   },
-  savingsAmount: { fontSize: 30, fontWeight: "900", letterSpacing: 0.5 },
+  savingsAmount: { 
+    fontSize: 26,         // 🌟 少し縮小
+    fontWeight: "900", 
+    letterSpacing: 0.5,
+    flexShrink: 1,        // 🌟 はみ出る前に縮む設定
+  },
   expectedSavingsText: { fontSize: 11, fontWeight: "bold", color: "#999" },
   hugeSalaryBtn: {
     flexDirection: "row",
