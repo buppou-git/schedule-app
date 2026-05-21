@@ -212,6 +212,7 @@ export default function BudgetDashboard({
         AsyncStorage.getItem("wishlistData"),
         AsyncStorage.getItem("lastAutoDepositCycle"),
         AsyncStorage.getItem("unallocatedSavingsData"),
+        AsyncStorage.getItem("ScheduleData"),
       ]);
 
       const loadedMonthlyBudget = b ? parseInt(b) : 0;
@@ -458,7 +459,7 @@ export default function BudgetDashboard({
     setScheduleData(newData);
     
     // 🌟 AsyncStorageに保存（キーを統一）
-    await AsyncStorage.setItem("myScheduleData", JSON.stringify(newData));
+    await AsyncStorage.setItem("ScheduleData", JSON.stringify(newData));
 
     setHasUnsavedChanges(true);
     setIsSalaryModalVisible(false);
