@@ -212,7 +212,7 @@ export default function BudgetDashboard({
         AsyncStorage.getItem("wishlistData"),
         AsyncStorage.getItem("lastAutoDepositCycle"),
         AsyncStorage.getItem("unallocatedSavingsData"),
-        AsyncStorage.getItem("ScheduleData"),
+        AsyncStorage.getItem("scheduleData"),
       ]);
 
       const loadedMonthlyBudget = b ? parseInt(b) : 0;
@@ -460,9 +460,9 @@ export default function BudgetDashboard({
 
     // 🌟 ZustandのStateを更新
     setScheduleData(newData);
-    
+
     // 🌟 AsyncStorageに保存（キーを統一）
-    await AsyncStorage.setItem("ScheduleData", JSON.stringify(newData));
+    await AsyncStorage.setItem("scheduleData", JSON.stringify(newData));
 
     setHasUnsavedChanges(true);
     setIsSalaryModalVisible(false);
@@ -984,14 +984,20 @@ export default function BudgetDashboard({
               </Text>
             </View>
             <View style={styles.savingsAmountRow}>
+              {/* 🌟 【修正】ここに flex: 1 と、ボタンとの余白(paddingRight)を追加！ */}
               <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+                style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, paddingRight: 10 }}
               >
                 <Text
                   style={[
                     styles.savingsAmount,
-                    { color: currentUsable >= 0 ? "#1C1C1E" : "#FF3B30" },
+                    {
+                      color: currentUsable >= 0 ? "#1C1C1E" : "#FF3B30",
+                      fontSize: (isSavingsHidden ? 4 : currentUsable.toLocaleString().length) > 9 ? 18 : 26
+                    },
                   ]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit={true}
                 >
                   ¥{isSavingsHidden ? "****" : currentUsable.toLocaleString()}
                 </Text>
@@ -2701,13 +2707,14 @@ const styles = StyleSheet.create({
   savingsAmountRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-end",
+    alignItems: "center",
+    flexWrap: "nowrap",              // 🌟 1行に収める（改行させない）
   },
   savingsAmount: {
     fontSize: 26,         // 🌟 少し縮小
     fontWeight: "900",
     letterSpacing: 0.5,
-    flexShrink: 1,        // 🌟 はみ出る前に縮む設定
+    flexShrink: 1,      // 🌟 金額が長くなったら、ボタンを押し出さずに「ここが縮む」
   },
   expectedSavingsText: { fontSize: 11, fontWeight: "bold", color: "#999" },
   hugeSalaryBtn: {
@@ -2723,6 +2730,8 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 5,
     gap: 6,
+    flexShrink: 0,      // 🌟 どんなに金額が長くても、ボタンのサイズは絶対に維持する
+    marginLeft: 8,      // 金額との間の隙間
   },
   hugeSalaryBtnText: { fontSize: 14, fontWeight: "bold", color: "#FFF" },
   addSubTagBtn: {
