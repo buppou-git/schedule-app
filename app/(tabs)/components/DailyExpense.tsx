@@ -304,22 +304,25 @@ export default function DailyExpense({
     setEditModalVisible(true);
   };
 
-  const handleUpdate = () => {
+  const handleUpdate = async () => { // 🌟 async を追加
     if (!editingItem) return;
     const newAmount = parseInt(editAmount);
     if (isNaN(newAmount) || newAmount <= 0)
       return Alert.alert("エラー", "金額を正しく入力してください");
+
     const newData = { ...scheduleData };
     newData[editingItem.date] = newData[editingItem.date].map((i) =>
       i.id === editingItem.item.id
         ? { ...i, amount: newAmount, title: editTitle }
         : i,
     );
+
     setEditModalVisible(false);
-    setTimeout(() => {
-      setScheduleData(newData);
-      setHasUnsavedChanges(true);
-    }, 100);
+
+    // 🌟 Stateを更新し、同時にストレージにも確実に保存する！
+    setScheduleData(newData);
+    await AsyncStorage.setItem("scheduleData", JSON.stringify(newData));
+    setHasUnsavedChanges(true);
   };
 
   return (
@@ -698,14 +701,20 @@ export default function DailyExpense({
                 onChangeText={setEditAmount}
               />
               <View style={styles.editActionRow}>
+                {/* 🌟 削除ボタンの処理を修正 */}
                 <TouchableOpacity
-                  onPress={() => {
+                  onPress={async () => { // 🌟 async を追加
                     if (!editingItem) return;
                     const newData = { ...scheduleData };
                     newData[editingItem.date] = newData[
                       editingItem.date
                     ].filter((i) => i.id !== editingItem.item.id);
+
+                    // 🌟 State更新 ＋ ストレージ完全上書き ＋ 変更通知
                     setScheduleData(newData);
+                    await AsyncStorage.setItem("scheduleData", JSON.stringify(newData));
+                    setHasUnsavedChanges(true);
+
                     setEditModalVisible(false);
                   }}
                 >
