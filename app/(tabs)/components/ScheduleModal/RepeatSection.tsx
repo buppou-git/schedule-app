@@ -1,131 +1,116 @@
+import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { Text, TextInput, TouchableOpacity, View } from "react-native";
-import { ScheduleFormData } from "../../../../types"; // 🌟 追加
+import { Text, TouchableOpacity, View } from "react-native";
 import { styles } from "./ScheduleModal.styles";
 
+type RepeatType = "none" | "daily" | "weekly" | "monthly" | "custom";
+
 interface RepeatSectionProps {
-  repeatType: "none" | "daily" | "weekly" | "monthly" | "custom";
+  repeatType: RepeatType;
   repeatDays: number[];
   repeatInterval: number;
+  repeatEndDate: Date | null;
   uiThemeColor: string;
-  updateForm: (updates: Partial<ScheduleFormData>) => void; // 🌟 anyを修正
+  onPress: () => void;
 }
+
+const repeatTypeLabelMap: Record<RepeatType, string> = {
+  none: "なし",
+  daily: "毎日",
+  weekly: "毎週",
+  monthly: "毎月",
+  custom: "カスタム",
+};
+
+const dayLabels = ["日", "月", "火", "水", "木", "金", "土"];
+
+const formatDate = (date: Date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}/${m}/${d}`;
+};
+
+const getRepeatSummary = (
+  repeatType: RepeatType,
+  repeatDays: number[],
+  repeatInterval: number,
+  repeatEndDate: Date | null,
+) => {
+  if (repeatType === "none") return "なし";
+
+  const endText = repeatEndDate ? ` / ${formatDate(repeatEndDate)}まで` : "";
+
+  if (repeatType !== "custom") {
+    return `${repeatTypeLabelMap[repeatType]}${endText}`;
+  }
+
+  const days =
+    repeatDays.length > 0
+      ? repeatDays.map((d) => dayLabels[d]).join("・")
+      : "曜日未選択";
+
+  return `${repeatInterval}週間ごと / ${days}${endText}`;
+};
 
 export const RepeatSection = React.memo(
   ({
     repeatType,
     repeatDays,
     repeatInterval,
+    repeatEndDate,
     uiThemeColor,
-    updateForm,
+    onPress,
   }: RepeatSectionProps) => {
     return (
       <View>
         <Text style={styles.label}>繰り返し</Text>
-        <View style={styles.layerContainer}>
-          {[
-            { label: "なし", value: "none" },
-            { label: "毎日", value: "daily" },
-            { label: "毎週", value: "weekly" },
-            { label: "毎月", value: "monthly" },
-            { label: "カスタム", value: "custom" },
-          ].map((opt) => (
-            <TouchableOpacity
-              key={opt.value}
-              style={[
-                styles.layerChip,
-                repeatType === opt.value && { backgroundColor: uiThemeColor },
-              ]}
-              onPress={() => updateForm({ repeatType: opt.value as RepeatSectionProps["repeatType"] })}
-            >
-              <Text
-                style={[
-                  styles.layerChipText,
-                  repeatType === opt.value && { color: "#fff" },
-                ]}
-              >
-                {opt.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
 
-        {repeatType === "custom" && (
-          <View style={styles.customRepeatArea}>
-            <View
+        <TouchableOpacity
+          onPress={onPress}
+          activeOpacity={0.75}
+          style={{
+            backgroundColor: "#FFF",
+            borderWidth: 1,
+            borderColor: "#E5E5EA",
+            borderRadius: 14,
+            paddingVertical: 14,
+            paddingHorizontal: 14,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 16,
+          }}
+        >
+          <View style={{ flex: 1, paddingRight: 12 }}>
+            <Text
               style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                marginBottom: 12,
+                fontSize: 15,
+                fontWeight: "bold",
+                color: "#1C1C1E",
               }}
             >
-              <Text style={styles.miniLabel}>曜日の選択</Text>
-              <TouchableOpacity
-                onPress={() => updateForm({ repeatDays: [1, 2, 3, 4, 5] })}
-              >
-                <Text
-                  style={{
-                    fontSize: 11,
-                    color: uiThemeColor,
-                    fontWeight: "bold",
-                  }}
-                >
-                  平日のみ選択
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.daySelectorRow}>
-              {["日", "月", "火", "水", "木", "金", "土"].map((day, idx) => {
-                const isSelected = repeatDays.includes(idx);
-                return (
-                  <TouchableOpacity
-                    key={idx}
-                    style={[
-                      styles.dayCircle,
-                      isSelected && {
-                        backgroundColor: uiThemeColor,
-                        borderColor: uiThemeColor,
-                      },
-                    ]}
-                    onPress={() => {
-                      const prev = repeatDays;
-                      const next = prev.includes(idx)
-                        ? prev.filter((d) => d !== idx)
-                        : [...prev, idx];
-                      updateForm({ repeatDays: next });
-                    }}
-                  >
-                    <Text
-                      style={[styles.dayText, isSelected && { color: "#FFF" }]}
-                    >
-                      {day}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            <View style={styles.intervalRow}>
-              <Text style={styles.miniLabel}>繰り返しの間隔:</Text>
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-              >
-                <TextInput
-                  style={styles.intervalInput}
-                  keyboardType="numeric"
-                  value={repeatInterval.toString()}
-                  onChangeText={(t) =>
-                    updateForm({ repeatInterval: parseInt(t) || 1 })
-                  }
-                />
-                <Text
-                  style={{ fontSize: 14, fontWeight: "bold", color: "#1C1C1E" }}
-                >
-                  週間ごと
-                </Text>
-              </View>
-            </View>
+              {getRepeatSummary(
+                repeatType,
+                repeatDays,
+                repeatInterval,
+                repeatEndDate,
+              )}
+            </Text>
+
+            <Text
+              style={{
+                fontSize: 12,
+                color: "#8E8E93",
+                marginTop: 3,
+              }}
+            >
+              タップして変更
+            </Text>
           </View>
-        )}
+
+          <Ionicons name="chevron-forward" size={20} color={uiThemeColor} />
+        </TouchableOpacity>
       </View>
     );
   },

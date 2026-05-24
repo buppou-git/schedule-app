@@ -22,6 +22,7 @@ import { db } from "../../../../firebaseConfig";
 
 import { ModernDatePicker, formatTime } from "./ModernDatePicker";
 import { RepeatSection } from "./RepeatSection";
+import { RepeatSettingsModal } from "./RepeatSettingsModal";
 import { styles } from "./ScheduleModal.styles";
 import { SubTaskSection } from "./SubTaskSection";
 import { TagSection } from "./TagSection";
@@ -96,6 +97,7 @@ const ScheduleModal = ({
     repeatType: "none" as "none" | "daily" | "weekly" | "monthly" | "custom",
     repeatDays: [] as number[],
     repeatInterval: 1,
+    repeatEndDate: null as Date | null,
     startDate: new Date(),
     endDate: new Date(),
     startTime: new Date(),
@@ -311,6 +313,8 @@ const ScheduleModal = ({
   // 🌟 追加：簡易モードの判定フラグ
   const [isSimpleMode, setIsSimpleMode] = useState(true);
 
+  const [repeatSettingsVisible, setRepeatSettingsVisible] = useState(false);
+
   useEffect(() => {
     if (!visible) {
       setIsReady(false);
@@ -355,6 +359,11 @@ const ScheduleModal = ({
             repeatType: selectedItem.repeatType || "none",
             repeatDays: selectedItem.repeatDays || [],
             repeatInterval: selectedItem.repeatInterval || 1,
+
+            repeatEndDate: selectedItem.repeatEndDate
+              ? new Date(selectedItem.repeatEndDate)
+              : null,
+
             startDate: new Date(selectedItem.startDate || selectedDate),
             endDate: new Date(selectedItem.endDate || selectedDate),
             startTime: parsedStartTime,
@@ -387,16 +396,22 @@ const ScheduleModal = ({
           setSubTasks(savedSubTasks);
           setShowSubTasks(savedSubTasks.length > 0);
 
+
           setInitialSnapshot(
             JSON.stringify({
               title: selectedItem.title || "",
               amount: parseInt(selectedItem.amount?.toString() || "0"),
               isTodo: selectedItem.isTodo ?? false,
+              repeatType: selectedItem.repeatType || "none",
+              repeatDays: selectedItem.repeatDays || [],
+              repeatInterval: selectedItem.repeatInterval || 1,
+              repeatEndDate: selectedItem.repeatEndDate || null,
               subTasksData: savedSubTasks
                 .map((t: SubTask) => `${t.title}_${t.isDone}`)
                 .join(","),
             }),
           );
+
         } else {
           setIsSimpleMode(true);
           updateForm({
@@ -412,6 +427,7 @@ const ScheduleModal = ({
             repeatType: "none",
             repeatDays: [],
             repeatInterval: 1,
+            repeatEndDate: null,
             startDate: new Date(selectedDate),
             endDate: new Date(selectedDate),
             startTime: new Date(),
@@ -431,7 +447,7 @@ const ScheduleModal = ({
         setIsReady(true);
       }); // 🌟 束ねる魔法ここまで
     }, 10);
-  }, [visible, selectedItem, activeMode, selectedDate]);
+  }, [visible, selectedItem, activeMode, selectedDate, layerMaster]);
 
   const toHiragana = (str: string) =>
     str
@@ -516,10 +532,15 @@ const ScheduleModal = ({
         endDate: formData.endDate.toISOString().split("T")[0],
         startTime: formData.isAllDay ? "" : formatTime(formData.startTime),
         endTime: formData.isAllDay ? "" : formatTime(formData.endTime),
+
         repeatType: formData.repeatType,
         repeatDays: formData.repeatDays,
         repeatInterval: formData.repeatInterval,
+        repeatEndDate: formData.repeatEndDate
+          ? formData.repeatEndDate.toISOString().split("T")[0]
+          : null,
         reminderOptions: selectedReminders,
+
         subTasksData: subTasks.map((t) => `${t.title}_${t.isDone}`).join(","),
       });
 
@@ -688,10 +709,18 @@ const ScheduleModal = ({
         isDone: allDone ? true : selectedItem ? selectedItem.isDone : false,
         color: finalColor,
         category: formData.isExpense ? formData.category : undefined,
+
         repeatType: formData.repeatType !== "none" ? formData.repeatType : undefined,
         repeatDays: formData.repeatType === "custom" ? formData.repeatDays : undefined,
         repeatInterval: formData.repeatType === "custom" ? formData.repeatInterval : undefined,
+
+        repeatEndDate:
+          formData.repeatType !== "none" && formData.repeatEndDate
+            ? formData.repeatEndDate.toISOString().split("T")[0]
+            : undefined,
+
         isAllDay: formData.isAllDay,
+
         startDate: sStr,
         endDate: eStr,
         startTime: formData.isAllDay ? undefined : formatTime(formData.startTime),
@@ -965,13 +994,16 @@ const ScheduleModal = ({
         />
 
         {/* 🌟 部品②：繰り返し設定 */}
+
         <RepeatSection
           repeatType={formData.repeatType}
           repeatDays={formData.repeatDays}
           repeatInterval={formData.repeatInterval}
+          repeatEndDate={formData.repeatEndDate}
           uiThemeColor={uiThemeColor}
-          updateForm={updateForm}
+          onPress={() => setRepeatSettingsVisible(true)}
         />
+
 
         {/* 🌟 部品③：カテゴリとタグ */}
         <TagSection
@@ -1001,6 +1033,7 @@ const ScheduleModal = ({
     formData.repeatType,
     formData.repeatDays,
     formData.repeatInterval,
+    formData.repeatEndDate,
     formData.tag,
     uiThemeColor,
     layerMaster,
@@ -1998,6 +2031,18 @@ const ScheduleModal = ({
             </View>
           </Modal>
         )}
+
+        <RepeatSettingsModal
+          visible={repeatSettingsVisible}
+          onClose={() => setRepeatSettingsVisible(false)}
+          repeatType={formData.repeatType}
+          repeatDays={formData.repeatDays}
+          repeatInterval={formData.repeatInterval}
+          repeatEndDate={formData.repeatEndDate}
+          uiThemeColor={uiThemeColor}
+          updateForm={updateForm}
+        />
+
       </KeyboardAvoidingView>
     </Modal>
   );
