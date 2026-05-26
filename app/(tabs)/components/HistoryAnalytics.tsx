@@ -105,28 +105,32 @@ export default function HistoryAnalytics({ onClose }: { onClose?: () => void }) 
     } else if (viewMode === "month") {
       const lastDay = new Date(y, m + 1, 0).getDate();
 
-      for (let i = 1; i <= lastDay; i++) {
-        const maxLabels = 6;
-        const step = Math.ceil(lastDay / maxLabels);
+      const maxLabels = 6;
+      const step = Math.ceil(lastDay / maxLabels);
 
-        for (let i = 1; i <= lastDay; i++) {
-          if (i === 1 || i === lastDay || i % step === 0) {
-            labels.push(`${i}`);
-          } else {
-            labels.push("");
-          }
+      for (let i = 1; i <= lastDay; i++) {
+        if (i === 1 || i === lastDay || i % step === 0) {
+          labels.push(`${i}`);
+        } else {
+          labels.push("");
         }
 
+        let dInc = 0;
+        let dExp = 0;
 
-        let dInc = 0; let dExp = 0;
         const dateKey = `${y}-${String(m + 1).padStart(2, "0")}-${String(i).padStart(2, "0")}`;
+
         (scheduleData[dateKey] || []).forEach(item => {
           dInc += getItemTotalIncome(item);
           dExp += getItemTotalExpense(item);
           items.push({ ...item, date: dateKey });
         });
-        incomeData.push(dInc); expenseData.push(dExp);
+
+        incomeData.push(dInc);
+        expenseData.push(dExp);
       }
+
+
     } else {
       const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
       const start = new Date(referenceDate);
@@ -166,20 +170,34 @@ export default function HistoryAnalytics({ onClose }: { onClose?: () => void }) 
     const totalInc = incomeData.reduce((a, b) => a + b, 0);
     const totalExp = expenseData.reduce((a, b) => a + b, 0);
 
+    // 🌟 データが1つでも存在するかチェック
+    const hasRealData = totalInc > 0 || totalExp > 0;
+
+    const datasets: any[] = [
+      { data: incomeData.length ? incomeData : [0], color: () => "#34C759", strokeWidth: 2 },
+      { data: expenseData.length ? expenseData : [0], color: () => "#FF3B30", strokeWidth: 2 }
+    ];
+
+    // 🌟 魔法のコード：データが空の時、Y軸の目盛りを引っ張るためだけの「透明なデータ」を混ぜる
+    if (!hasRealData) {
+      datasets.push({
+        data: [10000], // 縦軸の仮の最大値を1万に設定
+        color: () => "transparent", // 線を透明にして見えなくする
+        strokeWidth: 0,
+        withDots: false, // ドット（点）も消す
+      });
+    }
+
     return {
       filteredItems: finalItems,
       chartData: {
         labels,
-        datasets: [
-          { data: incomeData.length ? incomeData : [0], color: () => "#34C759", strokeWidth: 2 },
-          { data: expenseData.length ? expenseData : [0], color: () => "#FF3B30", strokeWidth: 2 }
-        ],
+        datasets,
         legend: ["収入", "支出"]
       },
       summary: { income: totalInc, expense: totalExp, balance: totalInc - totalExp }
     };
   }, [scheduleData, referenceDate, viewMode, typeFilter, layerFilters, tagFilters, categoryFilters]);
-
 
   // 🌟 変更：期間内のデータではなく、マスタ全体から直接フィルター項目を生成
   const availableLayers = useMemo(() => {
@@ -277,7 +295,7 @@ export default function HistoryAnalytics({ onClose }: { onClose?: () => void }) 
         <View style={styles.chartCard}>
           <LineChart
             data={chartData}
-            width={screenWidth - 40}   // 👈 元に戻す（重要）
+            width={screenWidth - 40}
             height={200}
             chartConfig={chartConfig}
             bezier
@@ -286,9 +304,16 @@ export default function HistoryAnalytics({ onClose }: { onClose?: () => void }) 
             }}
             withInnerLines={false}
             withOuterLines={false}
-            fromZero   // 👈 追加（これでY軸安定する）
+            fromZero
+            // 🌟 縦軸の余白と文字数を最適化
+            yLabelsOffset={5} // 👈 グラフと数字の距離をグッと詰める（数値を下げると近づきます）
+            formatYLabel={(y) => {
+              const val = parseInt(y, 10);
+              if (val === 0) return "0";
+              if (val >= 10000) return `${Math.round(val / 10000)}万`; // 「10000」を「1万」にして横幅を節約！
+              return val.toLocaleString();
+            }}
           />
-
         </View>
 
         <View style={styles.summaryGrid}>
