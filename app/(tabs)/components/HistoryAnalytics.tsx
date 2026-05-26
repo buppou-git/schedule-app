@@ -32,10 +32,10 @@ export default function HistoryAnalytics({ onClose }: { onClose?: () => void }) 
   const [totalSavings, setTotalSavings] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [referenceDate, setReferenceDate] = useState(new Date());
-  
+
   const [isFilterVisible, setIsFilterVisible] = useState(false);
   const [typeFilter, setTypeFilter] = useState<"all" | "expense" | "income">("all");
-  
+
   const [layerFilters, setLayerFilters] = useState<string[]>([]);
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
@@ -104,10 +104,17 @@ export default function HistoryAnalytics({ onClose }: { onClose?: () => void }) 
       }
     } else if (viewMode === "month") {
       const lastDay = new Date(y, m + 1, 0).getDate();
+
       for (let i = 1; i <= lastDay; i++) {
-        if (i % 5 === 0 || i === 1 || i === lastDay) labels.push(`${i}`);
-        else labels.push("");
-        
+        // ✅ 31日の月なら30は表示しない
+        if (lastDay === 31 && i === 30) {
+          labels.push("");
+        } else if (i % 5 === 0 || i === 1 || i === lastDay) {
+          labels.push(`${i}`);
+        } else {
+          labels.push("");
+        }
+
         let dInc = 0; let dExp = 0;
         const dateKey = `${y}-${String(m + 1).padStart(2, "0")}-${String(i).padStart(2, "0")}`;
         (scheduleData[dateKey] || []).forEach(item => {
@@ -141,7 +148,7 @@ export default function HistoryAnalytics({ onClose }: { onClose?: () => void }) 
       const exp = getItemTotalExpense(item);
       if (typeFilter === "expense" && exp === 0) return false;
       if (typeFilter === "income" && inc === 0) return false;
-      
+
       const tag = item.tags?.[0] || item.tag || "未分類";
       const layer = tagMaster[tag]?.layer || "共通";
       const category = item.category || "未分類";
@@ -149,7 +156,7 @@ export default function HistoryAnalytics({ onClose }: { onClose?: () => void }) 
       if (layerFilters.length > 0 && !layerFilters.includes(layer)) return false;
       if (tagFilters.length > 0 && !tagFilters.includes(tag)) return false;
       if (categoryFilters.length > 0 && !categoryFilters.includes(category)) return false;
-      
+
       return inc > 0 || exp > 0;
     }).sort((a, b) => b.date.localeCompare(a.date));
 
@@ -220,7 +227,7 @@ export default function HistoryAnalytics({ onClose }: { onClose?: () => void }) 
           <Ionicons name="chevron-back" size={22} color="#1C1C1E" />
           <Text style={styles.backText}>カレンダー</Text>
         </TouchableOpacity>
-        
+
         <View style={styles.headerTitleContainer} pointerEvents="none">
           <Text style={styles.headerTitle}>収支統計レポート</Text>
         </View>
@@ -267,13 +274,18 @@ export default function HistoryAnalytics({ onClose }: { onClose?: () => void }) 
         <View style={styles.chartCard}>
           <LineChart
             data={chartData}
-            width={screenWidth - 40}
+            width={screenWidth - 10}
             height={200}
             chartConfig={chartConfig}
             bezier
-            style={{ borderRadius: 16, paddingRight: 20, marginLeft: 0 }}
+            style={{
+              borderRadius: 16,
+              paddingLeft: 20,
+              paddingRight: 10,
+            }}
             withInnerLines={false}
             withOuterLines={false}
+            verticalLabelRotation={20}
           />
         </View>
 
@@ -313,7 +325,7 @@ export default function HistoryAnalytics({ onClose }: { onClose?: () => void }) 
       <Modal visible={isFilterVisible} transparent animationType="slide">
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setIsFilterVisible(false)}>
           <TouchableWithoutFeedback><View style={styles.filterModal}>
-            
+
             {/* 🌟 変更：モーダル内もスクロールできるようにして、溢れるのを防ぐ */}
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
               <View style={styles.filterHeader}>
@@ -322,7 +334,7 @@ export default function HistoryAnalytics({ onClose }: { onClose?: () => void }) 
                   <Text style={{ color: "#007AFF", fontWeight: "bold" }}>リセット</Text>
                 </TouchableOpacity>
               </View>
-              
+
               <Text style={styles.filterSubTitle}>収支種別</Text>
               <View style={styles.filterGroup}>
                 {(["all", "expense", "income"] as const).map(type => (
@@ -344,9 +356,9 @@ export default function HistoryAnalytics({ onClose }: { onClose?: () => void }) 
                   const color = layerMaster[layer] || "#8E8E93";
                   const isActive = layerFilters.includes(layer);
                   return (
-                    <TouchableOpacity 
-                      key={layer} 
-                      style={[styles.tagBtn, isActive && { backgroundColor: color, borderColor: color }]} 
+                    <TouchableOpacity
+                      key={layer}
+                      style={[styles.tagBtn, isActive && { backgroundColor: color, borderColor: color }]}
                       onPress={() => toggleLayerFilter(layer)}
                     >
                       <Text style={isActive ? styles.tagBtnTextActive : styles.tagBtnText}>{layer}</Text>
@@ -367,9 +379,9 @@ export default function HistoryAnalytics({ onClose }: { onClose?: () => void }) 
                     const color = tagMaster[tag]?.color || "#8E8E93";
                     const isActive = tagFilters.includes(tag);
                     return (
-                      <TouchableOpacity 
-                        key={tag} 
-                        style={[styles.tagBtn, isActive && { backgroundColor: color, borderColor: color }]} 
+                      <TouchableOpacity
+                        key={tag}
+                        style={[styles.tagBtn, isActive && { backgroundColor: color, borderColor: color }]}
                         onPress={() => toggleFilter(setTagFilters, tag)}
                       >
                         <Text style={isActive ? styles.tagBtnTextActive : styles.tagBtnText}>{tag}</Text>
@@ -389,9 +401,9 @@ export default function HistoryAnalytics({ onClose }: { onClose?: () => void }) 
                     {availableCategories.map(cat => {
                       const isActive = categoryFilters.includes(cat);
                       return (
-                        <TouchableOpacity 
-                          key={cat} 
-                          style={[styles.tagBtn, isActive && { backgroundColor: "#1C1C1E", borderColor: "#1C1C1E" }]} 
+                        <TouchableOpacity
+                          key={cat}
+                          style={[styles.tagBtn, isActive && { backgroundColor: "#1C1C1E", borderColor: "#1C1C1E" }]}
                           onPress={() => toggleFilter(setCategoryFilters, cat)}
                         >
                           <Text style={isActive ? styles.tagBtnTextActive : styles.tagBtnText}>{cat}</Text>
@@ -425,34 +437,34 @@ const chartConfig = {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8F8FA" },
-  
-  header: { 
-    flexDirection: "row", 
-    alignItems: "center", 
-    justifyContent: "space-between", 
-    paddingHorizontal: 20, 
-    paddingTop: Platform.OS === 'ios' ? 75 : 40, 
-    paddingBottom: 15, 
-    backgroundColor: "#FFF", 
-    borderBottomWidth: 1, 
+
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 75 : 40,
+    paddingBottom: 15,
+    backgroundColor: "#FFF",
+    borderBottomWidth: 1,
     borderBottomColor: "#E5E5EA",
   },
-  
+
   backBtn: { flexDirection: "row", alignItems: "center", marginLeft: -5 },
   backText: { fontSize: 14, color: "#1C1C1E", fontWeight: "600" },
-  
+
   headerTitleContainer: {
     position: "absolute",
     left: 0,
     right: 0,
-    top: Platform.OS === 'ios' ? 75 : 40, 
-    bottom: 15,                           
+    top: Platform.OS === 'ios' ? 75 : 40,
+    bottom: 15,
     alignItems: "center",
     justifyContent: "center",
     zIndex: 0,
   },
   headerTitle: { fontSize: 17, fontWeight: "800", color: "#1C1C1E" },
-  
+
   filterTrigger: { padding: 4 },
   assetCard: { margin: 20, padding: 25, backgroundColor: "#1C1C1E", borderRadius: 24, alignItems: "center", shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
   assetLabel: { color: "#AEAEB2", fontSize: 12, fontWeight: "bold", marginBottom: 5 },
@@ -464,18 +476,18 @@ const styles = StyleSheet.create({
   modeTabTextActive: { color: "#1C1C1E" },
   periodNav: { flexDirection: "row", justifyContent: "center", alignItems: "center", marginBottom: 10, gap: 20 },
   periodLabelText: { fontSize: 16, fontWeight: "800", color: "#1C1C1E", minWidth: 120, textAlign: "center" },
-  
-  chartCard: { 
-    backgroundColor: "#FFF", 
-    marginHorizontal: 20, 
-    borderRadius: 20, 
-    paddingVertical: 15, 
-    overflow: "hidden", 
-    marginBottom: 20, 
-    borderWidth: 1, 
-    borderColor: "#E5E5EA" 
+
+  chartCard: {
+    backgroundColor: "#FFF",
+    marginHorizontal: 20,
+    borderRadius: 20,
+    paddingVertical: 15,
+    overflow: "hidden",
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#E5E5EA"
   },
-  
+
   summaryGrid: { flexDirection: "row", marginHorizontal: 20, gap: 10, marginBottom: 25 },
   summaryItem: { flex: 1, backgroundColor: "#FFF", padding: 15, borderRadius: 16, alignItems: "center", borderWidth: 1, borderColor: "#E5E5EA" },
   summaryLabel: { fontSize: 11, color: "#8E8E93", fontWeight: "bold", marginBottom: 4 },
@@ -487,7 +499,7 @@ const styles = StyleSheet.create({
   itemTitle: { fontSize: 15, fontWeight: "bold", color: "#1C1C1E" },
   itemSub: { fontSize: 11, color: "#8E8E93", marginTop: 2 },
   itemAmount: { fontSize: 16, fontWeight: "900" },
-  
+
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   // モーダルが大きくなりすぎないように高さを制限（80%）
   filterModal: { backgroundColor: "#FFF", borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 25, paddingBottom: 40, maxHeight: "85%" },
@@ -499,7 +511,7 @@ const styles = StyleSheet.create({
   filterBtnActive: { backgroundColor: "#1C1C1E" },
   filterBtnText: { fontSize: 14, fontWeight: "bold", color: "#8E8E93" },
   filterBtnTextActive: { color: "#FFF" },
-  
+
   // 🌟 追加：Wrap用のスタイル
   wrapContainer: {
     flexDirection: "row",
@@ -517,12 +529,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: "hidden"
   },
-  
+
   tagBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, backgroundColor: "#F2F2F7", borderWidth: 1, borderColor: "transparent" },
   tagBtnActive: { backgroundColor: "#1C1C1E", borderColor: "#1C1C1E" },
   tagBtnText: { color: "#8E8E93", fontWeight: "bold", fontSize: 13 },
   tagBtnTextActive: { color: "#FFF", fontWeight: "bold", fontSize: 13 },
-  
+
   closeFilterBtn: { backgroundColor: "#007AFF", paddingVertical: 16, borderRadius: 16, shadowColor: "#007AFF", shadowOpacity: 0.3, shadowRadius: 8, elevation: 4, marginTop: 10 },
   closeFilterBtnText: { color: "#FFF", fontWeight: "bold", textAlign: "center", fontSize: 16 },
   noDataText: { textAlign: "center", color: "#AEAEB2", marginTop: 40, fontWeight: "600" },
