@@ -105,15 +105,18 @@ export default function HistoryAnalytics({ onClose }: { onClose?: () => void }) 
     } else if (viewMode === "month") {
       const lastDay = new Date(y, m + 1, 0).getDate();
 
-      // 目安のラベル表示数（約6個）
-      const maxLabels = 6;
-      const step = Math.ceil(lastDay / maxLabels);
+      // 🌟 新しいロジック：1日〜最終日を「完全に均等な間隔」で分割する
+      const maxLabels = 6; // 表示したいラベルの総数
+      const labelDays = [];
+      for (let j = 0; j < maxLabels; j++) {
+        // 1からlastDayまでを均等に割った日付を計算し、四捨五入する
+        const day = Math.round(1 + j * (lastDay - 1) / (maxLabels - 1));
+        labelDays.push(day);
+      }
 
       for (let i = 1; i <= lastDay; i++) {
-        // 🌟 ここが新しいロジック！
-        // 1日、または最終日は確実に表示する。
-        // それ以外は step ごとに表示するが、「最終日との間隔が3日未満」ならかぶるのを防ぐために非表示にする
-        if (i === 1 || i === lastDay || (i % step === 0 && lastDay - i >= 3)) {
+        // 計算した「均等な日付」の時だけ文字を表示する
+        if (labelDays.includes(i)) {
           labels.push(`${i}`);
         } else {
           labels.push("");
@@ -133,8 +136,6 @@ export default function HistoryAnalytics({ onClose }: { onClose?: () => void }) 
         incomeData.push(dInc);
         expenseData.push(dExp);
       }
-
-
 
     } else {
       const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
