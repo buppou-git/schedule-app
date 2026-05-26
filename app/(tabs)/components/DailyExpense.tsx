@@ -700,35 +700,53 @@ export default function DailyExpense({
                 value={editAmount}
                 onChangeText={setEditAmount}
               />
-              <View style={styles.editActionRow}>
-                {/* 🌟 削除ボタンの処理を修正 */}
+              <View style={{ marginTop: 10 }}>
+                {/* 保存（上段） */}
                 <TouchableOpacity
-                  onPress={async () => { // 🌟 async を追加
+                  style={[
+                    styles.saveBtn,
+                    {
+                      backgroundColor: themeColor,
+                      width: "100%",
+                      alignItems: "center",
+                    },
+                  ]}
+                  onPress={handleUpdate}
+                >
+                  <Text style={styles.saveText}>保存</Text>
+                </TouchableOpacity>
+
+                {/* 削除（下段：大きく） */}
+                <TouchableOpacity
+                  onPress={async () => {
                     if (!editingItem) return;
+
                     const newData = { ...scheduleData };
                     newData[editingItem.date] = newData[
                       editingItem.date
                     ].filter((i) => i.id !== editingItem.item.id);
 
-                    // 🌟 State更新 ＋ ストレージ完全上書き ＋ 変更通知
                     setScheduleData(newData);
                     await AsyncStorage.setItem("scheduleData", JSON.stringify(newData));
                     setHasUnsavedChanges(true);
 
                     setEditModalVisible(false);
                   }}
+                  style={{
+                    marginTop: 16,
+                    backgroundColor: "#FF3B30",
+                    paddingVertical: 14,
+                    borderRadius: 12,
+                    alignItems: "center",
+                  }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Text style={{ color: "#FF3B30", fontWeight: "bold" }}>
+                  <Text style={{ color: "#FFF", fontWeight: "bold" }}>
                     削除
                   </Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.saveBtn, { backgroundColor: themeColor }]}
-                  onPress={handleUpdate}
-                >
-                  <Text style={styles.saveText}>保存</Text>
-                </TouchableOpacity>
               </View>
+              ``
             </View>
           </TouchableOpacity>
         </Modal>

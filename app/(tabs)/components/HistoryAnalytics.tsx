@@ -271,7 +271,7 @@ export default function HistoryAnalytics({ onClose }: { onClose?: () => void }) 
             height={200}
             chartConfig={chartConfig}
             bezier
-            style={{ borderRadius: 16, paddingRight: 40, marginLeft: -15 }}
+            style={{ borderRadius: 16, paddingRight: 20, marginLeft: 0 }}
             withInnerLines={false}
             withOuterLines={false}
           />
