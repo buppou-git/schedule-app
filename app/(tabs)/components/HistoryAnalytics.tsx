@@ -105,11 +105,15 @@ export default function HistoryAnalytics({ onClose }: { onClose?: () => void }) 
     } else if (viewMode === "month") {
       const lastDay = new Date(y, m + 1, 0).getDate();
 
+      // 目安のラベル表示数（約6個）
       const maxLabels = 6;
       const step = Math.ceil(lastDay / maxLabels);
 
       for (let i = 1; i <= lastDay; i++) {
-        if (i === 1 || i === lastDay || i % step === 0) {
+        // 🌟 ここが新しいロジック！
+        // 1日、または最終日は確実に表示する。
+        // それ以外は step ごとに表示するが、「最終日との間隔が3日未満」ならかぶるのを防ぐために非表示にする
+        if (i === 1 || i === lastDay || (i % step === 0 && lastDay - i >= 3)) {
           labels.push(`${i}`);
         } else {
           labels.push("");
@@ -129,6 +133,7 @@ export default function HistoryAnalytics({ onClose }: { onClose?: () => void }) 
         incomeData.push(dInc);
         expenseData.push(dExp);
       }
+
 
 
     } else {
