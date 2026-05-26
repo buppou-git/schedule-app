@@ -106,14 +106,17 @@ export default function HistoryAnalytics({ onClose }: { onClose?: () => void }) 
       const lastDay = new Date(y, m + 1, 0).getDate();
 
       for (let i = 1; i <= lastDay; i++) {
-        // ✅ 31日の月なら30は表示しない
-        if (lastDay === 31 && i === 30) {
-          labels.push("");
-        } else if (i % 5 === 0 || i === 1 || i === lastDay) {
-          labels.push(`${i}`);
-        } else {
-          labels.push("");
+        const maxLabels = 6;
+        const step = Math.ceil(lastDay / maxLabels);
+
+        for (let i = 1; i <= lastDay; i++) {
+          if (i === 1 || i === lastDay || i % step === 0) {
+            labels.push(`${i}`);
+          } else {
+            labels.push("");
+          }
         }
+
 
         let dInc = 0; let dExp = 0;
         const dateKey = `${y}-${String(m + 1).padStart(2, "0")}-${String(i).padStart(2, "0")}`;
@@ -274,19 +277,18 @@ export default function HistoryAnalytics({ onClose }: { onClose?: () => void }) 
         <View style={styles.chartCard}>
           <LineChart
             data={chartData}
-            width={screenWidth - 10}
+            width={screenWidth - 40}   // 👈 元に戻す（重要）
             height={200}
             chartConfig={chartConfig}
             bezier
             style={{
               borderRadius: 16,
-              paddingLeft: 20,
-              paddingRight: 10,
             }}
             withInnerLines={false}
             withOuterLines={false}
-            verticalLabelRotation={20}
+            fromZero   // 👈 追加（これでY軸安定する）
           />
+
         </View>
 
         <View style={styles.summaryGrid}>
