@@ -42,12 +42,7 @@ import PresetSaveModal from "./components/PresetSaveModal";
 
 //広告関係
 import { requestTrackingPermissionsAsync } from "expo-tracking-transparency";
-import {
-  BannerAd,
-  BannerAdSize,
-  MobileAds,
-  TestIds,
-} from "react-native-google-mobile-ads";
+import { MobileAds } from "react-native-google-mobile-ads";
 
 import {
   ActivityIndicator,
@@ -2558,7 +2553,7 @@ function IndexContent() {
           Alert.alert("保存完了", "支出情報を予定に紐付けました。");
         }}
       />
-
+      {/*
       <View style={styles.adContainer}>
         <BannerAd
           unitId={TestIds.BANNER}
@@ -2568,6 +2563,7 @@ function IndexContent() {
           }}
         />
       </View>
+*/}
     </SafeAreaView>
   );
 }
