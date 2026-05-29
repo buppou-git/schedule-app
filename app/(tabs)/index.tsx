@@ -1,5 +1,7 @@
 import "react-native-get-random-values";
 
+import * as Linking from "expo-linking";
+
 import { useAppModals } from "../../hooks/useAppModals"; // パスは適宜合わせてください
 import { styles } from "./index.styles";
 
@@ -159,6 +161,26 @@ const calculateStreak = (completedDates: string[] | undefined) => {
 };
 
 function IndexContent() {
+  useEffect(() => {
+    const handleUrl = (url: string | null) => {
+      if (!url) return;
+      const parsedUrl = Linking.parse(url);
+      if (parsedUrl.queryParams?.room) {
+        Alert.alert(
+          "共有カレンダーの招待",
+          `招待リンクを検出しました。\nIDをコピーして「リンク・IDで参加」から追加してください。\n\nID: ${parsedUrl.queryParams.room}`,
+          [{ text: "OK" }],
+        );
+      }
+    };
+
+    Linking.getInitialURL().then(handleUrl);
+    const subscription = Linking.addEventListener("url", (event) =>
+      handleUrl(event.url),
+    );
+    return () => subscription.remove();
+  }, []);
+
   useEffect(() => {
     const initAds = async () => {
       try {
@@ -530,8 +552,11 @@ function IndexContent() {
     }
   };
 
-  // 🌟 消えてしまった関数を復活！
-  const handleAddSharedRoom = async (layerName: string, roomId: string) => {
+  const handleAddSharedRoom = async (
+    layerName: string,
+    roomId: string,
+    color?: string,
+  ) => {
     const newRooms = { ...sharedRooms, [layerName]: roomId };
     setSharedRooms(newRooms);
     await AsyncStorage.setItem("sharedRoomsData", JSON.stringify(newRooms));
@@ -547,9 +572,11 @@ function IndexContent() {
         "#5856D6",
         "#AF52DE",
       ];
-      const randomColor =
+      // 🌟 受け取った color があればそれを使い、無ければランダムにする
+      const targetColor =
+        color ||
         PRESET_COLORS[Math.floor(Math.random() * PRESET_COLORS.length)];
-      const newLayerMaster = { ...layerMaster, [layerName]: randomColor };
+      const newLayerMaster = { ...layerMaster, [layerName]: targetColor };
       setLayerMaster(newLayerMaster);
       await AsyncStorage.setItem(
         "layerMasterData",
