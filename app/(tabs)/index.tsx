@@ -501,11 +501,15 @@ function IndexContent() {
       // ② 新しい共有先に保存する（🌟 親レイヤーを使って正しい部屋に保存する！）
       if (Object.keys(sharedRooms).includes(parentLayer)) {
         const targetRoomId = sharedRooms[parentLayer];
-        batch.set(doc(db, "rooms", targetRoomId, "schedules", newItem.id), {
+
+        // 🌟 追加：移動・コピー時も undefined を完全に除去する！
+        const cleanNewItem = JSON.parse(JSON.stringify({
           ...newItem,
           date: targetDate,
           updatedAt: new Date().toISOString(),
-        });
+        }));
+
+        batch.set(doc(db, "rooms", targetRoomId, "schedules", newItem.id), cleanNewItem);
         hasCloudAction = true;
       }
 
@@ -1433,7 +1437,7 @@ function IndexContent() {
         try {
           const Calendar = await import("expo-calendar");
           await Calendar.deleteEventAsync(item.externalEventId);
-        } catch (e) {}
+        } catch (e) { }
       }
 
       const wasShared = isSharedItem(item);
@@ -1493,9 +1497,9 @@ function IndexContent() {
               nextData[d] = nextData[d].map((i) =>
                 i.id === item.id
                   ? {
-                      ...i,
-                      exceptionDates: [...(i.exceptionDates || []), targetDate],
-                    }
+                    ...i,
+                    exceptionDates: [...(i.exceptionDates || []), targetDate],
+                  }
                   : i,
               );
             }
@@ -1885,75 +1889,75 @@ function IndexContent() {
 
               {(activeMode === "todo" ||
                 (activeMode === "money" && !isMoneySummaryMode)) && (
-                <View style={styles.weekCalendarWrapper}>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      paddingRight: 20,
-                    }}
-                  >
-                    <Text style={styles.monthLabel}>
-                      {parseInt(selectedDate.split("-")[1])}月
-                    </Text>
-                    {/* 🌟 変更：「今日に戻る」ボタンと「＋」ボタンを横並びにする */}
+                  <View style={styles.weekCalendarWrapper}>
                     <View
                       style={{
                         flexDirection: "row",
+                        justifyContent: "space-between",
                         alignItems: "center",
-                        gap: 12,
+                        paddingRight: 20,
                       }}
                     >
-                      <TouchableOpacity
-                        onPress={() => setSelectedDate(getTodayString())}
+                      <Text style={styles.monthLabel}>
+                        {parseInt(selectedDate.split("-")[1])}月
+                      </Text>
+                      {/* 🌟 変更：「今日に戻る」ボタンと「＋」ボタンを横並びにする */}
+                      <View
                         style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: 16,
-                          backgroundColor: currentSolidColor + "10", // 月間カレンダーと同じ美しい透け感
+                          flexDirection: "row",
                           alignItems: "center",
-                          justifyContent: "center",
-                          borderWidth: 1,
-                          borderColor: currentSolidColor + "30",
-                          shadowColor: "#000",
-                          shadowOpacity: 0.05,
-                          shadowRadius: 2,
-                          elevation: 1,
+                          gap: 12,
                         }}
                       >
-                        <Ionicons
-                          name="return-down-back-outline" // 同じアイコンを使用
-                          size={18}
-                          color={currentSolidColor}
-                        />
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={handleOpenNewModal}>
-                        <Ionicons
-                          name="add-circle"
-                          size={30}
-                          color={currentSolidColor}
-                        />
-                      </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => setSelectedDate(getTodayString())}
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            backgroundColor: currentSolidColor + "10", // 月間カレンダーと同じ美しい透け感
+                            alignItems: "center",
+                            justifyContent: "center",
+                            borderWidth: 1,
+                            borderColor: currentSolidColor + "30",
+                            shadowColor: "#000",
+                            shadowOpacity: 0.05,
+                            shadowRadius: 2,
+                            elevation: 1,
+                          }}
+                        >
+                          <Ionicons
+                            name="return-down-back-outline" // 同じアイコンを使用
+                            size={18}
+                            color={currentSolidColor}
+                          />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={handleOpenNewModal}>
+                          <Ionicons
+                            name="add-circle"
+                            size={30}
+                            color={currentSolidColor}
+                          />
+                        </TouchableOpacity>
+                      </View>
                     </View>
+                    <CalendarProvider
+                      date={selectedDate}
+                      onDateChanged={setSelectedDate}
+                    >
+                      <WeekCalendar
+                        firstDay={1}
+                        markedDates={currentMarkedDates}
+                        theme={{
+                          calendarBackground: "transparent",
+                          todayTextColor: "#FFF",
+                          todayBackgroundColor: currentSolidColor + "33",
+                          selectedDayBackgroundColor: currentSolidColor,
+                        }}
+                      />
+                    </CalendarProvider>
                   </View>
-                  <CalendarProvider
-                    date={selectedDate}
-                    onDateChanged={setSelectedDate}
-                  >
-                    <WeekCalendar
-                      firstDay={1}
-                      markedDates={currentMarkedDates}
-                      theme={{
-                        calendarBackground: "transparent",
-                        todayTextColor: "#FFF",
-                        todayBackgroundColor: currentSolidColor + "33",
-                        selectedDayBackgroundColor: currentSolidColor,
-                      }}
-                    />
-                  </CalendarProvider>
-                </View>
-              )}
+                )}
             </>
           )}
 
@@ -2221,13 +2225,13 @@ function IndexContent() {
                         styles.gridCard,
                         tempActiveTags.includes("外部予定")
                           ? {
-                              backgroundColor: "#FF2D55",
-                              borderColor: "#FF2D55",
-                            }
+                            backgroundColor: "#FF2D55",
+                            borderColor: "#FF2D55",
+                          }
                           : [
-                              styles.gridCardGhost,
-                              { borderColor: "#FF2D5540" },
-                            ],
+                            styles.gridCardGhost,
+                            { borderColor: "#FF2D5540" },
+                          ],
                       ]}
                       onPress={() => toggleTempTag("外部予定")}
                     >
@@ -2277,13 +2281,13 @@ function IndexContent() {
                           styles.gridCard,
                           isSelected
                             ? {
-                                backgroundColor: layerMaster[layer],
-                                borderColor: layerMaster[layer],
-                              }
+                              backgroundColor: layerMaster[layer],
+                              borderColor: layerMaster[layer],
+                            }
                             : [
-                                styles.gridCardGhost,
-                                { borderColor: layerMaster[layer] + "40" },
-                              ],
+                              styles.gridCardGhost,
+                              { borderColor: layerMaster[layer] + "40" },
+                            ],
                         ]}
                         onPress={() => toggleTempTag(layer)}
                       >
