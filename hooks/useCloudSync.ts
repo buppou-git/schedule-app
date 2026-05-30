@@ -61,20 +61,22 @@ export function useCloudSync(sharedRooms: { [layerName: string]: string }) {
       const targetRoomId = sharedRooms[sharedLayerName];
       const schedulesRef = collection(db, "rooms", targetRoomId, "schedules");
 
-      // 🌟 漏れていた修正1：エラー対策の String()
-      const docRef = item.id
-        ? doc(schedulesRef, String(item.id))
-        : doc(schedulesRef);
+      const safeId = item.id ? String(item.id) : undefined;
 
-      // 🌟 漏れていた修正2：Firebaseが嫌う undefined を完全に除去する
-      const cleanItem = JSON.parse(JSON.stringify(item));
+      const docRef = safeId ? doc(schedulesRef, safeId) : doc(schedulesRef);
 
-      // await せず、Firebaseの標準機能にキューイングを任せる（オフライン時も自動リトライされる）
-      setDoc(docRef, {
-        ...cleanItem, // 🌟 item を cleanItem に変更
+      // ✅ データ構造を守る（categoryが消えるのを防ぐ）
+      const cleanItem = {
+        ...item,
         id: docRef.id,
-        date: date,
+        tags: item.tags || (item.tag ? [item.tag] : []),
+        category: item.category || "", // ✅ これ超重要
         updatedAt: new Date().toISOString(),
+      };
+
+      setDoc(docRef, {
+        ...cleanItem,
+        date: date,
       });
     } catch (e) {
       console.error("共有保存エラー:", e);

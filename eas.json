@@ -10,9 +10,12 @@
     "preview": {
       "distribution": "internal"
     },
+
     "production": {
       "channel": "production",
-      "autoIncrement": true
+      "autoIncrement": true,
+      "developmentClient": false,
+      "distribution": "store"
     }
   },
   "submit": {
