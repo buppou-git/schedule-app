@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Joining...</title>
+
+  <script>
+    // URLの ?room= を取得
+    const params = new URLSearchParams(window.location.search);
+    const roomId = params.get("room");
+
+    // アプリを開く（deep link）
+    if (roomId) {
+      window.location.href = `unical://join?room=${roomId}`;
+    }
+
+    // fallback（アプリ入ってない人）
+    setTimeout(() => {
+      window.location.href = "https://apps.apple.com/";
+    }, 1500);
+  </script>
+</head>
+<body>
+  <h2>アプリを開いています...</h2>
+</body>
+</html>

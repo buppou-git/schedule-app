@@ -2,6 +2,8 @@ import "react-native-get-random-values";
 
 import * as Linking from "expo-linking";
 
+import * as Clipboard from "expo-clipboard";
+
 import { useAppModals } from "../../hooks/useAppModals"; // パスは適宜合わせてください
 import { styles } from "./index.styles";
 
@@ -156,25 +158,99 @@ const calculateStreak = (completedDates: string[] | undefined) => {
 };
 
 function IndexContent() {
+
+
+  const handleShareRoom = async (roomId: string) => {
+    const url = `https://multi-calendar-1379f.web.app/join?room=${roomId}`;
+
+    await Clipboard.setStringAsync(url);
+
+    Alert.alert("リンクをコピーしました", url);
+  };
+
+  // ✅ 先に定義する
+  const handleAddSharedRoom = async (
+    layerName: string,
+    roomId: string,
+    color?: string,
+  ) => {
+    const newRooms = { ...sharedRooms, [layerName]: roomId };
+    setSharedRooms(newRooms);
+    await AsyncStorage.setItem("sharedRoomsData", JSON.stringify(newRooms));
+
+    // レイヤー追加もそのままでOK
+    if (!layerMaster[layerName]) {
+      const PRESET_COLORS = [
+        "#FF3B30",
+        "#FF9500",
+        "#FFCC00",
+        "#34C759",
+        "#007AFF",
+        "#5856D6",
+        "#AF52DE",
+      ];
+
+      const targetColor =
+        color ||
+        PRESET_COLORS[Math.floor(Math.random() * PRESET_COLORS.length)];
+
+      const newLayerMaster = { ...layerMaster, [layerName]: targetColor };
+      setLayerMaster(newLayerMaster);
+
+      await AsyncStorage.setItem(
+        "layerMasterData",
+        JSON.stringify(newLayerMaster),
+      );
+    }
+  };
+
+  // ✅ その後にuseEffect
   useEffect(() => {
     const handleUrl = (url: string | null) => {
       if (!url) return;
+
       const parsedUrl = Linking.parse(url);
-      if (parsedUrl.queryParams?.room) {
-        Alert.alert(
-          "共有カレンダーの招待",
-          `招待リンクを検出しました。\nIDをコピーして「リンク・IDで参加」から追加してください。\n\nID: ${parsedUrl.queryParams.room}`,
-          [{ text: "OK" }],
+      // 🌟 パラメータに room= が含まれているかどうかで判定をシンプルかつ確実に
+      const isJoinLink = url.includes("room=");
+
+      if (isJoinLink) {
+        // 🌟 判定を parsedUrl.queryParams?.room だけでなく、念のため全体から抽出
+        const roomId = parsedUrl.queryParams?.room
+          ? String(parsedUrl.queryParams.room)
+          : url.split("room=")[1]?.split("&")[0];
+
+        if (!roomId) return;
+
+        handleAddSharedRoom(
+          `共有_${roomId.slice(0, 4)}`,
+          roomId
         );
+
+        Alert.alert("参加完了", "共有カレンダーに参加しました！");
+      }
+
+      if (isJoinLink) {
+        const roomId = String(parsedUrl.queryParams?.room);
+        if (!roomId) return;
+
+        handleAddSharedRoom(
+          `共有_${roomId.slice(0, 4)}`,
+          roomId
+        );
+
+        Alert.alert("参加完了", "共有カレンダーに参加しました！");
       }
     };
 
     Linking.getInitialURL().then(handleUrl);
-    const subscription = Linking.addEventListener("url", (event) =>
-      handleUrl(event.url),
-    );
+
+    const subscription = Linking.addEventListener("url", (event) => {
+      handleUrl(event.url);
+    });
+
     return () => subscription.remove();
-  }, []);
+  }, [handleAddSharedRoom]);
+
 
   useEffect(() => {
     const initAds = async () => {
@@ -548,39 +624,6 @@ function IndexContent() {
     } catch (e) {
       console.error("Move/Copy Error:", e);
       Alert.alert("エラー", "データの移動に失敗しました。");
-    }
-  };
-
-  const handleAddSharedRoom = async (
-    layerName: string,
-    roomId: string,
-    color?: string,
-  ) => {
-    const newRooms = { ...sharedRooms, [layerName]: roomId };
-    setSharedRooms(newRooms);
-    await AsyncStorage.setItem("sharedRoomsData", JSON.stringify(newRooms));
-
-    // レイヤーマスターにも追加（ランダムな色を割り当て）
-    if (!layerMaster[layerName]) {
-      const PRESET_COLORS = [
-        "#FF3B30",
-        "#FF9500",
-        "#FFCC00",
-        "#34C759",
-        "#007AFF",
-        "#5856D6",
-        "#AF52DE",
-      ];
-      // 🌟 受け取った color があればそれを使い、無ければランダムにする
-      const targetColor =
-        color ||
-        PRESET_COLORS[Math.floor(Math.random() * PRESET_COLORS.length)];
-      const newLayerMaster = { ...layerMaster, [layerName]: targetColor };
-      setLayerMaster(newLayerMaster);
-      await AsyncStorage.setItem(
-        "layerMasterData",
-        JSON.stringify(newLayerMaster),
-      );
     }
   };
 

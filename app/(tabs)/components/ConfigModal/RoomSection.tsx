@@ -44,10 +44,16 @@ export const RoomSection = React.memo(
     const handleShareRoom = useCallback(
       async (roomName: string, roomId: string) => {
         try {
+          const url = `https://multi-calendar-app-1379f.web.app/join?room=${roomId}`;
+
           await Share.share({
-            message: `【UniCal】「${roomName}」の共有カレンダーに参加しよう！\n\nアプリを開いて以下のIDかURLを入力してね。\nID: ${roomId}\nリンク: unical://join?room=${roomId}`,
+            message: `【UniCal】「${roomName}」の共有カレンダーに参加しよう！
+    
+    このリンクをタップするだけ👇
+    ${url}`,
             title: "カレンダーの共有",
           });
+
           setShareRoomListVisible(false);
         } catch (error) {
           Alert.alert("エラー", "共有に失敗しました。");
@@ -55,6 +61,7 @@ export const RoomSection = React.memo(
       },
       [],
     );
+    ``
 
     const handleCreateRoom = useCallback(async () => {
       if (!newRoomName.trim()) return;

@@ -1,0 +1,21 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 🌍 今回追加した「共有レイヤー」のルール
+    // ログインしているユーザー（匿名ログイン含む）なら、誰でも読み書きOK
+    match /shared_schedules/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    // 🔐 既存の「プライベートデータ（バックアップ用）」のルール
+    // 自分のUIDと一致するデータだけ読み書きOK（他の人からは絶対に見られない）
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    match /rooms/{roomId}/schedules/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

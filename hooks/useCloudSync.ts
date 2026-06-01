@@ -52,32 +52,44 @@ export function useCloudSync(sharedRooms: { [layerName: string]: string }) {
   // 🌟 2. 共有データの送信処理
   const handleSaveItem = async (item: ScheduleItem, date: string) => {
     try {
-      const itemTags = item.tags || (item.tag ? [item.tag] : []);
-      const sharedLayerName = itemTags.find((tag) =>
-        Object.keys(sharedRooms).includes(tag),
-      );
-      if (!sharedLayerName) return;
+      // ✅ 親レイヤーを取得（これが最重要）
+      const parentLayer =
+        item.layer ||
+        (item.tags && item.tags.length > 0 ? item.tags[0] : item.tag);
 
-      const targetRoomId = sharedRooms[sharedLayerName];
+      if (!parentLayer || !sharedRooms[parentLayer]) return;
+
+      const targetRoomId = sharedRooms[parentLayer];
       const schedulesRef = collection(db, "rooms", targetRoomId, "schedules");
 
       const safeId = item.id ? String(item.id) : undefined;
-
       const docRef = safeId ? doc(schedulesRef, safeId) : doc(schedulesRef);
 
-      // ✅ データ構造を守る（categoryが消えるのを防ぐ）
       const cleanItem = {
         ...item,
         id: docRef.id,
-        tags: item.tags || (item.tag ? [item.tag] : []),
-        category: item.category || "", // ✅ これ超重要
+        tags:
+          item.tags && item.tags.length > 0
+            ? item.tags
+            : item.tag
+              ? [item.tag]
+              : [],
+        category: item.category || "",
+        layer: parentLayer,
         updatedAt: new Date().toISOString(),
       };
 
-      setDoc(docRef, {
-        ...cleanItem,
-        date: date,
-      });
+
+      await setDoc(
+        docRef,
+        {
+          ...cleanItem,
+          date,
+        },
+        { merge: true }
+      );
+
+
     } catch (e) {
       console.error("共有保存エラー:", e);
     }
@@ -86,23 +98,27 @@ export function useCloudSync(sharedRooms: { [layerName: string]: string }) {
   // 🌟 3. 安全なデバウンス（遅延）送信
   const safeDebouncedSync = useCallback(
     (item: ScheduleItem, date: string) => {
-      const itemTags = item.tags || (item.tag ? [item.tag] : []);
-      const isShared = itemTags.some((tag) =>
-        Object.keys(sharedRooms).includes(tag),
-      );
+      const parentLayer =
+        item.layer ||
+        (item.tags && item.tags.length > 0 ? item.tags[0] : item.tag);
+
+      const isShared = !!(parentLayer && sharedRooms[parentLayer]);
       if (!isShared) return;
 
-      if (syncQueue.current[item.id]) {
-        clearTimeout(syncQueue.current[item.id].timer);
+
+      const key = String(item.id || Date.now());
+
+      if (syncQueue.current[key]) {
+        clearTimeout(syncQueue.current[key].timer);
       }
 
       // 1秒間操作がなければ送信
       const timer = setTimeout(() => {
         handleSaveItem(item, date);
-        delete syncQueue.current[item.id];
+        delete syncQueue.current[key];
       }, 1000);
 
-      syncQueue.current[item.id] = { item, date, timer };
+      syncQueue.current[key] = { item, date, timer };
     },
     [sharedRooms],
   );
