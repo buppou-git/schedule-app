@@ -159,7 +159,6 @@ const calculateStreak = (completedDates: string[] | undefined) => {
 
 function IndexContent() {
 
-
   const handleShareRoom = async (roomId: string) => {
     const url = `https://multi-calendar-app-1379f.web.app/join?room=${roomId}`;
 
@@ -501,6 +500,35 @@ function IndexContent() {
     const itemTags = item.tags || (item.tag ? [item.tag] : item.layer ? [item.layer] : []);
     return itemTags.some((tag) => Object.keys(sharedRooms).includes(tag));
   };
+
+  const setScheduleDataWithSync = useCallback(
+    (value: React.SetStateAction<Record<string, ScheduleItem[]>>) => {
+      setScheduleData((prevData) => {
+        const nextData = typeof value === "function" ? value(prevData) : value;
+
+        // 変更があった日付のアイテムをチェックし、共有アイテムがあれば自動同期に回す
+        Object.keys(nextData).forEach((date) => {
+          const prevItems = prevData[date] || [];
+          const nextItems = nextData[date] || [];
+
+          nextItems.forEach((nextItem) => {
+            if (isSharedItem(nextItem)) {
+              const prevItem = prevItems.find((i) => i.id === nextItem.id);
+              // 新規追加、または既存のアイテムから内容に変更があった場合のみ同期を実行
+              if (!prevItem || JSON.stringify(prevItem) !== JSON.stringify(nextItem)) {
+                setTimeout(() => {
+                  safeDebouncedSync(nextItem, date);
+                }, 0);
+              }
+            }
+          });
+        });
+
+        return nextData;
+      });
+    },
+    [setScheduleData, sharedRooms, safeDebouncedSync]
+  );
 
   // 🌟 修正：長押し画面からの移動・コピーを完璧に反映させる
   const handleMoveOrCopy = async (
@@ -2495,7 +2523,8 @@ function IndexContent() {
           selectedItem={selectedItem}
           activeMode={activeMode}
           scheduleData={scheduleData}
-          setScheduleData={setScheduleData}
+          // 🌟 通常の関数の代わりに、上で作った自動同期付きのラッパー関数を渡す
+          setScheduleData={setScheduleDataWithSync}
           layerMaster={layerMaster}
           tagMaster={tagMaster}
           setTagMaster={setTagMaster}
