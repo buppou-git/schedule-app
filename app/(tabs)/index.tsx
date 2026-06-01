@@ -161,25 +161,33 @@ function IndexContent() {
 
 
   const handleShareRoom = async (roomId: string) => {
-    const url = `https://multi-calendar-1379f.web.app/join?room=${roomId}`;
+    const url = `https://multi-calendar-app-1379f.web.app/join?room=${roomId}`;
 
     await Clipboard.setStringAsync(url);
 
     Alert.alert("リンクをコピーしました", url);
   };
 
-  // ✅ 先に定義する
+  // 🌟 起動直後のロードのズレを100%防ぐ超安全版に強化
   const handleAddSharedRoom = async (
     layerName: string,
     roomId: string,
     color?: string,
   ) => {
-    const newRooms = { ...sharedRooms, [layerName]: roomId };
+    // 🌟 1. Stateのロードを待たず、AsyncStorageから直接現在の部屋データを読み込む
+    const storedRoomsStr = await AsyncStorage.getItem("sharedRoomsData");
+    const currentRooms = storedRoomsStr ? JSON.parse(storedRoomsStr) : {};
+
+    // 既存のデータに対して、新しい部屋を安全に結合
+    const newRooms = { ...currentRooms, [layerName]: roomId };
     setSharedRooms(newRooms);
     await AsyncStorage.setItem("sharedRoomsData", JSON.stringify(newRooms));
 
-    // レイヤー追加もそのままでOK
-    if (!layerMaster[layerName]) {
+    // 🌟 2. layerMasterも同様にAsyncStorageから直接最新状態を読み込んでマージする
+    const storedLayersStr = await AsyncStorage.getItem("layerMasterData");
+    const currentLayers = storedLayersStr ? JSON.parse(storedLayersStr) : {};
+
+    if (!currentLayers[layerName]) {
       const PRESET_COLORS = [
         "#FF3B30",
         "#FF9500",
@@ -194,7 +202,7 @@ function IndexContent() {
         color ||
         PRESET_COLORS[Math.floor(Math.random() * PRESET_COLORS.length)];
 
-      const newLayerMaster = { ...layerMaster, [layerName]: targetColor };
+      const newLayerMaster = { ...currentLayers, [layerName]: targetColor };
       setLayerMaster(newLayerMaster);
 
       await AsyncStorage.setItem(
@@ -219,18 +227,6 @@ function IndexContent() {
           ? String(parsedUrl.queryParams.room)
           : url.split("room=")[1]?.split("&")[0];
 
-        if (!roomId) return;
-
-        handleAddSharedRoom(
-          `共有_${roomId.slice(0, 4)}`,
-          roomId
-        );
-
-        Alert.alert("参加完了", "共有カレンダーに参加しました！");
-      }
-
-      if (isJoinLink) {
-        const roomId = String(parsedUrl.queryParams?.room);
         if (!roomId) return;
 
         handleAddSharedRoom(
@@ -501,7 +497,8 @@ function IndexContent() {
   };
 
   const isSharedItem = (item: ScheduleItem) => {
-    const itemTags = item.tags || (item.tag ? [item.tag] : []);
+    // 🌟 item.layer も判定に含めるように強化
+    const itemTags = item.tags || (item.tag ? [item.tag] : item.layer ? [item.layer] : []);
     return itemTags.some((tag) => Object.keys(sharedRooms).includes(tag));
   };
 
@@ -786,6 +783,7 @@ function IndexContent() {
               tagMaster,
               presets,
               activeTags,
+              sharedRooms,
             });
 
             const masterKey = await getOrGenerateMasterKey();
@@ -811,14 +809,16 @@ function IndexContent() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [layers, pre, tags, onboarded, scheduleExists, extSync] =
+        // 🌟 sharedRoomsStr を追加
+        const [layers, pre, tags, onboarded, scheduleExists, extSync, sharedRoomsStr] =
           await Promise.all([
             AsyncStorage.getItem("layerMasterData"),
             AsyncStorage.getItem("filterPresets"),
             AsyncStorage.getItem("tagMasterData"),
             AsyncStorage.getItem("hasCompletedOnboarding"),
             AsyncStorage.getItem("myScheduleData"),
-            AsyncStorage.getItem("externalCalendarSync"), // 🌟 外部同期の設定も読み込む
+            AsyncStorage.getItem("externalCalendarSync"),
+            AsyncStorage.getItem("sharedRoomsData"), // 🌟 追加：共有ルームの記憶を呼び出す
           ]);
 
         let initialLayers = layers ? JSON.parse(layers) : {};
@@ -830,17 +830,21 @@ function IndexContent() {
             await AsyncStorage.setItem("hasCompletedOnboarding", "true");
           }
 
-          setLayerMaster(initialLayers); // 🌟 更新したレイヤーマスターをセット
+          setLayerMaster(initialLayers);
           if (pre) setPresets(JSON.parse(pre));
           if (tags) setTagMaster(JSON.parse(tags));
+
+          // 🌟 追加：共有ルームの記憶をStateにセット
+          if (sharedRoomsStr) {
+            setSharedRooms(JSON.parse(sharedRoomsStr));
+          }
         }
       } catch (error) {
         console.error(error);
       }
     };
     loadData();
-  }, [isExternalSyncEnabled]); // 🌟 外部同期が切り替わった時にも再実行されるように依存配列に追加
-
+  }, [isExternalSyncEnabled]);
   // 🌟 追加：起動した直後かどうかを判定するフラグ
   const isFirstRenderForSync = useRef(true);
 
@@ -903,16 +907,17 @@ function IndexContent() {
       hasAnyChange = true;
       let dateChanged = false;
 
-      // 🌟 mapの引数から any を排除し、ScheduleItem として厳密に扱う！
       const newItems = scheduleData[date].map((item: ScheduleItem) => {
         const itemTag =
           item.tag ||
           (item.tags && item.tags.length > 1 ? item.tags[1] : item.tags?.[0]) ||
+          item.layer || // 🌟 追加：「生活」になる前に、保存されたレイヤー名を見に行く
           "生活";
+
         const parentTag =
           item.tags && item.tags.length > 0
             ? item.tags[0]
-            : tagMaster[itemTag]?.layer || itemTag;
+            : tagMaster[itemTag]?.layer || item.layer || itemTag; // 🌟 追加
 
         let latestColor = item.color;
         if (item.tag && tagMaster[item.tag]) {

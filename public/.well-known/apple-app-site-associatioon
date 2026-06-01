@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "6768195580.com.yourapp.unical",
+        "paths": ["/join", "/join*"]
+      }
+    ]
+  }
+}

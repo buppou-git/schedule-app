@@ -11,13 +11,18 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.buppou.multicalendar",
+      "associatedDomains": [
+        "applinks:multi-calendar-app-1379f.web.app" 
+      ],
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
-              "com.googleusercontent.apps.633661996714-m1eoribajuqgbe5grrv3gpcco27peqrv"
+              "com.googleusercontent.apps.633661996714-m1eoribajuqgbe5grrv3gpcco27peqrv",
+              "com.buppou.multicalendar", // 🌟 これを追加
+              "unical"                    // 🌟 これを追加
             ]
           }
         ]
