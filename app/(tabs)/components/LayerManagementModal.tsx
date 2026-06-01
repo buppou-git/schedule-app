@@ -31,13 +31,14 @@ const COLOR_PALETTE = [
   "#1C1C1E",
 ];
 
-// 🌟 Propsの型定義を追加
 interface LayerManagementModalProps {
   visible: boolean;
   onClose: () => void;
   layerMaster: { [key: string]: string };
   setLayerMaster: (data: { [key: string]: string }) => void;
   setHasUnsavedChanges: (val: boolean) => void;
+  sharedRooms: { [layerName: string]: string }; // ✅ 追加
+  onDeleteSharedRoom: (layerName: string) => void; // ✅ 追加
 }
 
 export default function LayerManagementModal({
@@ -46,6 +47,8 @@ export default function LayerManagementModal({
   layerMaster,
   setLayerMaster,
   setHasUnsavedChanges,
+  sharedRooms, // ✅ 追加
+  onDeleteSharedRoom, // ✅ 追加
 }: LayerManagementModalProps) {
   const [newLayerName, setNewLayerName] = useState("");
   const [selectedColor, setSelectedColor] = useState("#007AFF");
@@ -106,23 +109,45 @@ export default function LayerManagementModal({
   };
 
   const deleteLayer = (name: string) => {
-    Alert.alert("確認", `カテゴリ「${name}」を削除しますか？`, [
-      { text: "キャンセル", style: "cancel" },
-      {
-        text: "削除",
-        style: "destructive",
-        onPress: async () => {
-          const updated = { ...layerMaster };
-          delete updated[name];
-          setLayerMaster(updated);
-          await AsyncStorage.setItem(
-            "layerMasterData",
-            JSON.stringify(updated),
-          );
-          setHasUnsavedChanges(true);
+    // ✅ 共有カレンダーかどうかを判定
+    const isShared = Object.keys(sharedRooms).includes(name);
+
+    if (isShared) {
+      Alert.alert(
+        "共有カレンダーの削除",
+        `「${name}」の共有設定とカテゴリを削除しますか？\n（※クラウド上のデータは消えず、この端末からの接続のみ解除されます）`,
+        [
+          { text: "キャンセル", style: "cancel" },
+          {
+            text: "削除する",
+            style: "destructive",
+            onPress: async () => {
+              onDeleteSharedRoom(name); // 共有接続を解除
+              const updated = { ...layerMaster };
+              delete updated[name];
+              setLayerMaster(updated); // ローカルカテゴリからも削除
+              await AsyncStorage.setItem("layerMasterData", JSON.stringify(updated));
+              setHasUnsavedChanges(true);
+            },
+          },
+        ]
+      );
+    } else {
+      Alert.alert("確認", `カテゴリ「${name}」を削除しますか？`, [
+        { text: "キャンセル", style: "cancel" },
+        {
+          text: "削除",
+          style: "destructive",
+          onPress: async () => {
+            const updated = { ...layerMaster };
+            delete updated[name];
+            setLayerMaster(updated);
+            await AsyncStorage.setItem("layerMasterData", JSON.stringify(updated));
+            setHasUnsavedChanges(true);
+          },
         },
-      },
-    ]);
+      ]);
+    }
   };
 
   return (
@@ -159,34 +184,44 @@ export default function LayerManagementModal({
               style={styles.scroll}
               showsVerticalScrollIndicator={false}
             >
-              {/* 🌟 修正：日本語ラベルに変更 */}
               <Text style={styles.sectionLabel}>登録済み</Text>
-              {Object.keys(layerMaster).map((layer) => (
-                <View key={layer} style={styles.layerCard}>
-                  <View
-                    style={[
-                      styles.cardAccentLine,
-                      { backgroundColor: layerMaster[layer] },
-                    ]}
-                  />
-                  <View style={styles.cardInfo}>
-                    <Text style={styles.layerNameText}>{layer}</Text>
-                    <Text style={styles.layerHexText}>
-                      {layerMaster[layer].toUpperCase()}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => deleteLayer(layer)}
-                    style={styles.deleteBtn}
-                  >
-                    <Ionicons
-                      name="remove-circle-outline"
-                      size={20}
-                      color="#1C1C1E"
+              {Object.keys(layerMaster).map((layer) => {
+                // ✅ 追加：このレイヤーが共有カレンダーかどうか判定
+                const isShared = Object.keys(sharedRooms).includes(layer);
+
+                return (
+                  <View key={layer} style={styles.layerCard}>
+                    <View
+                      style={[
+                        styles.cardAccentLine,
+                        { backgroundColor: layerMaster[layer] },
+                      ]}
                     />
-                  </TouchableOpacity>
-                </View>
-              ))}
+                    <View style={styles.cardInfo}>
+                      {/* ✅ 共有なら雲マークをつける */}
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <Text style={styles.layerNameText}>{layer}</Text>
+                        {isShared && <Ionicons name="cloud-outline" size={16} color="#007AFF" />}
+                      </View>
+                      {/* ✅ 共有ならIDを表示、違うならカラーコード */}
+                      <Text style={styles.layerHexText}>
+                        {isShared ? `ID: ${sharedRooms[layer]}` : layerMaster[layer].toUpperCase()}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => deleteLayer(layer)}
+                      style={styles.deleteBtn}
+                    >
+                      {/* ✅ 共有の時は赤色のゴミ箱アイコンにしてわかりやすく */}
+                      <Ionicons
+                        name={isShared ? "trash-outline" : "remove-circle-outline"}
+                        size={20}
+                        color={isShared ? "#FF3B30" : "#1C1C1E"}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
 
               <View style={styles.newLayerSection}>
                 <Text style={styles.sectionLabel}>新規追加</Text>

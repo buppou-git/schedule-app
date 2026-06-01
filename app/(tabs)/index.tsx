@@ -211,6 +211,16 @@ function IndexContent() {
     }
   };
 
+  // 🌟 追加：共有カレンダーの個別削除（接続解除）関数
+  const handleDeleteSharedRoom = useCallback(async (layerName: string) => {
+    setSharedRooms((prev) => {
+      const next = { ...prev };
+      delete next[layerName];
+      AsyncStorage.setItem("sharedRoomsData", JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
   // ✅ その後にuseEffect
   useEffect(() => {
     const handleUrl = (url: string | null) => {
@@ -220,20 +230,34 @@ function IndexContent() {
       // 🌟 パラメータに room= が含まれているかどうかで判定をシンプルかつ確実に
       const isJoinLink = url.includes("room=");
 
+
       if (isJoinLink) {
-        // 🌟 判定を parsedUrl.queryParams?.room だけでなく、念のため全体から抽出
         const roomId = parsedUrl.queryParams?.room
           ? String(parsedUrl.queryParams.room)
           : url.split("room=")[1]?.split("&")[0];
 
         if (!roomId) return;
 
-        handleAddSharedRoom(
-          `共有_${roomId.slice(0, 4)}`,
-          roomId
+        Alert.prompt(
+          "共有カレンダーへの参加",
+          "このカレンダーの表示名（カテゴリ名）を入力してください。",
+          [
+            {
+              text: "キャンセル",
+              style: "cancel",
+            },
+            {
+              text: "参加する",
+              onPress: (name: string | undefined) => { // 🌟 '(name)' を '(name: string | undefined)' に変更
+                const finalName = name?.trim() || `共有_${roomId.slice(0, 4)}`;
+                handleAddSharedRoom(finalName, roomId);
+                Alert.alert("参加完了", `「${finalName}」を追加しました！`);
+              },
+            },
+          ],
+          "plain-text",
+          `共有_${roomId.slice(0, 4)}`
         );
-
-        Alert.alert("参加完了", "共有カレンダーに参加しました！");
       }
     };
 
@@ -501,34 +525,33 @@ function IndexContent() {
     return itemTags.some((tag) => Object.keys(sharedRooms).includes(tag));
   };
 
-  const setScheduleDataWithSync = useCallback(
-    (value: React.SetStateAction<Record<string, ScheduleItem[]>>) => {
-      setScheduleData((prevData) => {
-        const nextData = typeof value === "function" ? value(prevData) : value;
+  // 🌟 共有カレンダーの予定を自動検知してFirestoreへ飛ばす最強の監視機構
+  const prevScheduleDataRef = useRef<Record<string, ScheduleItem[]>>({});
 
-        // 変更があった日付のアイテムをチェックし、共有アイテムがあれば自動同期に回す
-        Object.keys(nextData).forEach((date) => {
-          const prevItems = prevData[date] || [];
-          const nextItems = nextData[date] || [];
+  useEffect(() => {
+    // アプリの起動準備が整うまではスキップ
+    if (!isAppReady) return;
 
-          nextItems.forEach((nextItem) => {
-            if (isSharedItem(nextItem)) {
-              const prevItem = prevItems.find((i) => i.id === nextItem.id);
-              // 新規追加、または既存のアイテムから内容に変更があった場合のみ同期を実行
-              if (!prevItem || JSON.stringify(prevItem) !== JSON.stringify(nextItem)) {
-                setTimeout(() => {
-                  safeDebouncedSync(nextItem, date);
-                }, 0);
-              }
-            }
-          });
-        });
+    Object.keys(scheduleData).forEach((date) => {
+      const nextItems = scheduleData[date] || [];
+      const prevItems = prevScheduleDataRef.current[date] || [];
 
-        return nextData;
+      nextItems.forEach((nextItem) => {
+        // 共有カレンダーのアイテムか判定
+        if (isSharedItem(nextItem)) {
+          const prevItem = prevItems.find((i) => i.id === nextItem.id);
+
+          // 新規追加、または既存の予定から内容に変更があった場合のみ自動同期を実行
+          if (!prevItem || JSON.stringify(prevItem) !== JSON.stringify(nextItem)) {
+            safeDebouncedSync(nextItem, date);
+          }
+        }
       });
-    },
-    [setScheduleData, sharedRooms, safeDebouncedSync]
-  );
+    });
+
+    // 次回比較のために現在のデータを保存
+    prevScheduleDataRef.current = scheduleData;
+  }, [scheduleData, isAppReady, isSharedItem, safeDebouncedSync]);
 
   // 🌟 修正：長押し画面からの移動・コピーを完璧に反映させる
   const handleMoveOrCopy = async (
@@ -2523,8 +2546,7 @@ function IndexContent() {
           selectedItem={selectedItem}
           activeMode={activeMode}
           scheduleData={scheduleData}
-          // 🌟 通常の関数の代わりに、上で作った自動同期付きのラッパー関数を渡す
-          setScheduleData={setScheduleDataWithSync}
+          setScheduleData={setScheduleData}
           layerMaster={layerMaster}
           tagMaster={tagMaster}
           setTagMaster={setTagMaster}
@@ -2539,6 +2561,8 @@ function IndexContent() {
         layerMaster={layerMaster}
         setLayerMaster={setLayerMaster}
         setHasUnsavedChanges={setHasUnsavedChanges}
+        sharedRooms={sharedRooms} // ✅ 追加
+        onDeleteSharedRoom={handleDeleteSharedRoom} // ✅ 追加
       />
       <StatusBar style="auto" />
       <ConfigModal
