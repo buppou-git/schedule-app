@@ -33,7 +33,6 @@ interface ConfigModalProps {
   onDeleteAccount: () => void;
   sharedRooms: { [layerName: string]: string };
   onAddSharedRoom: (layerName: string, roomId: string) => void;
-  onDeleteSharedRoom: (layerName: string) => void;
 }
 
 const WEB_CLIENT_ID =
@@ -217,10 +216,7 @@ export default function ConfigModal({
                     </TouchableOpacity>
                   </View>
 
-                  <Text style={styles.copyright}>
-                    UniCal
-                  </Text>
-
+                  <Text style={styles.copyright}>UniCal</Text>
                 </ScrollView>
               )}
             </View>

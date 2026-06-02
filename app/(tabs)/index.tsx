@@ -158,7 +158,6 @@ const calculateStreak = (completedDates: string[] | undefined) => {
 };
 
 function IndexContent() {
-
   const handleShareRoom = async (roomId: string) => {
     const url = `https://multi-calendar-app-1379f.web.app/join?room=${roomId}`;
 
@@ -173,42 +172,39 @@ function IndexContent() {
     roomId: string,
     color?: string,
   ) => {
-    // 🌟 1. Stateのロードを待たず、AsyncStorageから直接現在の部屋データを読み込む
     const storedRoomsStr = await AsyncStorage.getItem("sharedRoomsData");
     const currentRooms = storedRoomsStr ? JSON.parse(storedRoomsStr) : {};
 
-    // 既存のデータに対して、新しい部屋を安全に結合
     const newRooms = { ...currentRooms, [layerName]: roomId };
     setSharedRooms(newRooms);
     await AsyncStorage.setItem("sharedRoomsData", JSON.stringify(newRooms));
 
-    // 🌟 2. layerMasterも同様にAsyncStorageから直接最新状態を読み込んでマージする
     const storedLayersStr = await AsyncStorage.getItem("layerMasterData");
     const currentLayers = storedLayersStr ? JSON.parse(storedLayersStr) : {};
 
-    if (!currentLayers[layerName]) {
-      const PRESET_COLORS = [
-        "#FF3B30",
-        "#FF9500",
-        "#FFCC00",
-        "#34C759",
-        "#007AFF",
-        "#5856D6",
-        "#AF52DE",
-      ];
+    // 🌟 修正：「既に存在しているから無視」という条件を外し、指定された色を最優先で確実に適用する！
+    const PRESET_COLORS = [
+      "#FF3B30",
+      "#FF9500",
+      "#FFCC00",
+      "#34C759",
+      "#007AFF",
+      "#5856D6",
+      "#AF52DE",
+    ];
 
-      const targetColor =
-        color ||
-        PRESET_COLORS[Math.floor(Math.random() * PRESET_COLORS.length)];
+    const targetColor =
+      color ||
+      currentLayers[layerName] || // 色指定がなければ既存の色を維持
+      PRESET_COLORS[Math.floor(Math.random() * PRESET_COLORS.length)];
 
-      const newLayerMaster = { ...currentLayers, [layerName]: targetColor };
-      setLayerMaster(newLayerMaster);
+    const newLayerMaster = { ...currentLayers, [layerName]: targetColor };
+    setLayerMaster(newLayerMaster);
 
-      await AsyncStorage.setItem(
-        "layerMasterData",
-        JSON.stringify(newLayerMaster),
-      );
-    }
+    await AsyncStorage.setItem(
+      "layerMasterData",
+      JSON.stringify(newLayerMaster),
+    );
   };
 
   // 🌟 追加：共有カレンダーの個別削除（接続解除）関数
@@ -230,7 +226,6 @@ function IndexContent() {
       // 🌟 パラメータに room= が含まれているかどうかで判定をシンプルかつ確実に
       const isJoinLink = url.includes("room=");
 
-
       if (isJoinLink) {
         const roomId = parsedUrl.queryParams?.room
           ? String(parsedUrl.queryParams.room)
@@ -248,7 +243,8 @@ function IndexContent() {
             },
             {
               text: "参加する",
-              onPress: (name: string | undefined) => { // 🌟 '(name)' を '(name: string | undefined)' に変更
+              onPress: (name: string | undefined) => {
+                // 🌟 '(name)' を '(name: string | undefined)' に変更
                 const finalName = name?.trim() || `共有_${roomId.slice(0, 4)}`;
                 handleAddSharedRoom(finalName, roomId);
                 Alert.alert("参加完了", `「${finalName}」を追加しました！`);
@@ -256,7 +252,7 @@ function IndexContent() {
             },
           ],
           "plain-text",
-          `共有_${roomId.slice(0, 4)}`
+          `共有_${roomId.slice(0, 4)}`,
         );
       }
     };
@@ -269,7 +265,6 @@ function IndexContent() {
 
     return () => subscription.remove();
   }, [handleAddSharedRoom]);
-
 
   useEffect(() => {
     const initAds = async () => {
@@ -521,7 +516,8 @@ function IndexContent() {
 
   const isSharedItem = (item: ScheduleItem) => {
     // 🌟 item.layer も判定に含めるように強化
-    const itemTags = item.tags || (item.tag ? [item.tag] : item.layer ? [item.layer] : []);
+    const itemTags =
+      item.tags || (item.tag ? [item.tag] : item.layer ? [item.layer] : []);
     return itemTags.some((tag) => Object.keys(sharedRooms).includes(tag));
   };
 
@@ -542,7 +538,10 @@ function IndexContent() {
           const prevItem = prevItems.find((i) => i.id === nextItem.id);
 
           // 新規追加、または既存の予定から内容に変更があった場合のみ自動同期を実行
-          if (!prevItem || JSON.stringify(prevItem) !== JSON.stringify(nextItem)) {
+          if (
+            !prevItem ||
+            JSON.stringify(prevItem) !== JSON.stringify(nextItem)
+          ) {
             safeDebouncedSync(nextItem, date);
           }
         }
@@ -627,13 +626,18 @@ function IndexContent() {
         const targetRoomId = sharedRooms[parentLayer];
 
         // 🌟 追加：移動・コピー時も undefined を完全に除去する！
-        const cleanNewItem = JSON.parse(JSON.stringify({
-          ...newItem,
-          date: targetDate,
-          updatedAt: new Date().toISOString(),
-        }));
+        const cleanNewItem = JSON.parse(
+          JSON.stringify({
+            ...newItem,
+            date: targetDate,
+            updatedAt: new Date().toISOString(),
+          }),
+        );
 
-        batch.set(doc(db, "rooms", targetRoomId, "schedules", newItem.id), cleanNewItem);
+        batch.set(
+          doc(db, "rooms", targetRoomId, "schedules", newItem.id),
+          cleanNewItem,
+        );
         hasCloudAction = true;
       }
 
@@ -860,19 +864,44 @@ function IndexContent() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        // 🌟 sharedRoomsStr を追加
-        const [layers, pre, tags, onboarded, scheduleExists, extSync, sharedRoomsStr] =
-          await Promise.all([
-            AsyncStorage.getItem("layerMasterData"),
-            AsyncStorage.getItem("filterPresets"),
-            AsyncStorage.getItem("tagMasterData"),
-            AsyncStorage.getItem("hasCompletedOnboarding"),
-            AsyncStorage.getItem("myScheduleData"),
-            AsyncStorage.getItem("externalCalendarSync"),
-            AsyncStorage.getItem("sharedRoomsData"), // 🌟 追加：共有ルームの記憶を呼び出す
-          ]);
+        const [
+          layers,
+          pre,
+          tags,
+          onboarded,
+          scheduleExists,
+          extSync,
+          sharedRoomsStr,
+        ] = await Promise.all([
+          AsyncStorage.getItem("layerMasterData"),
+          AsyncStorage.getItem("filterPresets"),
+          AsyncStorage.getItem("tagMasterData"),
+          AsyncStorage.getItem("hasCompletedOnboarding"),
+          AsyncStorage.getItem("myScheduleData"),
+          AsyncStorage.getItem("externalCalendarSync"),
+          AsyncStorage.getItem("sharedRoomsData"),
+        ]);
 
         let initialLayers = layers ? JSON.parse(layers) : {};
+        let initialSharedRooms = sharedRoomsStr
+          ? JSON.parse(sharedRoomsStr)
+          : {};
+
+        // 🌟 魔法の自己修復：共有データにあるのにカテゴリから消えている「ゴースト」を見つけ出し、自動で完全復活させる！
+        let needsLayerUpdate = false;
+        Object.keys(initialSharedRooms).forEach((roomName) => {
+          if (!initialLayers[roomName]) {
+            initialLayers[roomName] = "#007AFF"; // とりあえず青色で復活させる
+            needsLayerUpdate = true;
+          }
+        });
+
+        if (needsLayerUpdate) {
+          await AsyncStorage.setItem(
+            "layerMasterData",
+            JSON.stringify(initialLayers),
+          );
+        }
 
         if (!onboarded && !scheduleExists) {
           setOnboardingVisible(true);
@@ -1536,7 +1565,7 @@ function IndexContent() {
         try {
           const Calendar = await import("expo-calendar");
           await Calendar.deleteEventAsync(item.externalEventId);
-        } catch (e) { }
+        } catch (e) {}
       }
 
       const wasShared = isSharedItem(item);
@@ -1596,9 +1625,9 @@ function IndexContent() {
               nextData[d] = nextData[d].map((i) =>
                 i.id === item.id
                   ? {
-                    ...i,
-                    exceptionDates: [...(i.exceptionDates || []), targetDate],
-                  }
+                      ...i,
+                      exceptionDates: [...(i.exceptionDates || []), targetDate],
+                    }
                   : i,
               );
             }
@@ -1988,75 +2017,75 @@ function IndexContent() {
 
               {(activeMode === "todo" ||
                 (activeMode === "money" && !isMoneySummaryMode)) && (
-                  <View style={styles.weekCalendarWrapper}>
+                <View style={styles.weekCalendarWrapper}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      paddingRight: 20,
+                    }}
+                  >
+                    <Text style={styles.monthLabel}>
+                      {parseInt(selectedDate.split("-")[1])}月
+                    </Text>
+                    {/* 🌟 変更：「今日に戻る」ボタンと「＋」ボタンを横並びにする */}
                     <View
                       style={{
                         flexDirection: "row",
-                        justifyContent: "space-between",
                         alignItems: "center",
-                        paddingRight: 20,
+                        gap: 12,
                       }}
                     >
-                      <Text style={styles.monthLabel}>
-                        {parseInt(selectedDate.split("-")[1])}月
-                      </Text>
-                      {/* 🌟 変更：「今日に戻る」ボタンと「＋」ボタンを横並びにする */}
-                      <View
+                      <TouchableOpacity
+                        onPress={() => setSelectedDate(getTodayString())}
                         style={{
-                          flexDirection: "row",
+                          width: 32,
+                          height: 32,
+                          borderRadius: 16,
+                          backgroundColor: currentSolidColor + "10", // 月間カレンダーと同じ美しい透け感
                           alignItems: "center",
-                          gap: 12,
+                          justifyContent: "center",
+                          borderWidth: 1,
+                          borderColor: currentSolidColor + "30",
+                          shadowColor: "#000",
+                          shadowOpacity: 0.05,
+                          shadowRadius: 2,
+                          elevation: 1,
                         }}
                       >
-                        <TouchableOpacity
-                          onPress={() => setSelectedDate(getTodayString())}
-                          style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: 16,
-                            backgroundColor: currentSolidColor + "10", // 月間カレンダーと同じ美しい透け感
-                            alignItems: "center",
-                            justifyContent: "center",
-                            borderWidth: 1,
-                            borderColor: currentSolidColor + "30",
-                            shadowColor: "#000",
-                            shadowOpacity: 0.05,
-                            shadowRadius: 2,
-                            elevation: 1,
-                          }}
-                        >
-                          <Ionicons
-                            name="return-down-back-outline" // 同じアイコンを使用
-                            size={18}
-                            color={currentSolidColor}
-                          />
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={handleOpenNewModal}>
-                          <Ionicons
-                            name="add-circle"
-                            size={30}
-                            color={currentSolidColor}
-                          />
-                        </TouchableOpacity>
-                      </View>
+                        <Ionicons
+                          name="return-down-back-outline" // 同じアイコンを使用
+                          size={18}
+                          color={currentSolidColor}
+                        />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={handleOpenNewModal}>
+                        <Ionicons
+                          name="add-circle"
+                          size={30}
+                          color={currentSolidColor}
+                        />
+                      </TouchableOpacity>
                     </View>
-                    <CalendarProvider
-                      date={selectedDate}
-                      onDateChanged={setSelectedDate}
-                    >
-                      <WeekCalendar
-                        firstDay={1}
-                        markedDates={currentMarkedDates}
-                        theme={{
-                          calendarBackground: "transparent",
-                          todayTextColor: "#FFF",
-                          todayBackgroundColor: currentSolidColor + "33",
-                          selectedDayBackgroundColor: currentSolidColor,
-                        }}
-                      />
-                    </CalendarProvider>
                   </View>
-                )}
+                  <CalendarProvider
+                    date={selectedDate}
+                    onDateChanged={setSelectedDate}
+                  >
+                    <WeekCalendar
+                      firstDay={1}
+                      markedDates={currentMarkedDates}
+                      theme={{
+                        calendarBackground: "transparent",
+                        todayTextColor: "#FFF",
+                        todayBackgroundColor: currentSolidColor + "33",
+                        selectedDayBackgroundColor: currentSolidColor,
+                      }}
+                    />
+                  </CalendarProvider>
+                </View>
+              )}
             </>
           )}
 
@@ -2324,13 +2353,13 @@ function IndexContent() {
                         styles.gridCard,
                         tempActiveTags.includes("外部予定")
                           ? {
-                            backgroundColor: "#FF2D55",
-                            borderColor: "#FF2D55",
-                          }
+                              backgroundColor: "#FF2D55",
+                              borderColor: "#FF2D55",
+                            }
                           : [
-                            styles.gridCardGhost,
-                            { borderColor: "#FF2D5540" },
-                          ],
+                              styles.gridCardGhost,
+                              { borderColor: "#FF2D5540" },
+                            ],
                       ]}
                       onPress={() => toggleTempTag("外部予定")}
                     >
@@ -2374,10 +2403,12 @@ function IndexContent() {
                     new Set([
                       ...Object.keys(layerMaster),
                       ...Object.keys(sharedRooms || {}),
-                    ])
+                    ]),
                   ).map((layer) => {
                     const isSelected = tempActiveTags.includes(layer);
-                    const isShared = Object.keys(sharedRooms || {}).includes(layer);
+                    const isShared = Object.keys(sharedRooms || {}).includes(
+                      layer,
+                    );
                     // 色データがないゴースト用の保険（標準の青色）
                     const displayColor = layerMaster[layer] || "#007AFF";
 
@@ -2388,13 +2419,13 @@ function IndexContent() {
                           styles.gridCard,
                           isSelected
                             ? {
-                              backgroundColor: displayColor,
-                              borderColor: displayColor,
-                            }
+                                backgroundColor: displayColor,
+                                borderColor: displayColor,
+                              }
                             : [
-                              styles.gridCardGhost,
-                              { borderColor: displayColor + "40" },
-                            ],
+                                styles.gridCardGhost,
+                                { borderColor: displayColor + "40" },
+                              ],
                         ]}
                         onPress={() => toggleTempTag(layer)}
                       >
