@@ -225,7 +225,6 @@ function IndexContent() {
       const parsedUrl = Linking.parse(url);
       // 🌟 パラメータに room= が含まれているかどうかで判定をシンプルかつ確実に
       const isJoinLink = url.includes("room=");
-
       if (isJoinLink) {
         const roomId = parsedUrl.queryParams?.room
           ? String(parsedUrl.queryParams.room)
@@ -233,27 +232,11 @@ function IndexContent() {
 
         if (!roomId) return;
 
-        Alert.prompt(
-          "共有カレンダーへの参加",
-          "このカレンダーの表示名（カテゴリ名）を入力してください。",
-          [
-            {
-              text: "キャンセル",
-              style: "cancel",
-            },
-            {
-              text: "参加する",
-              onPress: (name: string | undefined) => {
-                // 🌟 '(name)' を '(name: string | undefined)' に変更
-                const finalName = name?.trim() || `共有_${roomId.slice(0, 4)}`;
-                handleAddSharedRoom(finalName, roomId);
-                Alert.alert("参加完了", `「${finalName}」を追加しました！`);
-              },
-            },
-          ],
-          "plain-text",
-          `共有_${roomId.slice(0, 4)}`,
-        );
+        // 🌟 文字入力だけの標準ポップアップをやめて、色も選べる専用モーダルを開く！
+        setDeepLinkRoomId(roomId);
+        setDeepLinkRoomName(`共有_${roomId.slice(0, 4)}`);
+        setDeepLinkRoomColor("#007AFF");
+        setDeepLinkJoinVisible(true);
       }
     };
 
@@ -319,6 +302,11 @@ function IndexContent() {
   const [sharedRooms, setSharedRooms] = useState<{
     [layerName: string]: string;
   }>({});
+
+  const [deepLinkRoomId, setDeepLinkRoomId] = useState("");
+  const [deepLinkJoinVisible, setDeepLinkJoinVisible] = useState(false);
+  const [deepLinkRoomName, setDeepLinkRoomName] = useState("");
+  const [deepLinkRoomColor, setDeepLinkRoomColor] = useState("#007AFF");
 
   const { roomSchedules, safeDebouncedSync } = useCloudSync(sharedRooms);
 
@@ -2707,6 +2695,182 @@ function IndexContent() {
         />
       </View>
 */}
+      {deepLinkJoinVisible && (
+        <Modal visible={deepLinkJoinVisible} transparent animationType="fade">
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={{ flex: 1 }}
+          >
+            <View
+              style={{
+                flex: 1,
+                justifyContent: "center",
+                backgroundColor: "rgba(0,0,0,0.5)",
+                padding: 20,
+              }}
+            >
+              <View
+                style={{
+                  backgroundColor: "#FFF",
+                  borderRadius: 24,
+                  padding: 24,
+                  shadowColor: "#000",
+                  shadowOpacity: 0.1,
+                  shadowRadius: 10,
+                  borderTopWidth: 8,
+                  borderTopColor: deepLinkRoomColor,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 20,
+                    fontWeight: "bold",
+                    marginBottom: 20,
+                    color: "#1C1C1E",
+                  }}
+                >
+                  共有カレンダーに参加
+                </Text>
+
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: "bold",
+                    color: "#8E8E93",
+                    marginBottom: 8,
+                  }}
+                >
+                  表示名（カテゴリ名）
+                </Text>
+                <TextInput
+                  style={{
+                    backgroundColor: "#F2F2F7",
+                    padding: 15,
+                    borderRadius: 12,
+                    fontSize: 16,
+                    marginBottom: 20,
+                    color: "#1C1C1E",
+                    fontWeight: "bold",
+                  }}
+                  value={deepLinkRoomName}
+                  onChangeText={setDeepLinkRoomName}
+                  autoFocus
+                />
+
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: "bold",
+                    color: "#8E8E93",
+                    marginBottom: 8,
+                  }}
+                >
+                  カラーを選択
+                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={{ marginBottom: 30, maxHeight: 40 }}
+                >
+                  {[
+                    "#FF3B30",
+                    "#FF9500",
+                    "#FFCC00",
+                    "#34C759",
+                    "#007AFF",
+                    "#5856D6",
+                    "#AF52DE",
+                    "#FF2D55",
+                    "#1C1C1E",
+                  ].map((color) => (
+                    <TouchableOpacity
+                      key={color}
+                      style={[
+                        {
+                          width: 36,
+                          height: 36,
+                          borderRadius: 18,
+                          backgroundColor: color,
+                          marginRight: 12,
+                        },
+                        deepLinkRoomColor === color && {
+                          borderWidth: 3,
+                          borderColor: "#1C1C1E",
+                          transform: [{ scale: 1.1 }],
+                        },
+                      ]}
+                      onPress={() => setDeepLinkRoomColor(color)}
+                    />
+                  ))}
+                </ScrollView>
+
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    gap: 12,
+                  }}
+                >
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      padding: 16,
+                      alignItems: "center",
+                      backgroundColor: "#F2F2F7",
+                      borderRadius: 14,
+                    }}
+                    onPress={() => setDeepLinkJoinVisible(false)}
+                  >
+                    <Text
+                      style={{
+                        color: "#8E8E93",
+                        fontWeight: "bold",
+                        fontSize: 16,
+                      }}
+                    >
+                      キャンセル
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      padding: 16,
+                      alignItems: "center",
+                      backgroundColor: deepLinkRoomColor,
+                      borderRadius: 14,
+                    }}
+                    onPress={() => {
+                      const finalName =
+                        deepLinkRoomName.trim() ||
+                        `共有_${deepLinkRoomId.slice(0, 4)}`;
+                      handleAddSharedRoom(
+                        finalName,
+                        deepLinkRoomId,
+                        deepLinkRoomColor,
+                      );
+                      setDeepLinkJoinVisible(false);
+                      Alert.alert(
+                        "参加完了",
+                        `「${finalName}」を追加しました！`,
+                      );
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "#FFF",
+                        fontWeight: "bold",
+                        fontSize: 16,
+                      }}
+                    >
+                      参加する
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }

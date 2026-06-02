@@ -822,7 +822,7 @@ const ScheduleModal = ({
       let hasCloudAction = false;
       const batch = writeBatch(db);
 
-      // 🌟 修正②：古いカテゴリから移動した時の削除処理だけ残し、直接のFirestore保存は削除（index.tsxに任せる）
+      // 🌟 修正②：古いカテゴリから移動した時の削除処理
       if (selectedItem && wasShared) {
         const oldLayer = (selectedItem.tags || [selectedItem.tag || ""]).find(
           (tag) => Object.keys(sharedRooms).includes(tag),
@@ -838,8 +838,41 @@ const ScheduleModal = ({
         }
       }
 
+      // 🌟 修正③：エラーの元凶である「undefined」を JSON.parse で完全に消し去る
+      const rawNewItem = {
+        ...selectedItem,
+        ...itemData,
+        id: mode === "single" && selectedItem ? newEventId : targetDocId,
+        repeatType: mode === "single" ? undefined : itemData.repeatType,
+        linkedMasterId:
+          mode === "single" && selectedItem ? selectedItem.id : undefined,
+        externalEventId: finalReturnedId || selectedItem?.externalEventId,
+      };
+
+      const newItem = JSON.parse(JSON.stringify(rawNewItem)) as ScheduleItem;
+
+      // 🌟 修正④：直接Firestoreへの保存を復活！これで「他の人から見えない」問題を確実に解決！
+      if (isShared) {
+        const targetRoomId = sharedRooms[selectedLayer];
+        if (targetRoomId) {
+          const cleanItemForDB = JSON.parse(
+            JSON.stringify({
+              ...newItem,
+              date: sStr,
+              updatedAt: new Date().toISOString(),
+            }),
+          );
+          batch.set(
+            doc(db, "rooms", targetRoomId, "schedules", newItem.id),
+            cleanItemForDB,
+          );
+          hasCloudAction = true;
+        }
+      }
+
+      // 🌟 ここでまとめてクラウドに送信！
       if (hasCloudAction) {
-        await batch.commit().catch((e) => console.error("共有移動エラー:", e));
+        await batch.commit().catch((e) => console.error("共有保存エラー:", e));
       }
 
       setScheduleData((prevData: Record<string, ScheduleItem[]>) => {
