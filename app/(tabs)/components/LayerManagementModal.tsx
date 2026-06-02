@@ -185,34 +185,40 @@ export default function LayerManagementModal({
               showsVerticalScrollIndicator={false}
             >
               <Text style={styles.sectionLabel}>登録済み</Text>
-              {Object.keys(layerMaster).map((layer) => {
-                // ✅ 追加：このレイヤーが共有カレンダーかどうか判定
-                const isShared = Object.keys(sharedRooms).includes(layer);
+
+              {/* 🌟 修正：カテゴリ一覧と共有接続一覧を合体させて、隠れているゴーストもあぶり出す！ */}
+              {Array.from(
+                new Set([
+                  ...Object.keys(layerMaster),
+                  ...Object.keys(sharedRooms || {}),
+                ])
+              ).map((layer) => {
+                // このレイヤーが共有カレンダーかどうか判定
+                const isShared = Object.keys(sharedRooms || {}).includes(layer);
+                // 色データが消えてしまっているゴースト用の保険（標準の青色にする）
+                const displayColor = layerMaster[layer] || "#007AFF";
 
                 return (
                   <View key={layer} style={styles.layerCard}>
                     <View
                       style={[
                         styles.cardAccentLine,
-                        { backgroundColor: layerMaster[layer] },
+                        { backgroundColor: displayColor },
                       ]}
                     />
                     <View style={styles.cardInfo}>
-                      {/* ✅ 共有なら雲マークをつける */}
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                         <Text style={styles.layerNameText}>{layer}</Text>
                         {isShared && <Ionicons name="cloud-outline" size={16} color="#007AFF" />}
                       </View>
-                      {/* ✅ 共有ならIDを表示、違うならカラーコード */}
                       <Text style={styles.layerHexText}>
-                        {isShared ? `ID: ${sharedRooms[layer]}` : layerMaster[layer].toUpperCase()}
+                        {isShared ? `ID: ${sharedRooms[layer]}` : displayColor.toUpperCase()}
                       </Text>
                     </View>
                     <TouchableOpacity
                       onPress={() => deleteLayer(layer)}
                       style={styles.deleteBtn}
                     >
-                      {/* ✅ 共有の時は赤色のゴミ箱アイコンにしてわかりやすく */}
                       <Ionicons
                         name={isShared ? "trash-outline" : "remove-circle-outline"}
                         size={20}

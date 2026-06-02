@@ -2369,9 +2369,17 @@ function IndexContent() {
                     </TouchableOpacity>
                   )}
 
-                  {Object.keys(layerMaster).map((layer) => {
+                  {/* 🌟 修正：フィルター画面でも、カテゴリ一覧と共有接続一覧を合体させてゴーストをあぶり出す！ */}
+                  {Array.from(
+                    new Set([
+                      ...Object.keys(layerMaster),
+                      ...Object.keys(sharedRooms || {}),
+                    ])
+                  ).map((layer) => {
                     const isSelected = tempActiveTags.includes(layer);
-                    const isShared = Object.keys(sharedRooms).includes(layer);
+                    const isShared = Object.keys(sharedRooms || {}).includes(layer);
+                    // 色データがないゴースト用の保険（標準の青色）
+                    const displayColor = layerMaster[layer] || "#007AFF";
 
                     return (
                       <TouchableOpacity
@@ -2380,12 +2388,12 @@ function IndexContent() {
                           styles.gridCard,
                           isSelected
                             ? {
-                              backgroundColor: layerMaster[layer],
-                              borderColor: layerMaster[layer],
+                              backgroundColor: displayColor,
+                              borderColor: displayColor,
                             }
                             : [
                               styles.gridCardGhost,
-                              { borderColor: layerMaster[layer] + "40" },
+                              { borderColor: displayColor + "40" },
                             ],
                         ]}
                         onPress={() => toggleTempTag(layer)}
@@ -2404,9 +2412,8 @@ function IndexContent() {
                                 : "ellipse-outline"
                             }
                             size={16}
-                            color={isSelected ? "#FFF" : layerMaster[layer]}
+                            color={isSelected ? "#FFF" : displayColor}
                           />
-                          {/* 🌟 文字が長すぎてもカードが崩れないように numberOfLines を追加 */}
                           <Text
                             style={[
                               styles.gridCardText,
@@ -2425,7 +2432,7 @@ function IndexContent() {
                           )}
                         </View>
 
-                        {/* 🌟 追加：共有レイヤーの場合のみ、下に小さくIDを表示 */}
+                        {/* 共有レイヤーの場合のみ、下に小さくIDを表示 */}
                         {isShared && (
                           <Text
                             style={{
