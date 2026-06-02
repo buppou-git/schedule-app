@@ -42,7 +42,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  unstable_batchedUpdates
+  unstable_batchedUpdates,
 } from "react-native";
 
 interface ScheduleModalProps {
@@ -144,7 +144,10 @@ const ScheduleModal = ({
         const oldEndDT = createDateTime(prev.endDate, prev.endTime);
 
         // 🌟 元の予定の長さ（ミリ秒）を記憶しておく。最低でも1時間（60*60*1000）を保証！
-        const duration = Math.max(oldEndDT.getTime() - oldStartDT.getTime(), 60 * 60 * 1000);
+        const duration = Math.max(
+          oldEndDT.getTime() - oldStartDT.getTime(),
+          60 * 60 * 1000,
+        );
 
         const startDT = createDateTime(next.startDate, next.startTime);
         const endDT = createDateTime(next.endDate, next.endTime);
@@ -380,7 +383,7 @@ const ScheduleModal = ({
             selectedItem.notificationIds.length > 0;
           setSelectedReminders(
             selectedItem.reminderOptions ||
-            (hasOldNotification ? ["exact"] : []),
+              (hasOldNotification ? ["exact"] : []),
           );
 
           if (selectedItem.customReminderTimes) {
@@ -396,7 +399,6 @@ const ScheduleModal = ({
           setSubTasks(savedSubTasks);
           setShowSubTasks(savedSubTasks.length > 0);
 
-
           setInitialSnapshot(
             JSON.stringify({
               title: selectedItem.title || "",
@@ -411,7 +413,6 @@ const ScheduleModal = ({
                 .join(","),
             }),
           );
-
         } else {
           setIsSimpleMode(true);
           updateForm({
@@ -607,7 +608,10 @@ const ScheduleModal = ({
       // 2. 🌟 親レイヤー（大学など）自体もタグとして強制登録！
       // これが無いと、サブタグなしで保存した時にフィルター機能が「所属不明」と勘違いして隠してしまいます。
       if (!m[selectedLayer]) {
-        m[selectedLayer] = { layer: selectedLayer, color: layerMaster[selectedLayer] || uiThemeColor };
+        m[selectedLayer] = {
+          layer: selectedLayer,
+          color: layerMaster[selectedLayer] || uiThemeColor,
+        };
         tagMasterChanged = true;
       }
 
@@ -617,7 +621,10 @@ const ScheduleModal = ({
       }
 
       let finalNotificationIds: string[] = [];
-      if (selectedItem?.notificationIds && selectedItem.notificationIds.length > 0) {
+      if (
+        selectedItem?.notificationIds &&
+        selectedItem.notificationIds.length > 0
+      ) {
         for (const oldId of selectedItem.notificationIds) {
           await cancelItemNotification(oldId);
         }
@@ -637,10 +644,18 @@ const ScheduleModal = ({
               triggerDate.setHours(21, 0, 0, 0);
             }
           } else {
-            triggerDate.setHours(formData.startTime.getHours(), formData.startTime.getMinutes(), 0, 0);
-            if (option === "10min") triggerDate.setMinutes(triggerDate.getMinutes() - 10);
-            else if (option === "30min") triggerDate.setMinutes(triggerDate.getMinutes() - 30);
-            else if (option === "1hour") triggerDate.setHours(triggerDate.getHours() - 1);
+            triggerDate.setHours(
+              formData.startTime.getHours(),
+              formData.startTime.getMinutes(),
+              0,
+              0,
+            );
+            if (option === "10min")
+              triggerDate.setMinutes(triggerDate.getMinutes() - 10);
+            else if (option === "30min")
+              triggerDate.setMinutes(triggerDate.getMinutes() - 30);
+            else if (option === "1hour")
+              triggerDate.setHours(triggerDate.getHours() - 1);
             else if (option === "morning") triggerDate.setHours(7, 0, 0, 0);
             else if (option === "dayBefore") {
               triggerDate.setDate(triggerDate.getDate() - 1);
@@ -649,7 +664,10 @@ const ScheduleModal = ({
           }
 
           if (triggerDate > new Date()) {
-            const id = await scheduleItemNotification(formData.title, triggerDate);
+            const id = await scheduleItemNotification(
+              formData.title,
+              triggerDate,
+            );
             if (id) finalNotificationIds.push(id);
           }
         }
@@ -658,7 +676,10 @@ const ScheduleModal = ({
       if (selectedReminders.includes("custom")) {
         for (const customTime of customReminderTimes) {
           if (customTime > new Date()) {
-            const id = await scheduleItemNotification(formData.title, customTime);
+            const id = await scheduleItemNotification(
+              formData.title,
+              customTime,
+            );
             if (id) finalNotificationIds.push(id);
           }
         }
@@ -670,12 +691,22 @@ const ScheduleModal = ({
             await cancelItemNotification(task.notificationId);
           }
           let newNotifId = undefined;
-          if (task.hasDateTime && task.endTime && task.reminderOption && task.reminderOption !== "none") {
+          if (
+            task.hasDateTime &&
+            task.endTime &&
+            task.reminderOption &&
+            task.reminderOption !== "none"
+          ) {
             let triggerDate = new Date(task.endTime);
-            if (task.reminderOption === "1hour") triggerDate.setHours(triggerDate.getHours() - 1);
-            else if (task.reminderOption === "1day") triggerDate.setDate(triggerDate.getDate() - 1);
+            if (task.reminderOption === "1hour")
+              triggerDate.setHours(triggerDate.getHours() - 1);
+            else if (task.reminderOption === "1day")
+              triggerDate.setDate(triggerDate.getDate() - 1);
             if (triggerDate > new Date()) {
-              const id = await scheduleItemNotification(`子タスク: ${task.title}`, triggerDate);
+              const id = await scheduleItemNotification(
+                `子タスク: ${task.title}`,
+                triggerDate,
+              );
               if (id) newNotifId = id;
             }
           }
@@ -683,7 +714,9 @@ const ScheduleModal = ({
         }),
       );
 
-      const pureTodos = updatedSubTasks.filter((t) => !t.isExpense && !t.isIncome);
+      const pureTodos = updatedSubTasks.filter(
+        (t) => !t.isExpense && !t.isIncome,
+      );
       const allDone = pureTodos.length > 0 && pureTodos.every((t) => t.isDone);
 
       const sYear = formData.startDate.getFullYear();
@@ -701,7 +734,9 @@ const ScheduleModal = ({
         title: formData.title,
         tag: finalTag,
         layer: selectedLayer, // 🌟 フィルター機能のための命綱を強制追加！
-        tags: formData.tag.trim() ? [selectedLayer, formData.tag.trim()] : [selectedLayer],
+        tags: formData.tag.trim()
+          ? [selectedLayer, formData.tag.trim()]
+          : [selectedLayer],
         amount: parseInt(formData.amount) || 0,
         isEvent: formData.isEvent,
         isTodo: formData.isTodo,
@@ -710,9 +745,14 @@ const ScheduleModal = ({
         color: finalColor,
         category: formData.isExpense ? formData.category : undefined,
 
-        repeatType: formData.repeatType !== "none" ? formData.repeatType : undefined,
-        repeatDays: formData.repeatType === "custom" ? formData.repeatDays : undefined,
-        repeatInterval: formData.repeatType === "custom" ? formData.repeatInterval : undefined,
+        repeatType:
+          formData.repeatType !== "none" ? formData.repeatType : undefined,
+        repeatDays:
+          formData.repeatType === "custom" ? formData.repeatDays : undefined,
+        repeatInterval:
+          formData.repeatType === "custom"
+            ? formData.repeatInterval
+            : undefined,
 
         repeatEndDate:
           formData.repeatType !== "none" && formData.repeatEndDate
@@ -723,7 +763,9 @@ const ScheduleModal = ({
 
         startDate: sStr,
         endDate: eStr,
-        startTime: formData.isAllDay ? undefined : formatTime(formData.startTime),
+        startTime: formData.isAllDay
+          ? undefined
+          : formatTime(formData.startTime),
         endTime: formData.isAllDay ? undefined : formatTime(formData.endTime),
         notificationIds: finalNotificationIds,
         reminderOptions: selectedReminders,
@@ -734,55 +776,70 @@ const ScheduleModal = ({
 
       const startForExport = formData.isAllDay
         ? formData.startDate
-        : new Date(formData.startDate.getFullYear(), formData.startDate.getMonth(), formData.startDate.getDate(), formData.startTime.getHours(), formData.startTime.getMinutes());
+        : new Date(
+            formData.startDate.getFullYear(),
+            formData.startDate.getMonth(),
+            formData.startDate.getDate(),
+            formData.startTime.getHours(),
+            formData.startTime.getMinutes(),
+          );
       const endForExport = formData.isAllDay
         ? formData.endDate
-        : new Date(formData.endDate.getFullYear(), formData.endDate.getMonth(), formData.endDate.getDate(), formData.endTime.getHours(), formData.endTime.getMinutes());
+        : new Date(
+            formData.endDate.getFullYear(),
+            formData.endDate.getMonth(),
+            formData.endDate.getDate(),
+            formData.endTime.getHours(),
+            formData.endTime.getMinutes(),
+          );
 
-      const returnedId = await exportToStandardCalendar(
-        formData.title, startForExport, endForExport, formData.isAllDay, selectedItem?.externalEventId
-      );
+      // 🌟 修正①：標準カレンダー連携は「共有カレンダー以外」の時のみ実行する
+      const isShared = Object.keys(sharedRooms).includes(selectedLayer);
+      // 🌟 変数の型を明示的に指定
+      let finalReturnedId: string | undefined = selectedItem?.externalEventId;
 
-      let finalReturnedId = returnedId;
+      if (!isShared) {
+        const returnedId = await exportToStandardCalendar(
+          formData.title,
+          startForExport,
+          endForExport,
+          formData.isAllDay,
+          selectedItem?.externalEventId,
+        );
+        // 🌟 ?? undefined をつけることで、null が返ってきたら undefined に自動変換する！
+        finalReturnedId = returnedId ?? undefined;
+      }
+
       const newEventId = Date.now().toString();
       const targetDocId = selectedItem ? selectedItem.id : newEventId;
 
-      const isShared = Object.keys(sharedRooms).includes(selectedLayer);
       const wasShared = selectedItem
-        ? (selectedItem.tags || [selectedItem.tag || ""]).some((tag) => Object.keys(sharedRooms).includes(tag))
+        ? (selectedItem.tags || [selectedItem.tag || ""]).some((tag) =>
+            Object.keys(sharedRooms).includes(tag),
+          )
         : false;
 
       let hasCloudAction = false;
       const batch = writeBatch(db);
 
+      // 🌟 修正②：古いカテゴリから移動した時の削除処理だけ残し、直接のFirestore保存は削除（index.tsxに任せる）
       if (selectedItem && wasShared) {
-        const oldLayer = (selectedItem.tags || [selectedItem.tag || ""]).find((tag) => Object.keys(sharedRooms).includes(tag));
+        const oldLayer = (selectedItem.tags || [selectedItem.tag || ""]).find(
+          (tag) => Object.keys(sharedRooms).includes(tag),
+        );
         if (oldLayer && (!isShared || oldLayer !== selectedLayer)) {
           const oldRoomId = sharedRooms[oldLayer];
           if (oldRoomId) {
-            batch.delete(doc(db, "rooms", oldRoomId, "schedules", selectedItem.id));
+            batch.delete(
+              doc(db, "rooms", oldRoomId, "schedules", selectedItem.id),
+            );
             hasCloudAction = true;
           }
         }
       }
 
-      if (isShared) {
-        const targetRoomId = sharedRooms[selectedLayer];
-        if (targetRoomId) {
-          batch.set(doc(db, "rooms", targetRoomId, "schedules", targetDocId), {
-            ...selectedItem,
-            ...itemData, // any型なのでそのまま展開可能
-            id: targetDocId,
-            externalEventId: finalReturnedId || selectedItem?.externalEventId,
-            date: sStr,
-            updatedAt: new Date().toISOString(),
-          });
-          hasCloudAction = true;
-        }
-      }
-
       if (hasCloudAction) {
-        batch.commit().catch((e) => console.error("共有保存エラー:", e));
+        await batch.commit().catch((e) => console.error("共有移動エラー:", e));
       }
 
       setScheduleData((prevData: Record<string, ScheduleItem[]>) => {
@@ -796,32 +853,49 @@ const ScheduleModal = ({
             Object.keys(nextData).forEach((d) => {
               if (nextData[d].some((i) => i.id === selectedItem.id)) {
                 nextData[d] = nextData[d].map((i) =>
-                  i.id === selectedItem.id ? { ...i, exceptionDates: [...(i.exceptionDates || []), selectedDate] } : i
+                  i.id === selectedItem.id
+                    ? {
+                        ...i,
+                        exceptionDates: [
+                          ...(i.exceptionDates || []),
+                          selectedDate,
+                        ],
+                      }
+                    : i,
                 );
               }
             });
           } else {
             Object.keys(nextData).forEach((d) => {
               if (nextData[d].some((i) => i.id === selectedItem.id)) {
-                nextData[d] = nextData[d].filter((i) => i.id !== selectedItem.id);
+                nextData[d] = nextData[d].filter(
+                  (i) => i.id !== selectedItem.id,
+                );
               }
             });
           }
         }
 
-        const newItem: ScheduleItem = {
+        // 🌟 修正③：エラーの元凶である「undefined」を JSON.parse(JSON.stringify()) で完全に消し去る魔法
+        const rawNewItem = {
           ...selectedItem,
-          ...itemData, // any型なのでそのまま展開可能
+          ...itemData,
           id: mode === "single" && selectedItem ? newEventId : targetDocId,
           repeatType: mode === "single" ? undefined : itemData.repeatType,
-          linkedMasterId: mode === "single" && selectedItem ? selectedItem.id : undefined,
+          linkedMasterId:
+            mode === "single" && selectedItem ? selectedItem.id : undefined,
           externalEventId: finalReturnedId || selectedItem?.externalEventId,
-        } as unknown as ScheduleItem;
+        };
+
+        const newItem = JSON.parse(JSON.stringify(rawNewItem)) as ScheduleItem;
 
         if (!nextData[sStr]) {
           nextData[sStr] = [newItem];
         } else {
-          nextData[sStr] = [...nextData[sStr].filter(i => i.id !== newItem.id), newItem];
+          nextData[sStr] = [
+            ...nextData[sStr].filter((i) => i.id !== newItem.id),
+            newItem,
+          ];
         }
 
         return nextData;
@@ -832,7 +906,6 @@ const ScheduleModal = ({
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onClose();
-
     } catch (error) {
       console.error("Save Error:", error);
       Alert.alert("保存エラー", "予定の保存に失敗しました。");
@@ -847,7 +920,11 @@ const ScheduleModal = ({
       Alert.alert("繰り返しの削除", "この予定をどのように削除しますか？", [
         { text: "この予定のみ", onPress: () => executeDelete("single") },
         { text: "これ以降すべて", onPress: () => executeDelete("following") },
-        { text: "すべての繰り返し", onPress: () => executeDelete("all"), style: "destructive" },
+        {
+          text: "すべての繰り返し",
+          onPress: () => executeDelete("all"),
+          style: "destructive",
+        },
         { text: "キャンセル", style: "cancel" },
       ]);
     } else {
@@ -855,7 +932,9 @@ const ScheduleModal = ({
     }
   };
 
-  const executeDelete = async (mode: "normal" | "all" | "single" | "following") => {
+  const executeDelete = async (
+    mode: "normal" | "all" | "single" | "following",
+  ) => {
     if (!selectedItem) return;
     if (isSaving || isSavingRef.current) return;
 
@@ -867,28 +946,42 @@ const ScheduleModal = ({
 
     try {
       if (selectedItem.externalEventId) {
-        try { await Calendar.deleteEventAsync(selectedItem.externalEventId); } catch (e) { }
+        try {
+          await Calendar.deleteEventAsync(selectedItem.externalEventId);
+        } catch (e) {}
       }
 
-      const wasShared = selectedItem.tags?.some((tag) => Object.keys(sharedRooms).includes(tag)) || Object.keys(sharedRooms).includes(selectedItem.tag || "");
+      const wasShared =
+        selectedItem.tags?.some((tag) =>
+          Object.keys(sharedRooms).includes(tag),
+        ) || Object.keys(sharedRooms).includes(selectedItem.tag || "");
 
       // 🌟 今回追加：「これ以降すべて」を選んだ場合で、しかもそれが「一番最初の予定」だった場合は「全削除」扱いにする
-      const isFullDelete = mode === "all" || mode === "normal" || (mode === "following" && selectedItem.startDate === selectedDate);
+      const isFullDelete =
+        mode === "all" ||
+        mode === "normal" ||
+        (mode === "following" && selectedItem.startDate === selectedDate);
 
       if (isFullDelete) {
         if (selectedItem.notificationIds) {
-          for (const id of selectedItem.notificationIds) await cancelItemNotification(id);
+          for (const id of selectedItem.notificationIds)
+            await cancelItemNotification(id);
         }
         if (selectedItem.subTasks) {
           for (const task of selectedItem.subTasks) {
-            if (task.notificationId) await cancelItemNotification(task.notificationId);
+            if (task.notificationId)
+              await cancelItemNotification(task.notificationId);
           }
         }
         if (wasShared) {
-          const oldLayer = (selectedItem.tags || [selectedItem.tag || ""]).find((tag) => Object.keys(sharedRooms).includes(tag));
+          const oldLayer = (selectedItem.tags || [selectedItem.tag || ""]).find(
+            (tag) => Object.keys(sharedRooms).includes(tag),
+          );
           const roomId = oldLayer ? sharedRooms[oldLayer] : null;
           if (roomId) {
-            deleteDoc(doc(db, "rooms", roomId, "schedules", selectedItem.id)).catch((e) => console.error("共有データ削除エラー:", e));
+            deleteDoc(
+              doc(db, "rooms", roomId, "schedules", selectedItem.id),
+            ).catch((e) => console.error("共有データ削除エラー:", e));
           }
         }
       } else if (mode === "following") {
@@ -898,7 +991,9 @@ const ScheduleModal = ({
           targetDateObj.setDate(targetDateObj.getDate() - 1);
           const newEndDate = `${targetDateObj.getFullYear()}-${("0" + (targetDateObj.getMonth() + 1)).slice(-2)}-${("0" + targetDateObj.getDate()).slice(-2)}`;
 
-          const oldLayer = (selectedItem.tags || [selectedItem.tag || ""]).find((tag) => Object.keys(sharedRooms).includes(tag));
+          const oldLayer = (selectedItem.tags || [selectedItem.tag || ""]).find(
+            (tag) => Object.keys(sharedRooms).includes(tag),
+          );
           const roomId = oldLayer ? sharedRooms[oldLayer] : null;
           if (roomId) {
             const { updateDoc } = await import("firebase/firestore");
@@ -922,7 +1017,10 @@ const ScheduleModal = ({
             if (nextData[d].some((i) => i.id === selectedItem.id)) {
               nextData[d] = nextData[d].map((i: ScheduleItem) => {
                 if (i.id === selectedItem.id) {
-                  return { ...i, exceptionDates: [...(i.exceptionDates || []), selectedDate] };
+                  return {
+                    ...i,
+                    exceptionDates: [...(i.exceptionDates || []), selectedDate],
+                  };
                 }
                 return i;
               });
@@ -933,7 +1031,9 @@ const ScheduleModal = ({
           if (selectedItem.startDate === selectedDate) {
             Object.keys(nextData).forEach((d) => {
               if (nextData[d].some((i) => i.id === selectedItem.id)) {
-                nextData[d] = nextData[d].filter((i: ScheduleItem) => i.id !== selectedItem.id);
+                nextData[d] = nextData[d].filter(
+                  (i: ScheduleItem) => i.id !== selectedItem.id,
+                );
               }
             });
           } else {
@@ -956,7 +1056,9 @@ const ScheduleModal = ({
           // 「すべての繰り返し」：全削除
           Object.keys(nextData).forEach((d) => {
             if (nextData[d].some((i) => i.id === selectedItem.id)) {
-              nextData[d] = nextData[d].filter((i: ScheduleItem) => i.id !== selectedItem.id);
+              nextData[d] = nextData[d].filter(
+                (i: ScheduleItem) => i.id !== selectedItem.id,
+              );
             }
           });
         }
@@ -968,7 +1070,6 @@ const ScheduleModal = ({
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       onClose();
-
     } catch (error: unknown) {
       console.error("Delete Error:", error);
       Alert.alert("削除エラー", "削除中に問題が発生しました。");
@@ -1003,7 +1104,6 @@ const ScheduleModal = ({
           uiThemeColor={uiThemeColor}
           onPress={() => setRepeatSettingsVisible(true)}
         />
-
 
         {/* 🌟 部品③：カテゴリとタグ */}
         <TagSection
@@ -1118,19 +1218,19 @@ const ScheduleModal = ({
 
           {(formData.isAllDay
             ? [
-              { label: "当日の朝(7:00)", value: "morning" },
-              { label: "前日", value: "dayBefore" },
-              { label: "2日前", value: "2daysBefore" },
-              { label: "カスタム", value: "custom" },
-            ]
+                { label: "当日の朝(7:00)", value: "morning" },
+                { label: "前日", value: "dayBefore" },
+                { label: "2日前", value: "2daysBefore" },
+                { label: "カスタム", value: "custom" },
+              ]
             : [
-              { label: "ちょうど", value: "exact" },
-              { label: "10分前", value: "10min" },
-              { label: "30分前", value: "30min" },
-              { label: "1時間前", value: "1hour" },
-              { label: "当日の朝", value: "morning" },
-              { label: "カスタム", value: "custom" },
-            ]
+                { label: "ちょうど", value: "exact" },
+                { label: "10分前", value: "10min" },
+                { label: "30分前", value: "30min" },
+                { label: "1時間前", value: "1hour" },
+                { label: "当日の朝", value: "morning" },
+                { label: "カスタム", value: "custom" },
+              ]
           ).map((opt) => {
             const isSelected = selectedReminders.includes(opt.value);
             return (
@@ -1485,8 +1585,15 @@ const ScheduleModal = ({
         {/* 🌟 終日トグルをここに追加！ */}
         <View style={[styles.switchRow, { marginBottom: 12 }]}>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Ionicons name="time" size={18} color={uiThemeColor} style={{ marginRight: 8 }} />
-            <Text style={{ fontSize: 15, fontWeight: "bold", color: "#1C1C1E" }}>
+            <Ionicons
+              name="time"
+              size={18}
+              color={uiThemeColor}
+              style={{ marginRight: 8 }}
+            />
+            <Text
+              style={{ fontSize: 15, fontWeight: "bold", color: "#1C1C1E" }}
+            >
               終日
             </Text>
           </View>
@@ -1745,7 +1852,6 @@ const ScheduleModal = ({
         {/* ======================= */}
         {/* 🌟 究極の修正：全体を覆う枠を View にする */}
         <View style={styles.modalOverlay}>
-
           {/* 🌟 最強の防波堤：画面の裏側に「全体サイズの透明な閉じるボタン」を敷く！ */}
           {/* これならタップが貫通しない上に、中身の邪魔を一切しません */}
           <TouchableOpacity
@@ -1799,7 +1905,12 @@ const ScheduleModal = ({
                         }, 50);
                       }}
                     >
-                      <Text style={[styles.simpleDetailLinkText, { color: uiThemeColor }]}>
+                      <Text
+                        style={[
+                          styles.simpleDetailLinkText,
+                          { color: uiThemeColor },
+                        ]}
+                      >
                         詳細設定を表示
                       </Text>
                     </TouchableOpacity>
@@ -1809,7 +1920,9 @@ const ScheduleModal = ({
                       disabled={isSaving}
                       style={[
                         styles.saveBtn,
-                        { backgroundColor: isSaving ? "#C7C7CC" : uiThemeColor },
+                        {
+                          backgroundColor: isSaving ? "#C7C7CC" : uiThemeColor,
+                        },
                       ]}
                     >
                       {isSaving ? (
@@ -1834,18 +1947,45 @@ const ScheduleModal = ({
                     keyboardDismissMode="on-drag"
                   >
                     <View style={{ marginBottom: 20 }}>
-                      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                        <Text style={{ fontSize: 14, fontWeight: "700", color: "#8E8E93" }}>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          marginBottom: 8,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 14,
+                            fontWeight: "700",
+                            color: "#8E8E93",
+                          }}
+                        >
                           {selectedItem ? "詳細を編集" : "新規作成 (詳細)"}
                         </Text>
-                        <Text style={[styles.dateBadge, { backgroundColor: uiThemeColor + "15", color: uiThemeColor, fontWeight: "bold", overflow: "hidden" }]}>
+                        <Text
+                          style={[
+                            styles.dateBadge,
+                            {
+                              backgroundColor: uiThemeColor + "15",
+                              color: uiThemeColor,
+                              fontWeight: "bold",
+                              overflow: "hidden",
+                            },
+                          ]}
+                        >
                           {selectedDate}
                         </Text>
                       </View>
                       <TextInput
                         style={{
-                          fontSize: 26, fontWeight: "800", color: "#1C1C1E",
-                          paddingVertical: 12, borderBottomWidth: 1.5, borderBottomColor: "#F2F2F7",
+                          fontSize: 26,
+                          fontWeight: "800",
+                          color: "#1C1C1E",
+                          paddingVertical: 12,
+                          borderBottomWidth: 1.5,
+                          borderBottomColor: "#F2F2F7",
                         }}
                         placeholder="予定のタイトルを入力"
                         placeholderTextColor="#C7C7CC"
@@ -1856,9 +1996,16 @@ const ScheduleModal = ({
 
                     {suggestions.length > 0 && (
                       <View style={styles.suggestionWrapper}>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                        >
                           {suggestions.map((s, i) => (
-                            <TouchableOpacity key={i} style={styles.suggestionBadge} onPress={() => updateForm({ title: s })}>
+                            <TouchableOpacity
+                              key={i}
+                              style={styles.suggestionBadge}
+                              onPress={() => updateForm({ title: s })}
+                            >
                               <Text style={styles.suggestionText}>{s}</Text>
                             </TouchableOpacity>
                           ))}
@@ -1888,13 +2035,22 @@ const ScheduleModal = ({
                         disabled={isSaving}
                         style={{
                           backgroundColor: isSaving ? "#C7C7CC" : uiThemeColor,
-                          width: "100%", paddingVertical: 16, borderRadius: 16, alignItems: "center",
+                          width: "100%",
+                          paddingVertical: 16,
+                          borderRadius: 16,
+                          alignItems: "center",
                         }}
                       >
                         {isSaving ? (
                           <ActivityIndicator size="small" color="#FFF" />
                         ) : (
-                          <Text style={{ color: "#FFF", fontSize: 17, fontWeight: "bold" }}>
+                          <Text
+                            style={{
+                              color: "#FFF",
+                              fontSize: 17,
+                              fontWeight: "bold",
+                            }}
+                          >
                             保存して閉じる
                           </Text>
                         )}
@@ -1902,9 +2058,19 @@ const ScheduleModal = ({
 
                       <TouchableOpacity
                         onPress={onClose}
-                        style={{ width: "100%", paddingVertical: 14, alignItems: "center" }}
+                        style={{
+                          width: "100%",
+                          paddingVertical: 14,
+                          alignItems: "center",
+                        }}
                       >
-                        <Text style={{ color: "#8E8E93", fontSize: 16, fontWeight: "bold" }}>
+                        <Text
+                          style={{
+                            color: "#8E8E93",
+                            fontSize: 16,
+                            fontWeight: "bold",
+                          }}
+                        >
                           キャンセル
                         </Text>
                       </TouchableOpacity>
@@ -1914,18 +2080,33 @@ const ScheduleModal = ({
                           onPress={handleDeletePress}
                           disabled={isSaving}
                           style={{
-                            width: "100%", paddingVertical: 16,
+                            width: "100%",
+                            paddingVertical: 16,
                             backgroundColor: isSaving ? "#E5E5EA" : "#FF3B3015",
-                            borderRadius: 16, alignItems: "center", marginTop: 10,
-                            flexDirection: "row", justifyContent: "center",
+                            borderRadius: 16,
+                            alignItems: "center",
+                            marginTop: 10,
+                            flexDirection: "row",
+                            justifyContent: "center",
                           }}
                         >
                           {isSaving ? (
                             <ActivityIndicator size="small" color="#FF3B30" />
                           ) : (
                             <>
-                              <Ionicons name="trash-outline" size={18} color="#FF3B30" style={{ marginRight: 6 }} />
-                              <Text style={{ color: "#FF3B30", fontSize: 16, fontWeight: "bold" }}>
+                              <Ionicons
+                                name="trash-outline"
+                                size={18}
+                                color="#FF3B30"
+                                style={{ marginRight: 6 }}
+                              />
+                              <Text
+                                style={{
+                                  color: "#FF3B30",
+                                  fontSize: 16,
+                                  fontWeight: "bold",
+                                }}
+                              >
                                 この予定を削除する
                               </Text>
                             </>
@@ -1944,7 +2125,11 @@ const ScheduleModal = ({
         {/* 2. 属性（サブタグ）編集モーダル */}
         {/* ======================= */}
         {editSubTagModalVisible && (
-          <Modal visible={editSubTagModalVisible} transparent animationType="fade">
+          <Modal
+            visible={editSubTagModalVisible}
+            transparent
+            animationType="fade"
+          >
             <View style={styles.modalOverlay}>
               <TouchableOpacity
                 style={StyleSheet.absoluteFill}
@@ -1954,10 +2139,16 @@ const ScheduleModal = ({
               <View
                 style={[
                   styles.modalContent,
-                  { height: "auto", borderTopWidth: 8, borderTopColor: editingSubTagColor || uiThemeColor },
+                  {
+                    height: "auto",
+                    borderTopWidth: 8,
+                    borderTopColor: editingSubTagColor || uiThemeColor,
+                  },
                 ]}
               >
-                <Text style={[styles.modalTitle, { marginBottom: 15 }]}>属性の編集</Text>
+                <Text style={[styles.modalTitle, { marginBottom: 15 }]}>
+                  属性の編集
+                </Text>
                 <Text style={styles.label}>属性名</Text>
                 <TextInput
                   style={styles.input}
@@ -1966,24 +2157,50 @@ const ScheduleModal = ({
                   autoFocus
                 />
                 <Text style={[styles.label, { marginTop: 15 }]}>カラー</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20, paddingBottom: 5 }}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={{ marginBottom: 20, paddingBottom: 5 }}
+                >
                   {PRESET_COLORS.map((color) => (
                     <TouchableOpacity
                       key={color}
                       style={[
-                        { width: 30, height: 30, borderRadius: 15, backgroundColor: color, marginRight: 10 },
-                        editingSubTagColor === color && { borderWidth: 3, borderColor: "#1C1C1E" },
+                        {
+                          width: 30,
+                          height: 30,
+                          borderRadius: 15,
+                          backgroundColor: color,
+                          marginRight: 10,
+                        },
+                        editingSubTagColor === color && {
+                          borderWidth: 3,
+                          borderColor: "#1C1C1E",
+                        },
                       ]}
                       onPress={() => setEditingSubTagColor(color)}
                     />
                   ))}
                 </ScrollView>
-                <View style={[styles.actionButtons, { justifyContent: "space-between", marginTop: 0 }]}>
-                  <TouchableOpacity onPress={deleteSubTag} style={styles.cancelBtn}>
-                    <Text style={{ color: "#FF3B30", fontWeight: "bold" }}>削除</Text>
+                <View
+                  style={[
+                    styles.actionButtons,
+                    { justifyContent: "space-between", marginTop: 0 },
+                  ]}
+                >
+                  <TouchableOpacity
+                    onPress={deleteSubTag}
+                    style={styles.cancelBtn}
+                  >
+                    <Text style={{ color: "#FF3B30", fontWeight: "bold" }}>
+                      削除
+                    </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.saveBtn, { backgroundColor: editingSubTagColor || uiThemeColor }]}
+                    style={[
+                      styles.saveBtn,
+                      { backgroundColor: editingSubTagColor || uiThemeColor },
+                    ]}
                     onPress={saveEditedSubTag}
                   >
                     <Text style={styles.saveBtnText}>保存</Text>
@@ -2008,10 +2225,16 @@ const ScheduleModal = ({
               <View
                 style={[
                   styles.modalContent,
-                  { height: "auto", borderTopWidth: 8, borderTopColor: uiThemeColor },
+                  {
+                    height: "auto",
+                    borderTopWidth: 8,
+                    borderTopColor: uiThemeColor,
+                  },
                 ]}
               >
-                <Text style={[styles.modalTitle, { marginBottom: 15 }]}>カテゴリ名の編集</Text>
+                <Text style={[styles.modalTitle, { marginBottom: 15 }]}>
+                  カテゴリ名の編集
+                </Text>
                 <Text style={styles.label}>新しい名称を入力</Text>
                 <TextInput
                   style={styles.input}
@@ -2019,9 +2242,21 @@ const ScheduleModal = ({
                   onChangeText={setTempQuickTagText}
                   autoFocus
                 />
-                <View style={[styles.actionButtons, { justifyContent: "center", marginTop: 20 }]}>
+                <View
+                  style={[
+                    styles.actionButtons,
+                    { justifyContent: "center", marginTop: 20 },
+                  ]}
+                >
                   <TouchableOpacity
-                    style={[styles.saveBtn, { backgroundColor: uiThemeColor, width: "100%", alignItems: "center" }]}
+                    style={[
+                      styles.saveBtn,
+                      {
+                        backgroundColor: uiThemeColor,
+                        width: "100%",
+                        alignItems: "center",
+                      },
+                    ]}
                     onPress={saveQuickTag}
                   >
                     <Text style={styles.saveBtnText}>保存する</Text>
@@ -2042,7 +2277,6 @@ const ScheduleModal = ({
           uiThemeColor={uiThemeColor}
           updateForm={updateForm}
         />
-
       </KeyboardAvoidingView>
     </Modal>
   );
