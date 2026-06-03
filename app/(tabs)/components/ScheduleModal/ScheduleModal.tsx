@@ -569,6 +569,14 @@ const ScheduleModal = ({
   };
 
   const executeSave = async (mode: "normal" | "all" | "single") => {
+
+
+    console.log("🔥 SAVE START");
+    console.log("layer:", selectedLayer);
+    console.log("sharedRooms:", sharedRooms);
+    console.log("safeDebouncedSync:", safeDebouncedSync);
+
+
     // 🌟 1. 保存中なら処理をブロック
     if (isSaving || isSavingRef.current) return;
 
