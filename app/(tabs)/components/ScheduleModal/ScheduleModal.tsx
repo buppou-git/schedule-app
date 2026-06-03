@@ -65,6 +65,7 @@ interface ScheduleModalProps {
   setHasUnsavedChanges: (val: boolean) => void;
   sharedRooms?: { [layerName: string]: string };
   safeDebouncedSync?: (item: ScheduleItem, date: string) => void;
+  setDebugMessage?: (msg: string) => void;
 }
 
 const debugViewRef = useRef<string>("");
@@ -84,6 +85,7 @@ const ScheduleModal = ({
   sharedRooms = {},
   onForceRender,
   safeDebouncedSync,
+  setDebugMessage,
 }: ScheduleModalProps) => {
   // =========================================================
   // 🌟 改善：バラバラだった入力用Stateを1つの「formData」に統合！
@@ -876,11 +878,11 @@ const ScheduleModal = ({
         const msg = `❌ NOT SHARED
       layer: ${selectedLayer}
       sharedKeys: ${Object.keys(sharedRooms).join(",")}`;
-
-        debugViewRef.current = msg;
-
+      
+        setDebugMessage?.(msg);
+      
       } else if (safeDebouncedSync) {
-
+      
         const fixedItem = {
           ...newItem,
           layer: selectedLayer,
@@ -888,16 +890,17 @@ const ScheduleModal = ({
           sharedRoomId: sharedRooms[selectedLayer],
           tags: newItem.tags,
         };
-
+      
         const msg = `🚀 SEND
       layer: ${fixedItem.sharedLayer}
       roomId: ${fixedItem.sharedRoomId}
       match: ${!!sharedRooms[fixedItem.sharedLayer]}`;
-
-        debugViewRef.current = msg;
-
+      
+        setDebugMessage?.(msg);
+      
         safeDebouncedSync(fixedItem, sStr);
       }
+      
 
       // 🌟 削除アクション（古い部屋からの移動時など）があった場合のみ commit
       if (hasCloudAction) {
@@ -967,7 +970,7 @@ const ScheduleModal = ({
       onForceRender?.();
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      //onClose();
+      onClose();
     } catch (error) {
       console.error("Save Error:", error);
       Alert.alert("保存エラー", "予定の保存に失敗しました。");

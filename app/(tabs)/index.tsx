@@ -85,6 +85,7 @@ import { TodoDashboard } from "./components/TodoDashboard";
 
 import { useExternalCalendar } from "../../hooks/useExternalCalendar";
 
+
 function useStableCallback<T extends (...args: never[]) => unknown>(
   callback: T,
 ) {
@@ -158,6 +159,9 @@ const calculateStreak = (completedDates: string[] | undefined) => {
 };
 
 function IndexContent() {
+
+  const [debugMessage, setDebugMessage] = useState("");
+
   const handleShareRoom = async (roomId: string) => {
     // 🌟 修正1：部屋IDから、自分がつけているカテゴリ名を逆引きする
     const myLayerName =
@@ -1855,10 +1859,10 @@ function IndexContent() {
     >
 
 
-      {debugInfo && (
+      {debugMessage !== "" && (
         <View style={{ padding: 10, backgroundColor: "#000" }}>
           <Text style={{ color: "#0f0", fontSize: 12 }}>
-            {JSON.stringify(debugInfo, null, 2)}
+            {debugMessage}
           </Text>
         </View>
       )}
@@ -2652,6 +2656,7 @@ function IndexContent() {
           sharedRooms={sharedRooms}
           onForceRender={() => setCalendarResetKey((prev) => prev + 1)}
           safeDebouncedSync={safeDebouncedSync}
+          setDebugMessage={setDebugMessage}
         />
       )}
       <LayerManagementModal
