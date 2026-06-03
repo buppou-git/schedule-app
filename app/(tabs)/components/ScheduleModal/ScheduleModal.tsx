@@ -64,6 +64,7 @@ interface ScheduleModalProps {
   isExternalSyncEnabled?: boolean;
   setHasUnsavedChanges: (val: boolean) => void;
   sharedRooms?: { [layerName: string]: string };
+  safeDebouncedSync?: (item: ScheduleItem, date: string) => void;
 }
 
 const ScheduleModal = ({
@@ -80,6 +81,7 @@ const ScheduleModal = ({
   setHasUnsavedChanges,
   sharedRooms = {},
   onForceRender,
+  safeDebouncedSync,
 }: ScheduleModalProps) => {
   // =========================================================
   // 🌟 改善：バラバラだった入力用Stateを1つの「formData」に統合！
@@ -383,7 +385,7 @@ const ScheduleModal = ({
             selectedItem.notificationIds.length > 0;
           setSelectedReminders(
             selectedItem.reminderOptions ||
-              (hasOldNotification ? ["exact"] : []),
+            (hasOldNotification ? ["exact"] : []),
           );
 
           if (selectedItem.customReminderTimes) {
@@ -777,21 +779,21 @@ const ScheduleModal = ({
       const startForExport = formData.isAllDay
         ? formData.startDate
         : new Date(
-            formData.startDate.getFullYear(),
-            formData.startDate.getMonth(),
-            formData.startDate.getDate(),
-            formData.startTime.getHours(),
-            formData.startTime.getMinutes(),
-          );
+          formData.startDate.getFullYear(),
+          formData.startDate.getMonth(),
+          formData.startDate.getDate(),
+          formData.startTime.getHours(),
+          formData.startTime.getMinutes(),
+        );
       const endForExport = formData.isAllDay
         ? formData.endDate
         : new Date(
-            formData.endDate.getFullYear(),
-            formData.endDate.getMonth(),
-            formData.endDate.getDate(),
-            formData.endTime.getHours(),
-            formData.endTime.getMinutes(),
-          );
+          formData.endDate.getFullYear(),
+          formData.endDate.getMonth(),
+          formData.endDate.getDate(),
+          formData.endTime.getHours(),
+          formData.endTime.getMinutes(),
+        );
 
       // 🌟 修正①：標準カレンダー連携は「共有カレンダー以外」の時のみ実行する
       const isShared = Object.keys(sharedRooms).includes(selectedLayer);
@@ -815,8 +817,8 @@ const ScheduleModal = ({
 
       const wasShared = selectedItem
         ? (selectedItem.tags || [selectedItem.tag || ""]).some((tag) =>
-            Object.keys(sharedRooms).includes(tag),
-          )
+          Object.keys(sharedRooms).includes(tag),
+        )
         : false;
 
       let hasCloudAction = false;
@@ -853,28 +855,19 @@ const ScheduleModal = ({
 
       const newItem = JSON.parse(JSON.stringify(rawNewItem)) as ScheduleItem;
 
-      // 🌟 修正④：直接Firestoreへの保存を復活！これで「他の人から見えない」問題を確実に解決！
-      if (isShared) {
-        const targetRoomId = sharedRooms[selectedLayer];
-        if (targetRoomId) {
-          const cleanItemForDB = JSON.parse(
-            JSON.stringify({
-              ...newItem,
-              date: sStr,
-              updatedAt: new Date().toISOString(),
-            }),
-          );
-          batch.set(
-            doc(db, "rooms", targetRoomId, "schedules", newItem.id),
-            cleanItemForDB,
-          );
-          hasCloudAction = true;
-        }
+      // 🌟 修正④：直接の保存を廃止し、safeDebouncedSync（共通ルート）に一元化！
+      if (isShared && safeDebouncedSync) {
+        safeDebouncedSync(newItem, sStr);
+
+        // デバッグ用（ここでレイヤーがズレていないか確認できます）
+        console.log("== 共有同期実行 ==");
+        console.log("selectedLayer:", selectedLayer);
+        console.log("sharedRooms:", sharedRooms);
       }
 
-      // 🌟 ここでまとめてクラウドに送信！
+      // 🌟 削除アクション（古い部屋からの移動時など）があった場合のみ commit
       if (hasCloudAction) {
-        await batch.commit().catch((e) => console.error("共有保存エラー:", e));
+        await batch.commit().catch((e) => console.error("共有削除エラー:", e));
       }
 
       setScheduleData((prevData: Record<string, ScheduleItem[]>) => {
@@ -890,12 +883,12 @@ const ScheduleModal = ({
                 nextData[d] = nextData[d].map((i) =>
                   i.id === selectedItem.id
                     ? {
-                        ...i,
-                        exceptionDates: [
-                          ...(i.exceptionDates || []),
-                          selectedDate,
-                        ],
-                      }
+                      ...i,
+                      exceptionDates: [
+                        ...(i.exceptionDates || []),
+                        selectedDate,
+                      ],
+                    }
                     : i,
                 );
               }
@@ -983,7 +976,7 @@ const ScheduleModal = ({
       if (selectedItem.externalEventId) {
         try {
           await Calendar.deleteEventAsync(selectedItem.externalEventId);
-        } catch (e) {}
+        } catch (e) { }
       }
 
       const wasShared =
@@ -1253,19 +1246,19 @@ const ScheduleModal = ({
 
           {(formData.isAllDay
             ? [
-                { label: "当日の朝(7:00)", value: "morning" },
-                { label: "前日", value: "dayBefore" },
-                { label: "2日前", value: "2daysBefore" },
-                { label: "カスタム", value: "custom" },
-              ]
+              { label: "当日の朝(7:00)", value: "morning" },
+              { label: "前日", value: "dayBefore" },
+              { label: "2日前", value: "2daysBefore" },
+              { label: "カスタム", value: "custom" },
+            ]
             : [
-                { label: "ちょうど", value: "exact" },
-                { label: "10分前", value: "10min" },
-                { label: "30分前", value: "30min" },
-                { label: "1時間前", value: "1hour" },
-                { label: "当日の朝", value: "morning" },
-                { label: "カスタム", value: "custom" },
-              ]
+              { label: "ちょうど", value: "exact" },
+              { label: "10分前", value: "10min" },
+              { label: "30分前", value: "30min" },
+              { label: "1時間前", value: "1hour" },
+              { label: "当日の朝", value: "morning" },
+              { label: "カスタム", value: "custom" },
+            ]
           ).map((opt) => {
             const isSelected = selectedReminders.includes(opt.value);
             return (

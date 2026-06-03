@@ -711,14 +711,13 @@ function IndexContent() {
             });
           }
 
-          // 新しい場所に足す（移動先がローカルカレンダーの場合のみ）
-          if (!Object.keys(sharedRooms).includes(parentLayer)) {
-            if (!nextData[targetDate]) nextData[targetDate] = [];
-            nextData[targetDate] = [
-              ...nextData[targetDate].filter((i) => i.id !== newItem.id),
-              newItem,
-            ];
-          }
+          // 🌟 修正：移動先が「共有カレンダー」の場合でも、クラウドからの到着を待たずに
+          // 即座に画面に表示させるため、ローカルの State にも追加する！
+          if (!nextData[targetDate]) nextData[targetDate] = [];
+          nextData[targetDate] = [
+            ...nextData[targetDate].filter((i) => i.id !== newItem.id),
+            newItem,
+          ];
 
           return nextData;
         });
@@ -2642,6 +2641,7 @@ function IndexContent() {
           setHasUnsavedChanges={setHasUnsavedChanges}
           sharedRooms={sharedRooms}
           onForceRender={() => setCalendarResetKey((prev) => prev + 1)}
+          safeDebouncedSync={safeDebouncedSync}
         />
       )}
       <LayerManagementModal
