@@ -37,6 +37,7 @@ export function useCloudSync(sharedRooms: { [layerName: string]: string }) {
               itemsByDate[data.date].push({
                 id: docSnap.id,
                 ...data,
+                layer: data.layer || data.sharedLayer,
               } as ScheduleItem);
             }
           });
@@ -100,6 +101,7 @@ export function useCloudSync(sharedRooms: { [layerName: string]: string }) {
   const safeDebouncedSync = useCallback(
     (item: ScheduleItem, date: string) => {
       const parentLayer =
+        item.sharedLayer ||
         item.layer ||
         (item.tags && item.tags.length > 0 ? item.tags[0] : item.tag);
 

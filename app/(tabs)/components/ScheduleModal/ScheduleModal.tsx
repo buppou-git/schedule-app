@@ -834,9 +834,13 @@ const ScheduleModal = ({
 
       // 🌟 修正②：古いカテゴリから移動した時の削除処理
       if (selectedItem && wasShared) {
-        const oldLayer = (selectedItem.tags || [selectedItem.tag || ""]).find(
-          (tag) => Object.keys(sharedRooms).includes(tag),
-        );
+
+        const oldLayer =
+          selectedItem.sharedLayer ||
+          (selectedItem.tags || [selectedItem.tag || ""]).find(
+            (tag) => Object.keys(sharedRooms).includes(tag),
+          );
+
         if (oldLayer && (!isShared || oldLayer !== selectedLayer)) {
           const oldRoomId = sharedRooms[oldLayer];
           if (oldRoomId) {
@@ -871,27 +875,27 @@ const ScheduleModal = ({
 
         const fixedItem = {
           ...newItem,
-        
+
           // ✅ 表示用（そのまま）
           layer: selectedLayer,
-        
+
           // ✅ ★共有ルーティング専用（これが核心）
           sharedLayer: selectedLayer,
-        
+
           // ✅ 念のため（安定）
           sharedRoomId: sharedRooms[selectedLayer],
-        
+
           // tagsは元を維持
           tags: newItem.tags,
         };
-        
+
         console.log("🚀 FINAL SEND", {
           layer: fixedItem.layer,
           sharedLayer: fixedItem.sharedLayer,
           roomId: fixedItem.sharedRoomId,
           match: !!sharedRooms[fixedItem.sharedLayer],
         });
-        
+
         safeDebouncedSync(fixedItem, sStr);
       }
 
@@ -1032,9 +1036,13 @@ const ScheduleModal = ({
           }
         }
         if (wasShared) {
-          const oldLayer = (selectedItem.tags || [selectedItem.tag || ""]).find(
-            (tag) => Object.keys(sharedRooms).includes(tag),
-          );
+
+          const oldLayer =
+            selectedItem.sharedLayer ||
+            (selectedItem.tags || [selectedItem.tag || ""]).find(
+              (tag) => Object.keys(sharedRooms).includes(tag),
+            );
+
           const roomId = oldLayer ? sharedRooms[oldLayer] : null;
           if (roomId) {
             deleteDoc(
@@ -1049,9 +1057,13 @@ const ScheduleModal = ({
           targetDateObj.setDate(targetDateObj.getDate() - 1);
           const newEndDate = `${targetDateObj.getFullYear()}-${("0" + (targetDateObj.getMonth() + 1)).slice(-2)}-${("0" + targetDateObj.getDate()).slice(-2)}`;
 
-          const oldLayer = (selectedItem.tags || [selectedItem.tag || ""]).find(
-            (tag) => Object.keys(sharedRooms).includes(tag),
-          );
+
+          const oldLayer =
+            selectedItem.sharedLayer ||
+            (selectedItem.tags || [selectedItem.tag || ""]).find(
+              (tag) => Object.keys(sharedRooms).includes(tag),
+            );
+
           const roomId = oldLayer ? sharedRooms[oldLayer] : null;
           if (roomId) {
             const { updateDoc } = await import("firebase/firestore");
