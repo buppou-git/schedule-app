@@ -369,31 +369,28 @@ function IndexContent() {
   const { cancelItemNotification, scheduleItemNotification } =
     useNotificationManager();
 
-  // 🌟 追加：最強の「自動翻訳システム」（完全対応版）
+  // 🌟 追加：最強の「自動翻訳システム」
   // 相手が違うカテゴリ名をつけていても、自分の設定した名前に強制的に変換して表示する！
   const translatedRoomSchedules = useMemo(() => {
-    const translated: { [key: string]: { [date: string]: ScheduleItem[] } } = {};
+    // 🌟 箱のラベルもカテゴリ名になるように型を定義
+    const translated: { [layerName: string]: { [date: string]: ScheduleItem[] } } = {};
 
-    Object.keys(roomSchedules).forEach((roomKey) => {
-      translated[roomKey] = {};
-      const datesData = roomSchedules[roomKey] || {};
+    Object.keys(roomSchedules).forEach((roomId) => {
 
-      // 🌟 最大の修正：箱のラベルが「カテゴリ名(研究室)」でも「ID(room_123)」でも確実に自分の名前を特定する！
-      let myLayerName = "";
-      if (Object.keys(sharedRooms).includes(roomKey)) {
-        myLayerName = roomKey; // すでに自分のカテゴリ名だった場合
-      } else {
-        myLayerName = Object.keys(sharedRooms).find(
-          (key) => sharedRooms[key] === roomKey
-        ) || ""; // IDだった場合は逆引きする
-      }
+      // 🌟 修正：箱のラベル自体を「部屋ID」から「自分のカテゴリ名」に張り替える！
+      const myLayerName = Object.keys(sharedRooms).find(
+        (key) => sharedRooms[key] === roomId
+      ) || roomId; // 万が一見つからなければ元のIDのままにする
+
+      translated[myLayerName] = {}; // 🌟 翻訳された名前の箱を用意する
+      const datesData = roomSchedules[roomId] || {};
 
       Object.keys(datesData).forEach((date) => {
         const dailyItems = datesData[date] || [];
 
         // 翻訳処理
         const newItems = dailyItems.map((item: ScheduleItem) => {
-          if (myLayerName) {
+          if (myLayerName !== roomId) { // ちゃんと名前が特定できた場合
             return {
               ...item,
               layer: myLayerName,
@@ -402,10 +399,11 @@ function IndexContent() {
               color: layerMaster[myLayerName] || item.color,
             } as ScheduleItem;
           }
-          return item; // 万が一見つからなければそのまま返す
+          return item;
         });
 
-        translated[roomKey][date] = newItems;
+        // 🌟 翻訳した名前の箱にデータをしまう
+        translated[myLayerName][date] = newItems;
       });
     });
 
@@ -1856,27 +1854,6 @@ function IndexContent() {
     <SafeAreaView
       style={[styles.container, { backgroundColor: currentBgColor }]}
     >
-      {/* 🌟 一時的なデバッグ用ボタン */}
-      <TouchableOpacity
-        style={{ backgroundColor: "#FF3B30", padding: 12, margin: 16, borderRadius: 8 }}
-        onPress={() => {
-          Alert.alert(
-            "データ受信チェック",
-            `■生の受信データ: ${Object.keys(roomSchedules).length} 部屋\n` +
-            `■翻訳後のデータ: ${Object.keys(translatedRoomSchedules).length} 部屋\n` +
-            `■共有設定: ${JSON.stringify(sharedRooms)}`
-          );
-          // ターミナル（黒い画面）に詳細を吐き出す
-          console.log("=== デバッグ詳細 ===");
-          console.log("生のデータ:", roomSchedules);
-          console.log("翻訳データ:", translatedRoomSchedules);
-        }}
-      >
-        <Text style={{ color: "white", fontWeight: "bold", textAlign: "center" }}>
-          データ受信をチェックする
-        </Text>
-      </TouchableOpacity>
-
       <View
         style={[
           styles.header,
