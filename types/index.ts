@@ -4,7 +4,7 @@
 export interface SubTask {
   id: number;
   title: string;
-  date: Date; // または string（API通信後など）
+  date: Date; // または string（API通信後など）;
   hasDateTime?: boolean;
   amount: number;
   isIncome?: boolean;
