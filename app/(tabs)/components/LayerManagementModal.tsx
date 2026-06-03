@@ -39,6 +39,8 @@ interface LayerManagementModalProps {
   setHasUnsavedChanges: (val: boolean) => void;
   sharedRooms: { [layerName: string]: string }; // ✅ 追加
   onDeleteSharedRoom: (layerName: string) => void; // ✅ 追加
+  scheduleData: Record<string, any[]>; // 🌟 追加
+  setScheduleData: (data: any) => void; // 🌟 追加
 }
 
 export default function LayerManagementModal({
@@ -49,6 +51,8 @@ export default function LayerManagementModal({
   setHasUnsavedChanges,
   sharedRooms, // ✅ 追加
   onDeleteSharedRoom, // ✅ 追加
+  scheduleData, // 🌟 追加
+  setScheduleData, // 🌟 追加
 }: LayerManagementModalProps) {
   const [newLayerName, setNewLayerName] = useState("");
   const [selectedColor, setSelectedColor] = useState("#007AFF");
@@ -109,13 +113,13 @@ export default function LayerManagementModal({
   };
 
   const deleteLayer = (name: string) => {
-    // ✅ 共有カレンダーかどうかを判定
+    // 共有カレンダーかどうかを判定
     const isShared = Object.keys(sharedRooms).includes(name);
 
     if (isShared) {
       Alert.alert(
         "共有カレンダーの削除",
-        `「${name}」の共有設定とカテゴリを削除しますか？\n（※クラウド上のデータは消えず、この端末からの接続のみ解除されます）`,
+        `「${name}」の共有設定とカテゴリを削除しますか？\n（※クラウド上のデータは消えず、この端末からの表示のみ解除されます）`,
         [
           { text: "キャンセル", style: "cancel" },
           {
@@ -126,27 +130,72 @@ export default function LayerManagementModal({
               const updated = { ...layerMaster };
               delete updated[name];
               setLayerMaster(updated); // ローカルカテゴリからも削除
-              await AsyncStorage.setItem("layerMasterData", JSON.stringify(updated));
+
+              // 🌟 追加：このカテゴリに紐づく予定をすべて消去する！
+              setScheduleData((prev: Record<string, any[]>) => {
+                const next: Record<string, any[]> = {};
+                Object.keys(prev).forEach((date) => {
+                  next[date] = prev[date].filter((item) => {
+                    const itemLayer =
+                      item.layer ||
+                      (item.tags && item.tags.length > 0
+                        ? item.tags[0]
+                        : item.tag);
+                    return itemLayer !== name;
+                  });
+                });
+                return next;
+              });
+
+              await AsyncStorage.setItem(
+                "layerMasterData",
+                JSON.stringify(updated),
+              );
               setHasUnsavedChanges(true);
             },
           },
-        ]
+        ],
       );
     } else {
-      Alert.alert("確認", `カテゴリ「${name}」を削除しますか？`, [
-        { text: "キャンセル", style: "cancel" },
-        {
-          text: "削除",
-          style: "destructive",
-          onPress: async () => {
-            const updated = { ...layerMaster };
-            delete updated[name];
-            setLayerMaster(updated);
-            await AsyncStorage.setItem("layerMasterData", JSON.stringify(updated));
-            setHasUnsavedChanges(true);
+      // 🌟 確認メッセージも親切に強化
+      Alert.alert(
+        "確認",
+        `カテゴリ「${name}」と、そこに含まれる【すべての予定】を削除しますか？\n（この操作は取り消せません）`,
+        [
+          { text: "キャンセル", style: "cancel" },
+          {
+            text: "一括削除", // 🌟 ボタン名もわかりやすく
+            style: "destructive",
+            onPress: async () => {
+              const updated = { ...layerMaster };
+              delete updated[name];
+              setLayerMaster(updated);
+
+              // 🌟 追加：このカテゴリに紐づく予定をすべて消去する！
+              setScheduleData((prev: Record<string, any[]>) => {
+                const next: Record<string, any[]> = {};
+                Object.keys(prev).forEach((date) => {
+                  next[date] = prev[date].filter((item) => {
+                    const itemLayer =
+                      item.layer ||
+                      (item.tags && item.tags.length > 0
+                        ? item.tags[0]
+                        : item.tag);
+                    return itemLayer !== name;
+                  });
+                });
+                return next;
+              });
+
+              await AsyncStorage.setItem(
+                "layerMasterData",
+                JSON.stringify(updated),
+              );
+              setHasUnsavedChanges(true);
+            },
           },
-        },
-      ]);
+        ],
+      );
     }
   };
 
@@ -191,7 +240,7 @@ export default function LayerManagementModal({
                 new Set([
                   ...Object.keys(layerMaster),
                   ...Object.keys(sharedRooms || {}),
-                ])
+                ]),
               ).map((layer) => {
                 // このレイヤーが共有カレンダーかどうか判定
                 const isShared = Object.keys(sharedRooms || {}).includes(layer);
@@ -207,12 +256,26 @@ export default function LayerManagementModal({
                       ]}
                     />
                     <View style={styles.cardInfo}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
                         <Text style={styles.layerNameText}>{layer}</Text>
-                        {isShared && <Ionicons name="cloud-outline" size={16} color="#007AFF" />}
+                        {isShared && (
+                          <Ionicons
+                            name="cloud-outline"
+                            size={16}
+                            color="#007AFF"
+                          />
+                        )}
                       </View>
                       <Text style={styles.layerHexText}>
-                        {isShared ? `ID: ${sharedRooms[layer]}` : displayColor.toUpperCase()}
+                        {isShared
+                          ? `ID: ${sharedRooms[layer]}`
+                          : displayColor.toUpperCase()}
                       </Text>
                     </View>
                     <TouchableOpacity
@@ -220,7 +283,9 @@ export default function LayerManagementModal({
                       style={styles.deleteBtn}
                     >
                       <Ionicons
-                        name={isShared ? "trash-outline" : "remove-circle-outline"}
+                        name={
+                          isShared ? "trash-outline" : "remove-circle-outline"
+                        }
                         size={20}
                         color={isShared ? "#FF3B30" : "#1C1C1E"}
                       />

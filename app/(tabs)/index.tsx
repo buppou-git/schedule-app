@@ -2652,7 +2652,9 @@ function IndexContent() {
         setLayerMaster={setLayerMaster}
         setHasUnsavedChanges={setHasUnsavedChanges}
         sharedRooms={sharedRooms} // ✅ 追加
-        onDeleteSharedRoom={handleDeleteSharedRoom} // ✅ 追加
+        onDeleteSharedRoom={handleDeleteSharedRoom}
+        scheduleData={scheduleData} // 🌟 これを追加！
+        setScheduleData={setScheduleData} // 🌟 これを追加！
       />
       <StatusBar style="auto" />
       <ConfigModal
