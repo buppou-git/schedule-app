@@ -871,18 +871,28 @@ const ScheduleModal = ({
 
         const fixedItem = {
           ...newItem,
-          layer: selectedLayer,   // ✅ そのまま使う！
-          tags: [selectedLayer],
+        
+          // ✅ 表示用（そのまま）
+          layer: selectedLayer,
+        
+          // ✅ ★共有ルーティング専用（これが核心）
+          sharedLayer: selectedLayer,
+        
+          // ✅ 念のため（安定）
+          sharedRoomId: sharedRooms[selectedLayer],
+        
+          // tagsは元を維持
+          tags: newItem.tags,
         };
-
+        
         console.log("🚀 FINAL SEND", {
           layer: fixedItem.layer,
-          roomId: sharedRooms[selectedLayer],
-          match: !!sharedRooms[selectedLayer],
+          sharedLayer: fixedItem.sharedLayer,
+          roomId: fixedItem.sharedRoomId,
+          match: !!sharedRooms[fixedItem.sharedLayer],
         });
-
+        
         safeDebouncedSync(fixedItem, sStr);
-      }
 
       // 🌟 削除アクション（古い部屋からの移動時など）があった場合のみ commit
       if (hasCloudAction) {

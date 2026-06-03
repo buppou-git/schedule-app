@@ -54,6 +54,7 @@ export function useCloudSync(sharedRooms: { [layerName: string]: string }) {
     try {
       // ✅ 親レイヤーを取得（これが最重要）
       const parentLayer =
+        item.sharedLayer ||
         item.layer ||
         (item.tags && item.tags.length > 0 ? item.tags[0] : item.tag);
 
