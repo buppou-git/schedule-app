@@ -893,6 +893,7 @@ const ScheduleModal = ({
         });
         
         safeDebouncedSync(fixedItem, sStr);
+      }
 
       // 🌟 削除アクション（古い部屋からの移動時など）があった場合のみ commit
       if (hasCloudAction) {
