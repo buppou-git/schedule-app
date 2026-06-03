@@ -847,6 +847,8 @@ const ScheduleModal = ({
         linkedMasterId:
           mode === "single" && selectedItem ? selectedItem.id : undefined,
         externalEventId: finalReturnedId || selectedItem?.externalEventId,
+        // 🌟 追加：翻訳システムのために、クラウドに「どの部屋のデータか」を刻み込む！
+        sharedRoomId: isShared ? sharedRooms[selectedLayer] : undefined,
       };
 
       const newItem = JSON.parse(JSON.stringify(rawNewItem)) as ScheduleItem;

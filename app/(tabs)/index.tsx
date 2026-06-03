@@ -159,7 +159,14 @@ const calculateStreak = (completedDates: string[] | undefined) => {
 
 function IndexContent() {
   const handleShareRoom = async (roomId: string) => {
-    const url = `https://multi-calendar-app-1379f.web.app/join?room=${roomId}`;
+    // 🌟 修正1：部屋IDから、自分がつけているカテゴリ名を逆引きする
+    const myLayerName =
+      Object.keys(sharedRooms).find((key) => sharedRooms[key] === roomId) ||
+      "共有カレンダー";
+
+    // 🌟 修正2：URLの末尾に「&name=エンコードした名前」をこっそり忍ばせて発行する！
+    // （encodeURIComponentを使うことで、日本語の文字化けを防ぎます）
+    const url = `https://multi-calendar-app-1379f.web.app/join?room=${roomId}&name=${encodeURIComponent(myLayerName)}`;
 
     await Clipboard.setStringAsync(url);
 
@@ -232,9 +239,21 @@ function IndexContent() {
 
         if (!roomId) return;
 
-        // 🌟 文字入力だけの標準ポップアップをやめて、色も選べる専用モーダルを開く！
+        // 🌟 追加：URLの中に「作成者の名前（name=）」が入っていたら抽出する！
+        let defaultName = `共有_${roomId.slice(0, 4)}`;
+        const nameParam = parsedUrl.queryParams?.name
+          ? String(parsedUrl.queryParams.name)
+          : url.includes("name=")
+            ? decodeURIComponent(url.split("name=")[1]?.split("&")[0] || "")
+            : null;
+
+        // 名前が入っていれば、初期値をそれに書き換える
+        if (nameParam) {
+          defaultName = nameParam;
+        }
+
         setDeepLinkRoomId(roomId);
-        setDeepLinkRoomName(`共有_${roomId.slice(0, 4)}`);
+        setDeepLinkRoomName(defaultName); // 🌟 抽出した名前をセット！
         setDeepLinkRoomColor("#007AFF");
         setDeepLinkJoinVisible(true);
       }
@@ -344,6 +363,49 @@ function IndexContent() {
 
   const { cancelItemNotification, scheduleItemNotification } =
     useNotificationManager();
+
+  // 🌟 追加：最強の「自動翻訳システム」
+  // 相手が違うカテゴリ名をつけていても、自分の設定した名前に強制的に変換して表示する！
+  const translatedRoomSchedules = useMemo(() => {
+    const translated: { [key: string]: ScheduleItem[] } = {};
+
+    // 🌟 修正：roomSchedules は「部屋(roomId)」の中に「日付(date)」がある二重構造でした！
+    Object.keys(roomSchedules).forEach((roomId) => {
+      // datesData は { "2026-06-03": [予定, 予定] } のような日付ごとのオブジェクト
+      const datesData = roomSchedules[roomId] || {};
+
+      Object.keys(datesData).forEach((date) => {
+        const dailyItems = datesData[date] || [];
+
+        // 翻訳処理
+        const newItems = dailyItems.map((item: ScheduleItem) => {
+          // すでに親のキーが roomId なので、確実に部屋が特定できます！
+          const myLayerName = Object.keys(sharedRooms).find(
+            (key) => sharedRooms[key] === roomId,
+          );
+
+          if (myLayerName) {
+            return {
+              ...item,
+              layer: myLayerName,
+              tag: myLayerName,
+              tags: [myLayerName],
+              color: layerMaster[myLayerName] || item.color,
+            } as ScheduleItem;
+          }
+          return item; // 見つからなければそのまま返す
+        });
+
+        // 🌟 翻訳したデータを、日付ごとにまとめて translated に追加（合体）していく
+        if (!translated[date]) {
+          translated[date] = [];
+        }
+        translated[date] = [...translated[date], ...newItems];
+      });
+    });
+
+    return translated;
+  }, [roomSchedules, sharedRooms, layerMaster]);
 
   const handleCopyExternal = (item: ScheduleItem) => {
     // 外部予定特有のデータを剥がす
@@ -579,14 +641,16 @@ function IndexContent() {
       id: isCopy ? Date.now().toString() : item.id,
       tag: subTag || parentLayer,
       layer: parentLayer,
-      // 🌟 魔法の修正4：tags配列に「親レイヤー」を絶対に含める！（フィルター消滅バグを完全防止）
       tags:
         subTag && subTag !== parentLayer
           ? [parentLayer, subTag]
           : [parentLayer],
       color: newColor,
-      // 🌟 魔法の修正5：家計簿用のカテゴリも連動して書き換える！（金額計算バグを防止）
       category: item.isExpense ? subTag || targetLayer : item.category,
+      // 🌟 追加：移動・コピー時も roomId を刻み込む！
+      sharedRoomId: Object.keys(sharedRooms).includes(parentLayer)
+        ? sharedRooms[parentLayer]
+        : undefined,
     };
 
     const targetDate = item.date || selectedDate;
@@ -1057,7 +1121,7 @@ function IndexContent() {
 
   const displayData = useDisplayData(
     coloredScheduleData,
-    externalEvents,
+    translatedRoomSchedules,
     roomSchedules,
     activeTags,
     tagMaster,

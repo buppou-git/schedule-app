@@ -52,6 +52,7 @@ export interface ScheduleItem {
   externalEventId?: string;
   layer?: string;
   date?: string;
+  sharedRoomId?: string;
 }
 
 // 🌟 タグとレイヤーのマスターデータの型定義
