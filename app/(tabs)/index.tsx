@@ -266,7 +266,7 @@ function IndexContent() {
     });
 
     return () => subscription.remove();
-  }, [handleAddSharedRoom]);
+  }, []); // 🌟 [] の中身を完全に空っぽにしてください！
 
   useEffect(() => {
     const initAds = async () => {
@@ -647,10 +647,6 @@ function IndexContent() {
           : [parentLayer],
       color: newColor,
       category: item.isExpense ? subTag || targetLayer : item.category,
-      // 🌟 追加：移動・コピー時も roomId を刻み込む！
-      sharedRoomId: Object.keys(sharedRooms).includes(parentLayer)
-        ? sharedRooms[parentLayer]
-        : undefined,
     };
 
     const targetDate = item.date || selectedDate;
