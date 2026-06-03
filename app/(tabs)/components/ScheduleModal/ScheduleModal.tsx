@@ -67,6 +67,8 @@ interface ScheduleModalProps {
   safeDebouncedSync?: (item: ScheduleItem, date: string) => void;
 }
 
+const [debugView, setDebugView] = useState<string>("");
+
 const ScheduleModal = ({
   visible,
   onClose,
@@ -870,31 +872,29 @@ const ScheduleModal = ({
       const isSharedLayer = Object.keys(sharedRooms).includes(selectedLayer);
 
       if (!isSharedLayer) {
-        console.log("❌ このレイヤーは共有じゃない:", selectedLayer);
+
+        const msg = `❌ NOT SHARED
+      layer: ${selectedLayer}
+      sharedKeys: ${Object.keys(sharedRooms).join(",")}`;
+
+        setDebugView(msg);
+
       } else if (safeDebouncedSync) {
 
         const fixedItem = {
           ...newItem,
-
-          // ✅ 表示用（そのまま）
           layer: selectedLayer,
-
-          // ✅ ★共有ルーティング専用（これが核心）
           sharedLayer: selectedLayer,
-
-          // ✅ 念のため（安定）
           sharedRoomId: sharedRooms[selectedLayer],
-
-          // tagsは元を維持
           tags: newItem.tags,
         };
 
-        console.log("🚀 FINAL SEND", {
-          layer: fixedItem.layer,
-          sharedLayer: fixedItem.sharedLayer,
-          roomId: fixedItem.sharedRoomId,
-          match: !!sharedRooms[fixedItem.sharedLayer],
-        });
+        const msg = `🚀 SEND
+      layer: ${fixedItem.sharedLayer}
+      roomId: ${fixedItem.sharedRoomId}
+      match: ${!!sharedRooms[fixedItem.sharedLayer]}`;
+
+        setDebugView(msg);
 
         safeDebouncedSync(fixedItem, sStr);
       }
@@ -1946,6 +1946,17 @@ const ScheduleModal = ({
               },
             ]}
           >
+
+            {/* 🔥 デバッグ表示 */}
+            {debugView !== "" && (
+              <View style={{ backgroundColor: "#000", padding: 10, marginBottom: 10 }}>
+                <Text style={{ color: "#0f0", fontSize: 12 }}>
+                  {debugView}
+                </Text>
+              </View>
+            )}
+
+
             {isSimpleMode ? (
               <ScrollView
                 showsVerticalScrollIndicator={false}

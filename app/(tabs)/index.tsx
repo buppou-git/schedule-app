@@ -332,7 +332,7 @@ function IndexContent() {
   const [deepLinkRoomName, setDeepLinkRoomName] = useState("");
   const [deepLinkRoomColor, setDeepLinkRoomColor] = useState("#007AFF");
 
-  const { roomSchedules, safeDebouncedSync } = useCloudSync(sharedRooms);
+  const { roomSchedules, safeDebouncedSync, debugInfo } = useCloudSync(sharedRooms);
 
   const {
     isAppLocked,
@@ -1853,6 +1853,16 @@ function IndexContent() {
     <SafeAreaView
       style={[styles.container, { backgroundColor: currentBgColor }]}
     >
+
+
+      {debugInfo && (
+        <View style={{ padding: 10, backgroundColor: "#000" }}>
+          <Text style={{ color: "#0f0", fontSize: 12 }}>
+            {JSON.stringify(debugInfo, null, 2)}
+          </Text>
+        </View>
+      )}
+
       <View
         style={[
           styles.header,

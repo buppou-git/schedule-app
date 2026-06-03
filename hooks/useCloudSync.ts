@@ -5,6 +5,8 @@ import { AppState } from "react-native";
 import { db } from "../firebaseConfig";
 import { ScheduleItem } from "../types";
 
+const [debugInfo, setDebugInfo] = useState<any>(null);
+
 export function useCloudSync(sharedRooms: { [layerName: string]: string }) {
   const [roomSchedules, setRoomSchedules] = useState<{
     [roomId: string]: { [date: string]: ScheduleItem[] };
@@ -109,12 +111,15 @@ export function useCloudSync(sharedRooms: { [layerName: string]: string }) {
       // parentLayer が無い(undefined)場合は共有予定ではないので、ここで処理を止める！
       if (!parentLayer) return;
 
-      // 🌟 追加した最強のデバッグログ
-      console.log("▶ save attempt", {
-        layer: parentLayer,
+      const debug = {
+        step: "sync_attempt",
+        parentLayer,
         sharedRooms,
-        isMatched: !!sharedRooms[parentLayer]
-      });
+        hasRoom: !!sharedRooms[parentLayer],
+      };
+      
+      setDebugInfo(debug);
+      
 
       // 🌟 先に `if (!parentLayer) return;` で弾いているため、
       // ここで undefined エラー（ts2538）が起きなくなる！
@@ -152,5 +157,5 @@ export function useCloudSync(sharedRooms: { [layerName: string]: string }) {
     return () => subscription.remove();
   }, [sharedRooms]);
 
-  return { roomSchedules, safeDebouncedSync };
+  return { roomSchedules, safeDebouncedSync, debugInfo };
 }
