@@ -795,8 +795,8 @@ const ScheduleModal = ({
           formData.endTime.getMinutes(),
         );
 
-      // 🌟 修正①：標準カレンダー連携は「共有カレンダー以外」の時のみ実行する
-      const isShared = Object.keys(sharedRooms).includes(selectedLayer);
+      const targetRoomId = sharedRooms[selectedLayer];
+      const isShared = !!targetRoomId;
       // 🌟 変数の型を明示的に指定
       let finalReturnedId: string | undefined = selectedItem?.externalEventId;
 
@@ -855,14 +855,25 @@ const ScheduleModal = ({
 
       const newItem = JSON.parse(JSON.stringify(rawNewItem)) as ScheduleItem;
 
-      // 🌟 修正④：直接の保存を廃止し、safeDebouncedSync（共通ルート）に一元化！
-      if (isShared && safeDebouncedSync) {
-        safeDebouncedSync(newItem, sStr);
+      const isSharedLayer = Object.keys(sharedRooms).includes(selectedLayer);
 
-        // デバッグ用（ここでレイヤーがズレていないか確認できます）
-        console.log("== 共有同期実行 ==");
-        console.log("selectedLayer:", selectedLayer);
-        console.log("sharedRooms:", sharedRooms);
+      if (!isSharedLayer) {
+        console.log("❌ このレイヤーは共有じゃない:", selectedLayer);
+      } else if (safeDebouncedSync) {
+
+        const fixedItem = {
+          ...newItem,
+          layer: selectedLayer,   // ✅ そのまま使う！
+          tags: [selectedLayer],
+        };
+
+        console.log("🚀 FINAL SEND", {
+          layer: fixedItem.layer,
+          roomId: sharedRooms[selectedLayer],
+          match: !!sharedRooms[selectedLayer],
+        });
+
+        safeDebouncedSync(fixedItem, sStr);
       }
 
       // 🌟 削除アクション（古い部屋からの移動時など）があった場合のみ commit

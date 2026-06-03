@@ -102,9 +102,21 @@ export function useCloudSync(sharedRooms: { [layerName: string]: string }) {
         item.layer ||
         (item.tags && item.tags.length > 0 ? item.tags[0] : item.tag);
 
-      const isShared = !!(parentLayer && sharedRooms[parentLayer]);
-      if (!isShared) return;
+      // 👇 🌟 これを追加！
+      // parentLayer が無い(undefined)場合は共有予定ではないので、ここで処理を止める！
+      if (!parentLayer) return;
 
+      // 🌟 追加した最強のデバッグログ
+      console.log("▶ save attempt", {
+        layer: parentLayer,
+        sharedRooms,
+        isMatched: !!sharedRooms[parentLayer]
+      });
+
+      // 🌟 先に `if (!parentLayer) return;` で弾いているため、
+      // ここで undefined エラー（ts2538）が起きなくなる！
+      const isShared = !!sharedRooms[parentLayer];
+      if (!isShared) return;
 
       const key = String(item.id || Date.now());
 
