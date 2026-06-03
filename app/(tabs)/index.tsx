@@ -1856,6 +1856,27 @@ function IndexContent() {
     <SafeAreaView
       style={[styles.container, { backgroundColor: currentBgColor }]}
     >
+      {/* 🌟 一時的なデバッグ用ボタン */}
+      <TouchableOpacity
+        style={{ backgroundColor: "#FF3B30", padding: 12, margin: 16, borderRadius: 8 }}
+        onPress={() => {
+          Alert.alert(
+            "データ受信チェック",
+            `■生の受信データ: ${Object.keys(roomSchedules).length} 部屋\n` +
+            `■翻訳後のデータ: ${Object.keys(translatedRoomSchedules).length} 部屋\n` +
+            `■共有設定: ${JSON.stringify(sharedRooms)}`
+          );
+          // ターミナル（黒い画面）に詳細を吐き出す
+          console.log("=== デバッグ詳細 ===");
+          console.log("生のデータ:", roomSchedules);
+          console.log("翻訳データ:", translatedRoomSchedules);
+        }}
+      >
+        <Text style={{ color: "white", fontWeight: "bold", textAlign: "center" }}>
+          データ受信をチェックする
+        </Text>
+      </TouchableOpacity>
+
       <View
         style={[
           styles.header,
