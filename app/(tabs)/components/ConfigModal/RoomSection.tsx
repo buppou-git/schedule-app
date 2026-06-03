@@ -50,7 +50,7 @@ export const RoomSection = React.memo(
           await Share.share({
             message: `【UniCal】「${roomName}」の共有カレンダーに参加しよう！
     
-    下のリンクをタッチして参加！
+下のリンクをタッチして参加！
     ${url}`,
             title: "カレンダーの共有",
           });
