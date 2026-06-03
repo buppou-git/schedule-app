@@ -224,54 +224,54 @@ function IndexContent() {
     });
   }, []);
 
-// 🌟 無限ループ防止版＆名前自動入力版：URLの読み取り処理
-useEffect(() => {
-  // 🌟 追加：同じURLを何度も処理しないように記憶しておく「メモ帳」
-  let lastProcessedUrl = "";
+  // 🌟 無限ループ防止版＆名前自動入力版：URLの読み取り処理
+  useEffect(() => {
+    // 🌟 追加：同じURLを何度も処理しないように記憶しておく「メモ帳」
+    let lastProcessedUrl = "";
 
-  const handleUrl = (url: string | null) => {
-    if (!url) return;
-    if (url === lastProcessedUrl) return; // 🌟 すでに処理済みのURLなら無視する！
+    const handleUrl = (url: string | null) => {
+      if (!url) return;
+      if (url === lastProcessedUrl) return; // 🌟 すでに処理済みのURLなら無視する！
 
-    const parsedUrl = Linking.parse(url);
-    const isJoinLink = url.includes("room=");
-    
-    if (isJoinLink) {
-      lastProcessedUrl = url; // 🌟 処理したURLをメモ帳に書き込む
+      const parsedUrl = Linking.parse(url);
+      const isJoinLink = url.includes("room=");
 
-      const roomId = parsedUrl.queryParams?.room
-        ? String(parsedUrl.queryParams.room)
-        : url.split("room=")[1]?.split("&")[0];
+      if (isJoinLink) {
+        lastProcessedUrl = url; // 🌟 処理したURLをメモ帳に書き込む
 
-      if (!roomId) return;
+        const roomId = parsedUrl.queryParams?.room
+          ? String(parsedUrl.queryParams.room)
+          : url.split("room=")[1]?.split("&")[0];
 
-      // 🌟 追加：URLの中に「作成者の名前（name=）」が入っていたら抽出する！
-      let defaultName = `共有_${roomId.slice(0, 4)}`;
-      const nameParam = parsedUrl.queryParams?.name
-        ? String(parsedUrl.queryParams.name)
-        : url.includes("name=")
-          ? decodeURIComponent(url.split("name=")[1]?.split("&")[0] || "")
-          : null;
+        if (!roomId) return;
 
-      if (nameParam) {
-        defaultName = nameParam;
+        // 🌟 追加：URLの中に「作成者の名前（name=）」が入っていたら抽出する！
+        let defaultName = `共有_${roomId.slice(0, 4)}`;
+        const nameParam = parsedUrl.queryParams?.name
+          ? String(parsedUrl.queryParams.name)
+          : url.includes("name=")
+            ? decodeURIComponent(url.split("name=")[1]?.split("&")[0] || "")
+            : null;
+
+        if (nameParam) {
+          defaultName = nameParam;
+        }
+
+        setDeepLinkRoomId(roomId);
+        setDeepLinkRoomName(defaultName); // 🌟 抽出した名前をセット！
+        setDeepLinkRoomColor("#007AFF");
+        setDeepLinkJoinVisible(true);
       }
+    };
 
-      setDeepLinkRoomId(roomId);
-      setDeepLinkRoomName(defaultName); // 🌟 抽出した名前をセット！
-      setDeepLinkRoomColor("#007AFF");
-      setDeepLinkJoinVisible(true);
-    }
-  };
+    Linking.getInitialURL().then(handleUrl);
 
-  Linking.getInitialURL().then(handleUrl);
+    const subscription = Linking.addEventListener("url", (event) => {
+      handleUrl(event.url);
+    });
 
-  const subscription = Linking.addEventListener("url", (event) => {
-    handleUrl(event.url);
-  });
-
-  return () => subscription.remove();
-}, []); // 🌟 修正：空っぽにすることで、無限ループを完全に断ち切ります！
+    return () => subscription.remove();
+  }, []); // 🌟 修正：空っぽにすることで、無限ループを完全に断ち切ります！
 
   useEffect(() => {
     const initAds = async () => {
@@ -369,26 +369,30 @@ useEffect(() => {
   const { cancelItemNotification, scheduleItemNotification } =
     useNotificationManager();
 
-// 🌟 追加：最強の「自動翻訳システム」
+  // 🌟 追加：最強の「自動翻訳システム」（完全対応版）
   // 相手が違うカテゴリ名をつけていても、自分の設定した名前に強制的に変換して表示する！
   const translatedRoomSchedules = useMemo(() => {
-    // 🌟 修正：useDisplayData が求める「部屋ごと ＞ 日付ごと」のマトリョーシカ構造に型を合わせる！
-    const translated: { [roomId: string]: { [date: string]: ScheduleItem[] } } = {};
+    const translated: { [key: string]: { [date: string]: ScheduleItem[] } } = {};
 
-    Object.keys(roomSchedules).forEach((roomId) => {
-      translated[roomId] = {}; // まず「部屋の箱」を用意する
-      const datesData = roomSchedules[roomId] || {};
+    Object.keys(roomSchedules).forEach((roomKey) => {
+      translated[roomKey] = {};
+      const datesData = roomSchedules[roomKey] || {};
+
+      // 🌟 最大の修正：箱のラベルが「カテゴリ名(研究室)」でも「ID(room_123)」でも確実に自分の名前を特定する！
+      let myLayerName = "";
+      if (Object.keys(sharedRooms).includes(roomKey)) {
+        myLayerName = roomKey; // すでに自分のカテゴリ名だった場合
+      } else {
+        myLayerName = Object.keys(sharedRooms).find(
+          (key) => sharedRooms[key] === roomKey
+        ) || ""; // IDだった場合は逆引きする
+      }
 
       Object.keys(datesData).forEach((date) => {
         const dailyItems = datesData[date] || [];
 
         // 翻訳処理
         const newItems = dailyItems.map((item: ScheduleItem) => {
-          // すでに親のキーが roomId なので確実に部屋が特定できる
-          const myLayerName = Object.keys(sharedRooms).find(
-            (key) => sharedRooms[key] === roomId
-          );
-
           if (myLayerName) {
             return {
               ...item,
@@ -398,11 +402,10 @@ useEffect(() => {
               color: layerMaster[myLayerName] || item.color,
             } as ScheduleItem;
           }
-          return item; // 見つからなければそのまま返す
+          return item; // 万が一見つからなければそのまま返す
         });
 
-        // 🌟 修正：翻訳したデータを「部屋の箱」の中の「日付の箱」にしまう
-        translated[roomId][date] = newItems;
+        translated[roomKey][date] = newItems;
       });
     });
 
@@ -1615,7 +1618,7 @@ useEffect(() => {
         try {
           const Calendar = await import("expo-calendar");
           await Calendar.deleteEventAsync(item.externalEventId);
-        } catch (e) {}
+        } catch (e) { }
       }
 
       const wasShared = isSharedItem(item);
@@ -1675,9 +1678,9 @@ useEffect(() => {
               nextData[d] = nextData[d].map((i) =>
                 i.id === item.id
                   ? {
-                      ...i,
-                      exceptionDates: [...(i.exceptionDates || []), targetDate],
-                    }
+                    ...i,
+                    exceptionDates: [...(i.exceptionDates || []), targetDate],
+                  }
                   : i,
               );
             }
@@ -2067,75 +2070,75 @@ useEffect(() => {
 
               {(activeMode === "todo" ||
                 (activeMode === "money" && !isMoneySummaryMode)) && (
-                <View style={styles.weekCalendarWrapper}>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      paddingRight: 20,
-                    }}
-                  >
-                    <Text style={styles.monthLabel}>
-                      {parseInt(selectedDate.split("-")[1])}月
-                    </Text>
-                    {/* 🌟 変更：「今日に戻る」ボタンと「＋」ボタンを横並びにする */}
+                  <View style={styles.weekCalendarWrapper}>
                     <View
                       style={{
                         flexDirection: "row",
+                        justifyContent: "space-between",
                         alignItems: "center",
-                        gap: 12,
+                        paddingRight: 20,
                       }}
                     >
-                      <TouchableOpacity
-                        onPress={() => setSelectedDate(getTodayString())}
+                      <Text style={styles.monthLabel}>
+                        {parseInt(selectedDate.split("-")[1])}月
+                      </Text>
+                      {/* 🌟 変更：「今日に戻る」ボタンと「＋」ボタンを横並びにする */}
+                      <View
                         style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: 16,
-                          backgroundColor: currentSolidColor + "10", // 月間カレンダーと同じ美しい透け感
+                          flexDirection: "row",
                           alignItems: "center",
-                          justifyContent: "center",
-                          borderWidth: 1,
-                          borderColor: currentSolidColor + "30",
-                          shadowColor: "#000",
-                          shadowOpacity: 0.05,
-                          shadowRadius: 2,
-                          elevation: 1,
+                          gap: 12,
                         }}
                       >
-                        <Ionicons
-                          name="return-down-back-outline" // 同じアイコンを使用
-                          size={18}
-                          color={currentSolidColor}
-                        />
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={handleOpenNewModal}>
-                        <Ionicons
-                          name="add-circle"
-                          size={30}
-                          color={currentSolidColor}
-                        />
-                      </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => setSelectedDate(getTodayString())}
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            backgroundColor: currentSolidColor + "10", // 月間カレンダーと同じ美しい透け感
+                            alignItems: "center",
+                            justifyContent: "center",
+                            borderWidth: 1,
+                            borderColor: currentSolidColor + "30",
+                            shadowColor: "#000",
+                            shadowOpacity: 0.05,
+                            shadowRadius: 2,
+                            elevation: 1,
+                          }}
+                        >
+                          <Ionicons
+                            name="return-down-back-outline" // 同じアイコンを使用
+                            size={18}
+                            color={currentSolidColor}
+                          />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={handleOpenNewModal}>
+                          <Ionicons
+                            name="add-circle"
+                            size={30}
+                            color={currentSolidColor}
+                          />
+                        </TouchableOpacity>
+                      </View>
                     </View>
+                    <CalendarProvider
+                      date={selectedDate}
+                      onDateChanged={setSelectedDate}
+                    >
+                      <WeekCalendar
+                        firstDay={1}
+                        markedDates={currentMarkedDates}
+                        theme={{
+                          calendarBackground: "transparent",
+                          todayTextColor: "#FFF",
+                          todayBackgroundColor: currentSolidColor + "33",
+                          selectedDayBackgroundColor: currentSolidColor,
+                        }}
+                      />
+                    </CalendarProvider>
                   </View>
-                  <CalendarProvider
-                    date={selectedDate}
-                    onDateChanged={setSelectedDate}
-                  >
-                    <WeekCalendar
-                      firstDay={1}
-                      markedDates={currentMarkedDates}
-                      theme={{
-                        calendarBackground: "transparent",
-                        todayTextColor: "#FFF",
-                        todayBackgroundColor: currentSolidColor + "33",
-                        selectedDayBackgroundColor: currentSolidColor,
-                      }}
-                    />
-                  </CalendarProvider>
-                </View>
-              )}
+                )}
             </>
           )}
 
@@ -2403,13 +2406,13 @@ useEffect(() => {
                         styles.gridCard,
                         tempActiveTags.includes("外部予定")
                           ? {
-                              backgroundColor: "#FF2D55",
-                              borderColor: "#FF2D55",
-                            }
+                            backgroundColor: "#FF2D55",
+                            borderColor: "#FF2D55",
+                          }
                           : [
-                              styles.gridCardGhost,
-                              { borderColor: "#FF2D5540" },
-                            ],
+                            styles.gridCardGhost,
+                            { borderColor: "#FF2D5540" },
+                          ],
                       ]}
                       onPress={() => toggleTempTag("外部予定")}
                     >
@@ -2469,13 +2472,13 @@ useEffect(() => {
                           styles.gridCard,
                           isSelected
                             ? {
-                                backgroundColor: displayColor,
-                                borderColor: displayColor,
-                              }
+                              backgroundColor: displayColor,
+                              borderColor: displayColor,
+                            }
                             : [
-                                styles.gridCardGhost,
-                                { borderColor: displayColor + "40" },
-                              ],
+                              styles.gridCardGhost,
+                              { borderColor: displayColor + "40" },
+                            ],
                         ]}
                         onPress={() => toggleTempTag(layer)}
                       >
