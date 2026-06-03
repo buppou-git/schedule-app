@@ -224,49 +224,54 @@ function IndexContent() {
     });
   }, []);
 
-  // ✅ その後にuseEffect
-  useEffect(() => {
-    const handleUrl = (url: string | null) => {
-      if (!url) return;
+// 🌟 無限ループ防止版＆名前自動入力版：URLの読み取り処理
+useEffect(() => {
+  // 🌟 追加：同じURLを何度も処理しないように記憶しておく「メモ帳」
+  let lastProcessedUrl = "";
 
-      const parsedUrl = Linking.parse(url);
-      // 🌟 パラメータに room= が含まれているかどうかで判定をシンプルかつ確実に
-      const isJoinLink = url.includes("room=");
-      if (isJoinLink) {
-        const roomId = parsedUrl.queryParams?.room
-          ? String(parsedUrl.queryParams.room)
-          : url.split("room=")[1]?.split("&")[0];
+  const handleUrl = (url: string | null) => {
+    if (!url) return;
+    if (url === lastProcessedUrl) return; // 🌟 すでに処理済みのURLなら無視する！
 
-        if (!roomId) return;
+    const parsedUrl = Linking.parse(url);
+    const isJoinLink = url.includes("room=");
+    
+    if (isJoinLink) {
+      lastProcessedUrl = url; // 🌟 処理したURLをメモ帳に書き込む
 
-        // 🌟 追加：URLの中に「作成者の名前（name=）」が入っていたら抽出する！
-        let defaultName = `共有_${roomId.slice(0, 4)}`;
-        const nameParam = parsedUrl.queryParams?.name
-          ? String(parsedUrl.queryParams.name)
-          : url.includes("name=")
-            ? decodeURIComponent(url.split("name=")[1]?.split("&")[0] || "")
-            : null;
+      const roomId = parsedUrl.queryParams?.room
+        ? String(parsedUrl.queryParams.room)
+        : url.split("room=")[1]?.split("&")[0];
 
-        // 名前が入っていれば、初期値をそれに書き換える
-        if (nameParam) {
-          defaultName = nameParam;
-        }
+      if (!roomId) return;
 
-        setDeepLinkRoomId(roomId);
-        setDeepLinkRoomName(defaultName); // 🌟 抽出した名前をセット！
-        setDeepLinkRoomColor("#007AFF");
-        setDeepLinkJoinVisible(true);
+      // 🌟 追加：URLの中に「作成者の名前（name=）」が入っていたら抽出する！
+      let defaultName = `共有_${roomId.slice(0, 4)}`;
+      const nameParam = parsedUrl.queryParams?.name
+        ? String(parsedUrl.queryParams.name)
+        : url.includes("name=")
+          ? decodeURIComponent(url.split("name=")[1]?.split("&")[0] || "")
+          : null;
+
+      if (nameParam) {
+        defaultName = nameParam;
       }
-    };
 
-    Linking.getInitialURL().then(handleUrl);
+      setDeepLinkRoomId(roomId);
+      setDeepLinkRoomName(defaultName); // 🌟 抽出した名前をセット！
+      setDeepLinkRoomColor("#007AFF");
+      setDeepLinkJoinVisible(true);
+    }
+  };
 
-    const subscription = Linking.addEventListener("url", (event) => {
-      handleUrl(event.url);
-    });
+  Linking.getInitialURL().then(handleUrl);
 
-    return () => subscription.remove();
-  }, []); // 🌟 [] の中身を完全に空っぽにしてください！
+  const subscription = Linking.addEventListener("url", (event) => {
+    handleUrl(event.url);
+  });
+
+  return () => subscription.remove();
+}, []); // 🌟 修正：空っぽにすることで、無限ループを完全に断ち切ります！
 
   useEffect(() => {
     const initAds = async () => {
@@ -364,14 +369,14 @@ function IndexContent() {
   const { cancelItemNotification, scheduleItemNotification } =
     useNotificationManager();
 
-  // 🌟 追加：最強の「自動翻訳システム」
+// 🌟 追加：最強の「自動翻訳システム」
   // 相手が違うカテゴリ名をつけていても、自分の設定した名前に強制的に変換して表示する！
   const translatedRoomSchedules = useMemo(() => {
-    const translated: { [key: string]: ScheduleItem[] } = {};
+    // 🌟 修正：useDisplayData が求める「部屋ごと ＞ 日付ごと」のマトリョーシカ構造に型を合わせる！
+    const translated: { [roomId: string]: { [date: string]: ScheduleItem[] } } = {};
 
-    // 🌟 修正：roomSchedules は「部屋(roomId)」の中に「日付(date)」がある二重構造でした！
     Object.keys(roomSchedules).forEach((roomId) => {
-      // datesData は { "2026-06-03": [予定, 予定] } のような日付ごとのオブジェクト
+      translated[roomId] = {}; // まず「部屋の箱」を用意する
       const datesData = roomSchedules[roomId] || {};
 
       Object.keys(datesData).forEach((date) => {
@@ -379,9 +384,9 @@ function IndexContent() {
 
         // 翻訳処理
         const newItems = dailyItems.map((item: ScheduleItem) => {
-          // すでに親のキーが roomId なので、確実に部屋が特定できます！
+          // すでに親のキーが roomId なので確実に部屋が特定できる
           const myLayerName = Object.keys(sharedRooms).find(
-            (key) => sharedRooms[key] === roomId,
+            (key) => sharedRooms[key] === roomId
           );
 
           if (myLayerName) {
@@ -396,11 +401,8 @@ function IndexContent() {
           return item; // 見つからなければそのまま返す
         });
 
-        // 🌟 翻訳したデータを、日付ごとにまとめて translated に追加（合体）していく
-        if (!translated[date]) {
-          translated[date] = [];
-        }
-        translated[date] = [...translated[date], ...newItems];
+        // 🌟 修正：翻訳したデータを「部屋の箱」の中の「日付の箱」にしまう
+        translated[roomId][date] = newItems;
       });
     });
 
@@ -1117,8 +1119,8 @@ function IndexContent() {
 
   const displayData = useDisplayData(
     coloredScheduleData,
-    translatedRoomSchedules,
-    roomSchedules,
+    externalEvents,           // 🌟 外部予定（Appleカレンダー等）を復活！
+    translatedRoomSchedules,  // 🌟 ここに翻訳済みの綺麗な共有カレンダーデータを渡す！
     activeTags,
     tagMaster,
   );
