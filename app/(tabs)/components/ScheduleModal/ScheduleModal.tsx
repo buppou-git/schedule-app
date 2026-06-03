@@ -67,7 +67,7 @@ interface ScheduleModalProps {
   safeDebouncedSync?: (item: ScheduleItem, date: string) => void;
 }
 
-const [debugView, setDebugView] = useState<string>("");
+const debugViewRef = useRef<string>("");
 
 const ScheduleModal = ({
   visible,
@@ -877,7 +877,7 @@ const ScheduleModal = ({
       layer: ${selectedLayer}
       sharedKeys: ${Object.keys(sharedRooms).join(",")}`;
 
-        setDebugView(msg);
+        debugViewRef.current = msg;
 
       } else if (safeDebouncedSync) {
 
@@ -894,7 +894,7 @@ const ScheduleModal = ({
       roomId: ${fixedItem.sharedRoomId}
       match: ${!!sharedRooms[fixedItem.sharedLayer]}`;
 
-        setDebugView(msg);
+        debugViewRef.current = msg;
 
         safeDebouncedSync(fixedItem, sStr);
       }
@@ -967,7 +967,7 @@ const ScheduleModal = ({
       onForceRender?.();
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      onClose();
+      //onClose();
     } catch (error) {
       console.error("Save Error:", error);
       Alert.alert("保存エラー", "予定の保存に失敗しました。");
@@ -1947,14 +1947,16 @@ const ScheduleModal = ({
             ]}
           >
 
+
             {/* 🔥 デバッグ表示 */}
-            {debugView !== "" && (
+            {debugViewRef.current !== "" && (
               <View style={{ backgroundColor: "#000", padding: 10, marginBottom: 10 }}>
                 <Text style={{ color: "#0f0", fontSize: 12 }}>
-                  {debugView}
+                  {debugViewRef.current}
                 </Text>
               </View>
             )}
+
 
 
             {isSimpleMode ? (
