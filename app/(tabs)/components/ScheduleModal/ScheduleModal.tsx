@@ -68,8 +68,6 @@ interface ScheduleModalProps {
   setDebugMessage?: (msg: string) => void;
 }
 
-const debugViewRef = useRef<string>("");
-
 const ScheduleModal = ({
   visible,
   onClose,
@@ -1949,19 +1947,6 @@ const ScheduleModal = ({
               },
             ]}
           >
-
-
-            {/* 🔥 デバッグ表示 */}
-            {debugViewRef.current !== "" && (
-              <View style={{ backgroundColor: "#000", padding: 10, marginBottom: 10 }}>
-                <Text style={{ color: "#0f0", fontSize: 12 }}>
-                  {debugViewRef.current}
-                </Text>
-              </View>
-            )}
-
-
-
             {isSimpleMode ? (
               <ScrollView
                 showsVerticalScrollIndicator={false}
