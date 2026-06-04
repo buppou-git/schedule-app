@@ -1148,8 +1148,7 @@ function IndexContent() {
     tagMaster,
   );
 
-  // 🌟 修正1：const を let に変えて、後から上書きできるようにする！
-  const calendarData = useCalendarData(
+  const { expandedScheduleData, currentMarkedDates } = useCalendarData(
     displayData,
     activeMode,
     activeTags,
@@ -1158,10 +1157,8 @@ function IndexContent() {
     selectedDate,
     hiddenExternalIds,
   );
-  let currentMarkedDates = { ...calendarData.currentMarkedDates };
-  let expandedScheduleData = calendarData.expandedScheduleData;
 
-  const dailyData = useDailyItems(
+  const { dayTasks, upcomingTasks, dayEvents } = useDailyItems(
     expandedScheduleData,
     displayData,
     selectedDate,
@@ -1169,33 +1166,24 @@ function IndexContent() {
     activeMode,
     tagMaster,
   );
-  let dayTasks = dailyData.dayTasks;
-  let upcomingTasks = dailyData.upcomingTasks;
-  let dayEvents = dailyData.dayEvents;
 
-  // 👇👇👇 🌟🌟🌟 ここから究極の強制バイパス（配管の詰まりをぶち抜く！） 🌟🌟🌟 👇👇👇
+  useEffect(() => {
+    let sharedInfo = "";
+    Object.keys(displayData).forEach((date) => {
+      displayData[date].forEach((item) => {
+        if (Object.keys(sharedRooms).includes(item.layer || "")) {
+          sharedInfo += `📅 日付: [${date}] / 予定: ${item.title}\n`;
+        }
+      });
+    });
 
-  // ① 予定リストの強制上書き
-  if (displayData[selectedDate]) {
-    // フィルター済みの完成品箱から直接リストに流し込む！
-    dayEvents = displayData[selectedDate].filter((item) => item.isEvent);
-    dayTasks = displayData[selectedDate].filter((item) => item.isTodo);
-  }
-
-  // ② カレンダーの点（ドット）の強制上書き
-  Object.keys(displayData).forEach((date) => {
-    if (!currentMarkedDates[date]) {
-      currentMarkedDates[date] = { dots: [] };
+    if (sharedInfo !== "") {
+      Alert.alert(
+        "🎯 共有予定の日付を特定！",
+        `以下の予定がアプリ内に存在します！\n\n${sharedInfo}\n\n👉 カレンダーで【この日付】を直接タップして、下に表示されるか確認してください！\n※「2026-6-4」のように「0」が抜けているとカレンダーは表示できません。`,
+      );
     }
-    // 完成品箱にある予定の「色」を、強制的にドットとしてカレンダーにねじ込む！
-    const forcedDots = displayData[date].map((item) => ({
-      key: String(item.id),
-      color: item.color || "#007AFF",
-    }));
-    currentMarkedDates[date].dots = forcedDots;
-  });
-
-  // 👆👆👆 🌟🌟🌟 強制バイパスここまで 🌟🌟🌟 👆👆👆
+  }, [displayData, sharedRooms]);
 
   useEffect(() => {
     let sharedCount = 0;
