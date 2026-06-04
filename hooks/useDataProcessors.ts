@@ -106,34 +106,20 @@ export function useDailyItems(
   tagMaster: Record<string, { layer: string; color: string }>,
 ) {
   return useMemo(() => {
-    const items = expandedScheduleData[selectedDate] || [];
-    const isAllLayers = activeTags.length === 0;
-    const activeTagsSet = new Set(activeTags);
+    // 🌟🌟🌟 ここが共有先で見えなかった最大の理由でした！ 🌟🌟🌟
+    // ❌ 修正前: const items = expandedScheduleData[selectedDate] || [];
+    // 修正前は「自分のスマホで作ったローカルデータ」しか見ていませんでした！
+    // ✅ 修正後: クラウドデータも全て合体済みの「displayData」から読み取る！
+    const items = displayData[selectedDate] || [];
 
     const dTasks: ScheduleItem[] = [];
     const dEvents: ScheduleItem[] = [];
 
+    // 🌟 displayData の時点ですでにカテゴリ絞り込みは完璧に終わっています。
+    // ここでは純粋に Todo か Event かを仕分けるだけでOKです！
     items.forEach((item: ScheduleItem) => {
-      const itemTags =
-        item.tags && item.tags.length > 0
-          ? item.tags
-          : item.tag
-            ? [item.tag]
-            : [];
-      const isExternal =
-        item.category === "外部カレンダー" || !!item.externalEventId;
-      const matchLayer =
-        isAllLayers ||
-        (isExternal && activeTagsSet.has("外部予定")) ||
-        itemTags.some((tag: string) => {
-          if (tag === "祝日") return true;
-          const parentLayer = tagMaster[tag]?.layer || tag;
-          return activeTagsSet.has(parentLayer);
-        });
-      if (matchLayer) {
-        if (item.isTodo) dTasks.push(item);
-        if (item.isEvent) dEvents.push(item);
-      }
+      if (item.isTodo) dTasks.push(item);
+      if (item.isEvent) dEvents.push(item);
     });
 
     const uTasks: (ScheduleItem & { date: string })[] = [];
@@ -141,7 +127,11 @@ export function useDailyItems(
     const addedUpcomingIds = new Set<string>();
 
     if (activeMode === "todo") {
-      const sortedDates = Object.keys(expandedScheduleData).sort();
+      // 🌟🌟🌟 今後のタスク検索も、ローカル箱しか見ていなかったので修正！ 🌟🌟🌟
+      // ❌ 修正前: Object.keys(expandedScheduleData).sort();
+      // ✅ 修正後: クラウドの日付も含まれている displayData を使う！
+      const sortedDates = Object.keys(displayData).sort();
+
       sortedDates.forEach((date) => {
         if (date > selectedDate) {
           (displayData[date] || []).forEach((task) => {
@@ -152,22 +142,8 @@ export function useDailyItems(
               !dayTaskIds.has(task.id) &&
               !addedUpcomingIds.has(task.id)
             ) {
-              const itemTags =
-                task.tags && task.tags.length > 0
-                  ? task.tags
-                  : task.tag
-                    ? [task.tag]
-                    : [];
-              if (
-                isAllLayers ||
-                itemTags.some((tag) => {
-                  const parentLayer = tagMaster[tag]?.layer || tag;
-                  return activeTagsSet.has(parentLayer);
-                })
-              ) {
-                uTasks.push({ ...task, date });
-                addedUpcomingIds.add(task.id);
-              }
+              uTasks.push({ ...task, date });
+              addedUpcomingIds.add(task.id);
             }
           });
         }
