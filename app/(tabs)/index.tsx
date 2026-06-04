@@ -373,28 +373,27 @@ function IndexContent() {
   const { cancelItemNotification, scheduleItemNotification } =
     useNotificationManager();
 
-  // 🌟 追加：最強の「自動翻訳システム」
-  // 相手が違うカテゴリ名をつけていても、自分の設定した名前に強制的に変換して表示する！
+// 🌟 追加：最強の「自動翻訳システム」の修正版
+  // 相手が違うカテゴリ名をつけていても、自分の設定した名前に変換して表示する
   const translatedRoomSchedules = useMemo(() => {
-    // 🌟 箱のラベルもカテゴリ名になるように型を定義
-    const translated: { [layerName: string]: { [date: string]: ScheduleItem[] } } = {};
+    // 🌟 修正：カレンダー描画システムが読み取れるように、箱のラベル（キー）は「roomId」のまま戻す！
+    const translated: { [roomId: string]: { [date: string]: ScheduleItem[] } } = {};
 
     Object.keys(roomSchedules).forEach((roomId) => {
-
-      // 🌟 修正：箱のラベル自体を「部屋ID」から「自分のカテゴリ名」に張り替える！
+      // 自分がつけているカテゴリ名を探す
       const myLayerName = Object.keys(sharedRooms).find(
         (key) => sharedRooms[key] === roomId
-      ) || roomId; // 万が一見つからなければ元のIDのままにする
+      ) || roomId;
 
-      translated[myLayerName] = {}; // 🌟 翻訳された名前の箱を用意する
+      translated[roomId] = {}; // 🌟 ここが超重要！箱のラベルは roomId のまま！
       const datesData = roomSchedules[roomId] || {};
 
       Object.keys(datesData).forEach((date) => {
         const dailyItems = datesData[date] || [];
 
-        // 翻訳処理
+        // 予定の中身だけを翻訳する
         const newItems = dailyItems.map((item: ScheduleItem) => {
-          if (myLayerName !== roomId) { // ちゃんと名前が特定できた場合
+          if (myLayerName !== roomId) { 
             return {
               ...item,
               layer: myLayerName,
@@ -406,8 +405,7 @@ function IndexContent() {
           return item;
         });
 
-        // 🌟 翻訳した名前の箱にデータをしまう
-        translated[myLayerName][date] = newItems;
+        translated[roomId][date] = newItems; // 🌟 roomId の箱にしまう！
       });
     });
 
