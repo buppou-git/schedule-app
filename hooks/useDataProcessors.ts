@@ -9,7 +9,6 @@ export function useDisplayData(
   activeTags: string[],
   tagMaster: Record<string, { layer: string; color: string }>,
 ) {
-  // 💣 爆弾撤去 1: 「データの結合」は、予定が追加・編集された時だけ実行する！
   const mergedAllData = useMemo(() => {
     const combinedMap: { [date: string]: Map<string, ScheduleItem> } = {};
 
@@ -18,6 +17,7 @@ export function useDisplayData(
       return combinedMap[date];
     };
 
+    // 1. 外部カレンダー (🍎 あなたの元コードを復元！ダブり防止IDを生成)
     Object.keys(externalEvents).forEach((date) => {
       const map = getMapForDate(date);
       externalEvents[date].forEach((item) => {
@@ -31,9 +31,11 @@ export function useDisplayData(
       });
     });
 
+    // 2. ローカル予定
     Object.keys(scheduleData).forEach((date) => {
       const map = getMapForDate(date);
       scheduleData[date].forEach((item) => {
+        // 🍎 あなたの元コードを復元！外部予定のダブり防止キーと赤色の強制！
         const key = item.externalEventId ? item.externalEventId : item.id;
         if (item.category === "外部カレンダー" || item.externalEventId) {
           item.color = "#FF2D55";
@@ -42,18 +44,18 @@ export function useDisplayData(
       });
     });
 
+    // 3. クラウド共有予定 (🌟 今回の最大の修正：最強・上書きOK！)
     Object.values(roomSchedules).forEach((roomData) => {
       Object.keys(roomData).forEach((date) => {
         const map = getMapForDate(date);
         roomData[date].forEach((item) => {
           const key = item.externalEventId ? item.externalEventId : item.id;
-
-          // 🌟🌟🌟 究極の防波堤 🌟🌟🌟
-          // 自分のスマホ（ローカル）に既に同じ予定がある場合は、クラウドデータで上書きさせない！
-          // これにより、自分の作った予定がクラウドのデータによって透明化されるのを完全に防ぎます。
-          if (!map.has(key)) {
-            map.set(key, item);
-          }
+          // ✅ 重要な変更：条件なしでクラウド最新データを set して上書きする！
+          map.set(key, {
+            ...item,
+            isEvent: item.isEvent ?? true, // フラグの欠落を防ぐ
+            isTodo: item.isTodo ?? false,
+          });
         });
       });
     });
@@ -61,31 +63,23 @@ export function useDisplayData(
     return combinedMap;
   }, [scheduleData, externalEvents, roomSchedules]);
 
-  // 💣 爆弾撤去 2: レイヤーを切り替えた時は「フィルター」だけを実行する！（爆速化）
   const displayData = useMemo(() => {
     const result: { [date: string]: ScheduleItem[] } = {};
     Object.keys(mergedAllData).forEach((date) => {
       const items = Array.from(mergedAllData[date].values());
       result[date] = items.filter((item) => {
-        let itemLayer = "共通";
+        // ✅ 重要な変更：layer を最優先で判定し、共通・外部・共有を完全に識別する！
+        let itemLayer = item.layer || "共通";
 
         if (item.category === "外部カレンダー" || item.externalEventId) {
           itemLayer = "外部予定";
-        } else {
-          const itemTags =
-            item.tags && item.tags.length > 0
-              ? item.tags
-              : item.tag
-                ? [item.tag]
-                : [];
-          if (itemTags.length > 0) {
-            // 🌟🌟🌟 ここが透明化の「真の黒幕」！！！ 🌟🌟🌟
-            // 修正前：tagMaster[itemTags[0]]?.layer || "共通";
-            // 修正後：辞書にない親カテゴリ（ゼミ等）だった場合、"共通" に落とさず、そのままの名前を維持する保険を追加！
-            itemLayer = tagMaster[itemTags[0]]?.layer || itemTags[0] || "共通";
-          }
+        } else if (item.tags && item.tags.length > 0) {
+          itemLayer = tagMaster[item.tags[0]]?.layer || item.tags[0];
+        } else if (item.tag) {
+          itemLayer = tagMaster[item.tag]?.layer || item.tag;
         }
 
+        // フィルター判定
         if (activeTags.length === 0) return true;
         return activeTags.includes(itemLayer);
       });
