@@ -63,7 +63,10 @@ export function useDisplayData(
         } else {
           const itemTags = item.tags && item.tags.length > 0 ? item.tags : (item.tag ? [item.tag] : []);
           if (itemTags.length > 0) {
-            itemLayer = tagMaster[itemTags[0]]?.layer || "共通";
+            // 🌟🌟🌟 ここが透明化の「真の黒幕」！！！ 🌟🌟🌟
+            // 修正前：tagMaster[itemTags[0]]?.layer || "共通";
+            // 修正後：辞書にない親カテゴリ（ゼミ等）だった場合、"共通" に落とさず、そのままの名前を維持する保険を追加！
+            itemLayer = tagMaster[itemTags[0]]?.layer || itemTags[0] || "共通";
           }
         }
 
