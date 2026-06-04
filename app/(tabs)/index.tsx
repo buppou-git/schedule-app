@@ -336,7 +336,7 @@ function IndexContent() {
   const [deepLinkRoomName, setDeepLinkRoomName] = useState("");
   const [deepLinkRoomColor, setDeepLinkRoomColor] = useState("#007AFF");
 
-  const { roomSchedules, safeDebouncedSync, debugInfo } = useCloudSync(sharedRooms);
+  const { roomSchedules, safeDebouncedSync} = useCloudSync(sharedRooms);
 
   const {
     isAppLocked,

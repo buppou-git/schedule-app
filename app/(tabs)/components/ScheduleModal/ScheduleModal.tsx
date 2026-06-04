@@ -42,7 +42,6 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  unstable_batchedUpdates,
 } from "react-native";
 
 interface ScheduleModalProps {
@@ -335,7 +334,6 @@ const ScheduleModal = ({
     setTimeout(() => {
       // 🌟 限界突破：10個のバラバラの更新を「1回」に束ねる最強の魔法！
       // これにより、開く瞬間の「10連続フリーズ」が消滅します！
-      unstable_batchedUpdates(() => {
         const layers = Object.keys(layerMaster);
         const def = layers.length > 0 ? layers[0] : "生活";
 
@@ -450,7 +448,6 @@ const ScheduleModal = ({
 
         isInitialized.current = true;
         setIsReady(true);
-      }); // 🌟 束ねる魔法ここまで
     }, 10);
   }, [visible, selectedItem, activeMode, selectedDate, layerMaster]);
 
@@ -871,16 +868,15 @@ const ScheduleModal = ({
 
       const isSharedLayer = Object.keys(sharedRooms).includes(selectedLayer);
 
+      // 🌟 あなたのアイデアを採用！ UIの代わりにアラートで結果を報告する！
       if (!isSharedLayer) {
-
-        const msg = `❌ NOT SHARED
-      layer: ${selectedLayer}
-      sharedKeys: ${Object.keys(sharedRooms).join(",")}`;
-      
-        setDebugMessage?.(msg);
-      
+        // ① 共有レイヤーじゃなかった時のアラート
+        Alert.alert(
+          "デバッグ：共有ルートに乗りませんでした",
+          `❌ 選んだカテゴリ: ${selectedLayer}\n📁 共有中のカテゴリ: ${Object.keys(sharedRooms).join(", ")}\n\n※名前が一致していないためローカルのみに保存します。`
+        );
       } else if (safeDebouncedSync) {
-      
+        // ② 完璧に共有ルートに乗った時のアラート
         const fixedItem = {
           ...newItem,
           layer: selectedLayer,
@@ -889,14 +885,19 @@ const ScheduleModal = ({
           tags: newItem.tags,
         };
       
-        const msg = `🚀 SEND
-      layer: ${fixedItem.sharedLayer}
-      roomId: ${fixedItem.sharedRoomId}
-      match: ${!!sharedRooms[fixedItem.sharedLayer]}`;
+        Alert.alert(
+          "デバッグ：🚀 共有ルート送信成功！",
+          `✅ レイヤー: ${fixedItem.sharedLayer}\n🔑 ルームID: ${fixedItem.sharedRoomId}\n\nこのままクラウドへ送信します！`
+        );
       
-        setDebugMessage?.(msg);
-      
+        // 実際に送信する
         safeDebouncedSync(fixedItem, sStr);
+      } else {
+        // ③ 万が一送信関数が渡ってきていなかった時のアラート
+        Alert.alert(
+          "デバッグ：⚠️ 異常事態",
+          "safeDebouncedSync 関数が index.tsx から渡ってきていません！"
+        );
       }
       
 
