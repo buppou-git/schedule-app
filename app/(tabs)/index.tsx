@@ -1148,7 +1148,8 @@ function IndexContent() {
     tagMaster,
   );
 
-  const { expandedScheduleData, currentMarkedDates } = useCalendarData(
+  // 🌟 修正1：const を let に変えて、後から上書きできるようにする！
+  const calendarData = useCalendarData(
     displayData,
     activeMode,
     activeTags,
@@ -1157,8 +1158,10 @@ function IndexContent() {
     selectedDate,
     hiddenExternalIds,
   );
+  let currentMarkedDates = { ...calendarData.currentMarkedDates };
+  let expandedScheduleData = calendarData.expandedScheduleData;
 
-  const { dayTasks, upcomingTasks, dayEvents } = useDailyItems(
+  const dailyData = useDailyItems(
     expandedScheduleData,
     displayData,
     selectedDate,
@@ -1166,6 +1169,33 @@ function IndexContent() {
     activeMode,
     tagMaster,
   );
+  let dayTasks = dailyData.dayTasks;
+  let upcomingTasks = dailyData.upcomingTasks;
+  let dayEvents = dailyData.dayEvents;
+
+  // 👇👇👇 🌟🌟🌟 ここから究極の強制バイパス（配管の詰まりをぶち抜く！） 🌟🌟🌟 👇👇👇
+
+  // ① 予定リストの強制上書き
+  if (displayData[selectedDate]) {
+    // フィルター済みの完成品箱から直接リストに流し込む！
+    dayEvents = displayData[selectedDate].filter((item) => item.isEvent);
+    dayTasks = displayData[selectedDate].filter((item) => item.isTodo);
+  }
+
+  // ② カレンダーの点（ドット）の強制上書き
+  Object.keys(displayData).forEach((date) => {
+    if (!currentMarkedDates[date]) {
+      currentMarkedDates[date] = { dots: [] };
+    }
+    // 完成品箱にある予定の「色」を、強制的にドットとしてカレンダーにねじ込む！
+    const forcedDots = displayData[date].map((item) => ({
+      key: String(item.id),
+      color: item.color || "#007AFF",
+    }));
+    currentMarkedDates[date].dots = forcedDots;
+  });
+
+  // 👆👆👆 🌟🌟🌟 強制バイパスここまで 🌟🌟🌟 👆👆👆
 
   useEffect(() => {
     let sharedCount = 0;
