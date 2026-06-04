@@ -7,7 +7,7 @@ export function useDisplayData(
   externalEvents: { [key: string]: ScheduleItem[] },
   roomSchedules: { [roomId: string]: { [date: string]: ScheduleItem[] } },
   activeTags: string[],
-  tagMaster: Record<string, { layer: string; color: string }>
+  tagMaster: Record<string, { layer: string; color: string }>,
 ) {
   // 💣 爆弾撤去 1: 「データの結合」は、予定が追加・編集された時だけ実行する！
   const mergedAllData = useMemo(() => {
@@ -22,7 +22,12 @@ export function useDisplayData(
       const map = getMapForDate(date);
       externalEvents[date].forEach((item) => {
         const rawId = item.id.replace("ext_", "");
-        map.set(rawId, { ...item, externalEventId: rawId, color: "#FF2D55", isEvent: true });
+        map.set(rawId, {
+          ...item,
+          externalEventId: rawId,
+          color: "#FF2D55",
+          isEvent: true,
+        });
       });
     });
 
@@ -42,7 +47,13 @@ export function useDisplayData(
         const map = getMapForDate(date);
         roomData[date].forEach((item) => {
           const key = item.externalEventId ? item.externalEventId : item.id;
-          map.set(key, item);
+
+          // 🌟🌟🌟 究極の防波堤 🌟🌟🌟
+          // 自分のスマホ（ローカル）に既に同じ予定がある場合は、クラウドデータで上書きさせない！
+          // これにより、自分の作った予定がクラウドのデータによって透明化されるのを完全に防ぎます。
+          if (!map.has(key)) {
+            map.set(key, item);
+          }
         });
       });
     });
@@ -61,7 +72,12 @@ export function useDisplayData(
         if (item.category === "外部カレンダー" || item.externalEventId) {
           itemLayer = "外部予定";
         } else {
-          const itemTags = item.tags && item.tags.length > 0 ? item.tags : (item.tag ? [item.tag] : []);
+          const itemTags =
+            item.tags && item.tags.length > 0
+              ? item.tags
+              : item.tag
+                ? [item.tag]
+                : [];
           if (itemTags.length > 0) {
             // 🌟🌟🌟 ここが透明化の「真の黒幕」！！！ 🌟🌟🌟
             // 修正前：tagMaster[itemTags[0]]?.layer || "共通";
@@ -87,7 +103,7 @@ export function useDailyItems(
   selectedDate: string,
   activeTags: string[],
   activeMode: string,
-  tagMaster: Record<string, { layer: string; color: string }>
+  tagMaster: Record<string, { layer: string; color: string }>,
 ) {
   return useMemo(() => {
     const items = expandedScheduleData[selectedDate] || [];
@@ -98,8 +114,14 @@ export function useDailyItems(
     const dEvents: ScheduleItem[] = [];
 
     items.forEach((item: ScheduleItem) => {
-      const itemTags = item.tags && item.tags.length > 0 ? item.tags : item.tag ? [item.tag] : [];
-      const isExternal = item.category === "外部カレンダー" || !!item.externalEventId;
+      const itemTags =
+        item.tags && item.tags.length > 0
+          ? item.tags
+          : item.tag
+            ? [item.tag]
+            : [];
+      const isExternal =
+        item.category === "外部カレンダー" || !!item.externalEventId;
       const matchLayer =
         isAllLayers ||
         (isExternal && activeTagsSet.has("外部予定")) ||
@@ -130,7 +152,12 @@ export function useDailyItems(
               !dayTaskIds.has(task.id) &&
               !addedUpcomingIds.has(task.id)
             ) {
-              const itemTags = task.tags && task.tags.length > 0 ? task.tags : task.tag ? [task.tag] : [];
+              const itemTags =
+                task.tags && task.tags.length > 0
+                  ? task.tags
+                  : task.tag
+                    ? [task.tag]
+                    : [];
               if (
                 isAllLayers ||
                 itemTags.some((tag) => {
@@ -163,5 +190,12 @@ export function useDailyItems(
     });
 
     return { dayTasks: dTasks, upcomingTasks: uTasks, dayEvents: dEvents };
-  }, [expandedScheduleData, selectedDate, activeTags, activeMode, tagMaster, displayData]);
+  }, [
+    expandedScheduleData,
+    selectedDate,
+    activeTags,
+    activeMode,
+    tagMaster,
+    displayData,
+  ]);
 }
