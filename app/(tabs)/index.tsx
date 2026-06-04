@@ -338,6 +338,25 @@ function IndexContent() {
 
   const { roomSchedules, safeDebouncedSync } = useCloudSync(sharedRooms);
 
+  useEffect(() => {
+    let itemCount = 0;
+    Object.values(roomSchedules).forEach(dates => {
+      Object.values(dates).forEach(items => {
+        itemCount += items.length;
+      });
+    });
+
+    // 0件以上のデータが降ってきたらアラートでお知らせ！
+    if (itemCount > 0) {
+      Alert.alert(
+        "📥 クラウド受信完了！",
+        `クラウドから ${itemCount} 件の共有予定を受信しました！\n\n※詳細はターミナルに出力しています`
+      );
+      // ターミナルにも生のデータを出力（原因究明用）
+      console.log("📥 [受信した生データ]:", JSON.stringify(roomSchedules, null, 2));
+    }
+  }, [roomSchedules]);
+
   const {
     isAppLocked,
     pinForUnlock,
