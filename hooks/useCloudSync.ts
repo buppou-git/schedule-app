@@ -1,15 +1,29 @@
 import { collection, doc, onSnapshot, setDoc } from "firebase/firestore";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
-// ※ご自身の環境に合わせて firebaseConfig のパスを調整してください（例: "../firebaseConfig" など）
-import { db } from "../firebaseConfig";
+// 🌟 修正：auth と onAuthStateChanged を追加でインポートする！
+import { onAuthStateChanged } from "firebase/auth";
+import { auth, db } from "../firebaseConfig";
 import { ScheduleItem } from "../types";
 
+// ❌ 以前ここにあった `const [debugInfo, setDebugInfo]...` は完全に消去しました！
 
 export function useCloudSync(sharedRooms: { [layerName: string]: string }) {
   const [roomSchedules, setRoomSchedules] = useState<{
     [roomId: string]: { [date: string]: ScheduleItem[] };
   }>({});
+
+  // 🌟 追加：最強の盾！ログインが完了したかを判定するフラグ
+  const [isAuthReady, setIsAuthReady] = useState(false);
+
+  useEffect(() => {
+    // ログイン完了の通知が来るまでじっと待つ
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) setIsAuthReady(true);
+    });
+    return () => unsubscribe();
+  }, []);
+
   const syncQueue = useRef<{
     [id: string]: {
       item: ScheduleItem;
@@ -20,6 +34,9 @@ export function useCloudSync(sharedRooms: { [layerName: string]: string }) {
 
   // 🌟 1. 共有ルームのデータ受信（リアルタイム監視）
   useEffect(() => {
+    // 🌟 限界突破：ログインが完了するまでは絶対に監視を始めない！（権限エラーで死ぬのを100%防ぐ）
+    if (!isAuthReady) return;
+
     const roomIds = Object.values(sharedRooms);
     if (roomIds.length === 0) {
       setRoomSchedules({});
@@ -49,7 +66,9 @@ export function useCloudSync(sharedRooms: { [layerName: string]: string }) {
     });
 
     return () => unsubscribes.forEach((unsub) => unsub());
-  }, [sharedRooms]);
+  }, [sharedRooms, isAuthReady]); // 🌟 isAuthReady が true になった瞬間に動き出す！
+
+  // 👇 （ここから下の 2. 共有データの送信処理 などはそのまま残してください）
 
   // 🌟 2. 共有データの送信処理
   const handleSaveItem = async (item: ScheduleItem, date: string) => {
@@ -82,17 +101,14 @@ export function useCloudSync(sharedRooms: { [layerName: string]: string }) {
         updatedAt: new Date().toISOString(),
       };
 
-
       await setDoc(
         docRef,
         {
           ...cleanItem,
           date,
         },
-        { merge: true }
+        { merge: true },
       );
-
-
     } catch (e) {
       console.error("共有保存エラー:", e);
     }
@@ -146,5 +162,5 @@ export function useCloudSync(sharedRooms: { [layerName: string]: string }) {
     return () => subscription.remove();
   }, [sharedRooms]);
 
-  return { roomSchedules, safeDebouncedSync};
+  return { roomSchedules, safeDebouncedSync };
 }
