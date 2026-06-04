@@ -1167,6 +1167,29 @@ function IndexContent() {
     tagMaster,
   );
 
+  useEffect(() => {
+    let sharedCount = 0;
+    let sampleTitle = "";
+
+    // カレンダーに渡る直前の「完成品の箱（displayData）」をチェックする
+    Object.keys(displayData).forEach((date) => {
+      displayData[date].forEach((item) => {
+        // 自分の設定した共有カテゴリ名と同じデータが生き残っているか確認
+        if (Object.keys(sharedRooms).includes(item.layer || "")) {
+          sharedCount++;
+          if (!sampleTitle) sampleTitle = item.title; // 最初の1件の名前をメモ
+        }
+      });
+    });
+
+    if (sharedCount > 0) {
+      Alert.alert(
+        "🎯 【最終関門】カレンダー手前まで到達！",
+        `完成品の箱に ${sharedCount} 件の共有予定が生き残っています！\n（予定名: ${sampleTitle}）\n\n※ここに来ているのに画面に見えないなら、原因は見た目(UI)のバグです！`,
+      );
+    }
+  }, [displayData, sharedRooms]);
+
   const currentSolidColor = useMemo(() => {
     if (activeTags.length === 1) {
       return layerMaster[activeTags[0]] || "#1C1C1E"; // 外部予定の色も layerMaster に登録される前提
