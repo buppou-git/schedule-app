@@ -334,120 +334,120 @@ const ScheduleModal = ({
     setTimeout(() => {
       // 🌟 限界突破：10個のバラバラの更新を「1回」に束ねる最強の魔法！
       // これにより、開く瞬間の「10連続フリーズ」が消滅します！
-        const layers = Object.keys(layerMaster);
-        const def = layers.length > 0 ? layers[0] : "生活";
+      const layers = Object.keys(layerMaster);
+      const def = layers.length > 0 ? layers[0] : "生活";
 
-        if (selectedItem) {
-          setIsSimpleMode(false);
-          const parsedStartTime = new Date();
-          if (selectedItem.startTime) {
-            const [h, m] = selectedItem.startTime.split(":").map(Number);
-            parsedStartTime.setHours(h, m, 0, 0);
-          }
-          const parsedEndTime = new Date();
-          if (selectedItem.endTime) {
-            const [h, m] = selectedItem.endTime.split(":").map(Number);
-            parsedEndTime.setHours(h, m, 0, 0);
-          }
+      if (selectedItem) {
+        setIsSimpleMode(false);
+        const parsedStartTime = new Date();
+        if (selectedItem.startTime) {
+          const [h, m] = selectedItem.startTime.split(":").map(Number);
+          parsedStartTime.setHours(h, m, 0, 0);
+        }
+        const parsedEndTime = new Date();
+        if (selectedItem.endTime) {
+          const [h, m] = selectedItem.endTime.split(":").map(Number);
+          parsedEndTime.setHours(h, m, 0, 0);
+        }
 
-          updateForm({
+        updateForm({
+          title: selectedItem.title || "",
+          amount:
+            selectedItem.amount > 0 ? selectedItem.amount.toString() : "",
+          isEvent: selectedItem.isEvent ?? true,
+          isTodo: selectedItem.isTodo ?? false,
+          isExpense: selectedItem.isExpense ?? false,
+          tag: selectedItem.tag || "",
+          tagColor: selectedItem.color || "#007AFF",
+          category: selectedItem.category || "食費",
+          isAllDay: selectedItem.isAllDay ?? true,
+          repeatType: selectedItem.repeatType || "none",
+          repeatDays: selectedItem.repeatDays || [],
+          repeatInterval: selectedItem.repeatInterval || 1,
+
+          repeatEndDate: selectedItem.repeatEndDate
+            ? new Date(selectedItem.repeatEndDate)
+            : null,
+
+          startDate: new Date(selectedItem.startDate || selectedDate),
+          endDate: new Date(selectedItem.endDate || selectedDate),
+          startTime: parsedStartTime,
+          endTime: parsedEndTime,
+        });
+
+        const savedLayer =
+          tagMaster?.[selectedItem.tag || ""]?.layer ||
+          (layerMaster[selectedItem.tag || ""] ? selectedItem.tag : def);
+        setSelectedLayer(savedLayer || def);
+
+        const hasOldNotification =
+          selectedItem.notificationIds &&
+          selectedItem.notificationIds.length > 0;
+        setSelectedReminders(
+          selectedItem.reminderOptions ||
+          (hasOldNotification ? ["exact"] : []),
+        );
+
+        if (selectedItem.customReminderTimes) {
+          setCustomReminderTimes(
+            selectedItem.customReminderTimes.map((tStr) => new Date(tStr)),
+          );
+        } else {
+          setCustomReminderTimes([]);
+        }
+        setNewTagColor("");
+
+        const savedSubTasks = selectedItem.subTasks || [];
+        setSubTasks(savedSubTasks);
+        setShowSubTasks(savedSubTasks.length > 0);
+
+        setInitialSnapshot(
+          JSON.stringify({
             title: selectedItem.title || "",
-            amount:
-              selectedItem.amount > 0 ? selectedItem.amount.toString() : "",
-            isEvent: selectedItem.isEvent ?? true,
+            amount: parseInt(selectedItem.amount?.toString() || "0"),
             isTodo: selectedItem.isTodo ?? false,
-            isExpense: selectedItem.isExpense ?? false,
-            tag: selectedItem.tag || "",
-            tagColor: selectedItem.color || "#007AFF",
-            category: selectedItem.category || "食費",
-            isAllDay: selectedItem.isAllDay ?? true,
             repeatType: selectedItem.repeatType || "none",
             repeatDays: selectedItem.repeatDays || [],
             repeatInterval: selectedItem.repeatInterval || 1,
+            repeatEndDate: selectedItem.repeatEndDate || null,
+            subTasksData: savedSubTasks
+              .map((t: SubTask) => `${t.title}_${t.isDone}`)
+              .join(","),
+          }),
+        );
+      } else {
+        setIsSimpleMode(true);
+        updateForm({
+          title: "",
+          amount: "",
+          isEvent: activeMode === "calendar",
+          isTodo: activeMode === "todo",
+          isExpense: activeMode === "money",
+          tag: "",
+          tagColor: layerMaster[def] || "#007AFF",
+          category: "食費",
+          isAllDay: true,
+          repeatType: "none",
+          repeatDays: [],
+          repeatInterval: 1,
+          repeatEndDate: null,
+          startDate: new Date(selectedDate),
+          endDate: new Date(selectedDate),
+          startTime: new Date(),
+          endTime: new Date(new Date().getTime() + 60 * 60 * 1000),
+        });
 
-            repeatEndDate: selectedItem.repeatEndDate
-              ? new Date(selectedItem.repeatEndDate)
-              : null,
+        setSelectedLayer(def);
+        setSelectedReminders([]);
+        setCustomReminderTimes([]);
+        setNewTagColor("");
+        setSubTasks([]);
+        setShowSubTasks(false);
+      }
+      setIsCreatingNewTag(false);
 
-            startDate: new Date(selectedItem.startDate || selectedDate),
-            endDate: new Date(selectedItem.endDate || selectedDate),
-            startTime: parsedStartTime,
-            endTime: parsedEndTime,
-          });
-
-          const savedLayer =
-            tagMaster?.[selectedItem.tag || ""]?.layer ||
-            (layerMaster[selectedItem.tag || ""] ? selectedItem.tag : def);
-          setSelectedLayer(savedLayer || def);
-
-          const hasOldNotification =
-            selectedItem.notificationIds &&
-            selectedItem.notificationIds.length > 0;
-          setSelectedReminders(
-            selectedItem.reminderOptions ||
-            (hasOldNotification ? ["exact"] : []),
-          );
-
-          if (selectedItem.customReminderTimes) {
-            setCustomReminderTimes(
-              selectedItem.customReminderTimes.map((tStr) => new Date(tStr)),
-            );
-          } else {
-            setCustomReminderTimes([]);
-          }
-          setNewTagColor("");
-
-          const savedSubTasks = selectedItem.subTasks || [];
-          setSubTasks(savedSubTasks);
-          setShowSubTasks(savedSubTasks.length > 0);
-
-          setInitialSnapshot(
-            JSON.stringify({
-              title: selectedItem.title || "",
-              amount: parseInt(selectedItem.amount?.toString() || "0"),
-              isTodo: selectedItem.isTodo ?? false,
-              repeatType: selectedItem.repeatType || "none",
-              repeatDays: selectedItem.repeatDays || [],
-              repeatInterval: selectedItem.repeatInterval || 1,
-              repeatEndDate: selectedItem.repeatEndDate || null,
-              subTasksData: savedSubTasks
-                .map((t: SubTask) => `${t.title}_${t.isDone}`)
-                .join(","),
-            }),
-          );
-        } else {
-          setIsSimpleMode(true);
-          updateForm({
-            title: "",
-            amount: "",
-            isEvent: activeMode === "calendar",
-            isTodo: activeMode === "todo",
-            isExpense: activeMode === "money",
-            tag: "",
-            tagColor: layerMaster[def] || "#007AFF",
-            category: "食費",
-            isAllDay: true,
-            repeatType: "none",
-            repeatDays: [],
-            repeatInterval: 1,
-            repeatEndDate: null,
-            startDate: new Date(selectedDate),
-            endDate: new Date(selectedDate),
-            startTime: new Date(),
-            endTime: new Date(new Date().getTime() + 60 * 60 * 1000),
-          });
-
-          setSelectedLayer(def);
-          setSelectedReminders([]);
-          setCustomReminderTimes([]);
-          setNewTagColor("");
-          setSubTasks([]);
-          setShowSubTasks(false);
-        }
-        setIsCreatingNewTag(false);
-
-        isInitialized.current = true;
-        setIsReady(true);
+      isInitialized.current = true;
+      setIsReady(true);
     }, 10);
   }, [visible, selectedItem, activeMode, selectedDate, layerMaster]);
 
@@ -569,11 +569,6 @@ const ScheduleModal = ({
 
   const executeSave = async (mode: "normal" | "all" | "single") => {
 
-
-    console.log("🔥 SAVE START");
-    console.log("layer:", selectedLayer);
-    console.log("sharedRooms:", sharedRooms);
-    console.log("safeDebouncedSync:", safeDebouncedSync);
 
 
     // 🌟 1. 保存中なら処理をブロック
@@ -868,15 +863,8 @@ const ScheduleModal = ({
 
       const isSharedLayer = Object.keys(sharedRooms).includes(selectedLayer);
 
-      // 🌟 あなたのアイデアを採用！ UIの代わりにアラートで結果を報告する！
-      if (!isSharedLayer) {
-        // ① 共有レイヤーじゃなかった時のアラート
-        Alert.alert(
-          "デバッグ：共有ルートに乗りませんでした",
-          `❌ 選んだカテゴリ: ${selectedLayer}\n📁 共有中のカテゴリ: ${Object.keys(sharedRooms).join(", ")}\n\n※名前が一致していないためローカルのみに保存します。`
-        );
-      } else if (safeDebouncedSync) {
-        // ② 完璧に共有ルートに乗った時のアラート
+      // 🌟 共有レイヤーの場合、クラウドへ静かに同期する（アラートなし）
+      if (isSharedLayer && safeDebouncedSync) {
         const fixedItem = {
           ...newItem,
           layer: selectedLayer,
@@ -884,22 +872,9 @@ const ScheduleModal = ({
           sharedRoomId: sharedRooms[selectedLayer],
           tags: newItem.tags,
         };
-      
-        Alert.alert(
-          "デバッグ：🚀 共有ルート送信成功！",
-          `✅ レイヤー: ${fixedItem.sharedLayer}\n🔑 ルームID: ${fixedItem.sharedRoomId}\n\nこのままクラウドへ送信します！`
-        );
-      
-        // 実際に送信する
         safeDebouncedSync(fixedItem, sStr);
-      } else {
-        // ③ 万が一送信関数が渡ってきていなかった時のアラート
-        Alert.alert(
-          "デバッグ：⚠️ 異常事態",
-          "safeDebouncedSync 関数が index.tsx から渡ってきていません！"
-        );
       }
-      
+
 
       // 🌟 削除アクション（古い部屋からの移動時など）があった場合のみ commit
       if (hasCloudAction) {
