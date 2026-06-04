@@ -336,7 +336,7 @@ function IndexContent() {
   const [deepLinkRoomName, setDeepLinkRoomName] = useState("");
   const [deepLinkRoomColor, setDeepLinkRoomColor] = useState("#007AFF");
 
-  const { roomSchedules, safeDebouncedSync} = useCloudSync(sharedRooms);
+  const { roomSchedules, safeDebouncedSync } = useCloudSync(sharedRooms);
 
   const {
     isAppLocked,
@@ -373,39 +373,48 @@ function IndexContent() {
   const { cancelItemNotification, scheduleItemNotification } =
     useNotificationManager();
 
-// 🌟 追加：最強の「自動翻訳システム」の修正版
-  // 相手が違うカテゴリ名をつけていても、自分の設定した名前に変換して表示する
+  // 🌟 追加：最強の「自動翻訳システム」の完全修正版！
+  // TypeScriptのルール（2階層）を守りつつ、外側の箱のラベルを roomId から「自分のカテゴリ名」に張り替える！
   const translatedRoomSchedules = useMemo(() => {
-    // 🌟 修正：カレンダー描画システムが読み取れるように、箱のラベル（キー）は「roomId」のまま戻す！
-    const translated: { [roomId: string]: { [date: string]: ScheduleItem[] } } = {};
+    // 🌟 修正：型は描画システムが期待する 2階層 のままにする！
+    const translated: { [layerName: string]: { [date: string]: ScheduleItem[] } } = {};
 
     Object.keys(roomSchedules).forEach((roomId) => {
-      // 自分がつけているカテゴリ名を探す
+      // 自分がつけているカテゴリ名を探す（例：「ゼミ」）
       const myLayerName = Object.keys(sharedRooms).find(
         (key) => sharedRooms[key] === roomId
       ) || roomId;
 
-      translated[roomId] = {}; // 🌟 ここが超重要！箱のラベルは roomId のまま！
+      // 🌟🌟🌟 最大の修正ポイント 🌟🌟🌟
+      // 外側の箱のラベルを、roomId（room_123）ではなく、自分のカテゴリ名（ゼミ）にする！
+      if (!translated[myLayerName]) {
+        translated[myLayerName] = {};
+      }
+
       const datesData = roomSchedules[roomId] || {};
 
       Object.keys(datesData).forEach((date) => {
         const dailyItems = datesData[date] || [];
 
-        // 予定の中身だけを翻訳する
+        // 予定の中身を自分の色と名前に翻訳する
         const newItems = dailyItems.map((item: ScheduleItem) => {
-          if (myLayerName !== roomId) { 
-            return {
-              ...item,
-              layer: myLayerName,
-              tag: myLayerName,
-              tags: [myLayerName],
-              color: layerMaster[myLayerName] || item.color,
-            } as ScheduleItem;
-          }
-          return item;
+          return {
+            ...item,
+            layer: myLayerName,
+            tag: myLayerName,
+            tags: [myLayerName],
+            color: layerMaster[myLayerName] || item.color,
+          } as ScheduleItem;
         });
 
-        translated[roomId][date] = newItems; // 🌟 roomId の箱にしまう！
+        // 日付の箱を用意して、予定を放り込む
+        if (!translated[myLayerName][date]) {
+          translated[myLayerName][date] = [];
+        }
+        translated[myLayerName][date] = [
+          ...translated[myLayerName][date],
+          ...newItems
+        ];
       });
     });
 
