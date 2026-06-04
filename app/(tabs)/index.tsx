@@ -423,71 +423,6 @@ function IndexContent() {
   const { cancelItemNotification, scheduleItemNotification } =
     useNotificationManager();
 
-  // 🌟 追加：最強の「自動翻訳システム」の完全修正版！
-  // 描画システムが迷わないようにしつつ、属性（サブタグ）と色を絶対に破壊しない！
-  const translatedRoomSchedules = useMemo(() => {
-    const translated: { [roomId: string]: { [date: string]: ScheduleItem[] } } = {};
-
-    Object.keys(roomSchedules).forEach((roomId) => {
-      // 自分がつけている親カテゴリ名を探す（例：「ゼミ」）
-      const myLayerName =
-        Object.keys(sharedRooms).find((key) => sharedRooms[key] === roomId) ||
-        roomId;
-
-      translated[roomId] = {};
-
-      const datesData = roomSchedules[roomId] || {};
-
-      Object.keys(datesData).forEach((date) => {
-        const dailyItems = datesData[date] || [];
-
-        // 予定の中身を翻訳する
-        const newItems = dailyItems.map((item: ScheduleItem) => {
-          // 🌟🌟🌟 ここが最大の修正ポイント！ 🌟🌟🌟
-          // 送られてきたタグから「属性（サブカテゴリ）」を抽出する！
-          let finalTag = myLayerName;
-          let finalTags = [myLayerName];
-          let finalColor = layerMaster[myLayerName] || item.color;
-
-          // 相手が送ってきたデータの2番目に属性（サブカテゴリ）が入っているかチェック
-          if (item.tags && item.tags.length > 1) {
-            const subTag = item.tags[1]; // 例: "食費"
-            finalTag = subTag;
-            finalTags = [myLayerName, subTag]; // 親と子の両方を保持！
-
-            // 自分のスマホにその属性の色設定があればそれを使い、なければ相手の色をそのまま使う
-            if (tagMaster[subTag]) {
-              finalColor = tagMaster[subTag].color;
-            } else {
-              finalColor = item.color;
-            }
-          } else if (item.tag && item.tag !== item.layer && item.tag !== item.sharedLayer) {
-            // (保険) 配列ではなく tag に直接属性が入っていた場合
-            finalTag = item.tag;
-            finalTags = [myLayerName, item.tag];
-            if (tagMaster[item.tag]) {
-              finalColor = tagMaster[item.tag].color;
-            } else {
-              finalColor = item.color;
-            }
-          }
-
-          return {
-            ...item,
-            layer: myLayerName,
-            tag: finalTag,     // ✅ 属性（サブカテゴリ）を維持！
-            tags: finalTags,   // ✅ [親カテゴリ, 属性] を維持！
-            color: finalColor, // ✅ 属性の色を維持！
-          } as ScheduleItem;
-        });
-
-        translated[roomId][date] = newItems;
-      });
-    });
-
-    return translated;
-  }, [roomSchedules, sharedRooms, layerMaster, tagMaster]); // 🌟 tagMasterを追加（色を変えたら即反映されるようにする！）
-
   const handleCopyExternal = (item: ScheduleItem) => {
     // 外部予定特有のデータを剥がす
     const { externalEventId, color, ...rest } = item;
@@ -1195,6 +1130,86 @@ function IndexContent() {
     return cachedColoredData.current;
   }, [scheduleData, tagMaster, layerMaster, activeTags]);
 
+  // 🌟 追加：最強の「自動翻訳システム」の完全修正版！
+  // 描画システムが迷わないようにしつつ、表示するバッジをフィルターに合わせて賢く切り替える！
+  const translatedRoomSchedules = useMemo(() => {
+    const translated: { [roomId: string]: { [date: string]: ScheduleItem[] } } = {};
+
+    Object.keys(roomSchedules).forEach((roomId) => {
+      // 自分がつけている親カテゴリ名を探す（例：「ゼミ」）
+      const myLayerName =
+        Object.keys(sharedRooms).find((key) => sharedRooms[key] === roomId) ||
+        roomId;
+
+      translated[roomId] = {};
+
+      const datesData = roomSchedules[roomId] || {};
+
+      Object.keys(datesData).forEach((date) => {
+        const dailyItems = datesData[date] || [];
+
+        // 予定の中身を翻訳する
+        const newItems = dailyItems.map((item: ScheduleItem) => {
+          let finalTag = myLayerName;
+          let finalColor = layerMaster[myLayerName] || item.color;
+
+          // 相手が送ってきた属性（サブカテゴリ）を特定
+          if (item.tags && item.tags.length > 1) {
+            const subTag = item.tags[1]; // 例: "食費"
+            finalTag = subTag;
+
+            if (tagMaster[subTag]) {
+              finalColor = tagMaster[subTag].color;
+            } else {
+              finalColor = item.color;
+            }
+          } else if (
+            item.tag &&
+            item.tag !== item.layer &&
+            item.tag !== item.sharedLayer &&
+            item.tag !== myLayerName
+          ) {
+            finalTag = item.tag;
+            if (tagMaster[item.tag]) {
+              finalColor = tagMaster[item.tag].color;
+            } else {
+              finalColor = item.color;
+            }
+          }
+
+          // 👇👇👇 🌟🌟🌟 ここがあなたの望みを叶える表示切り替えロジック 🌟🌟🌟 👇👇👇
+          let displayTags: string[] = [];
+
+          if (activeTags.length === 1 && activeTags[0] === myLayerName) {
+            // ① 単一カテゴリ（「ゼミ」など）を選択中
+            if (finalTag && finalTag !== myLayerName) {
+              displayTags = [finalTag]; // 属性があれば属性名だけを表示する
+            } else {
+              displayTags = []; // 属性がなければスッキリさせるため非表示
+            }
+          } else {
+            // ② オールレイヤーや複数カテゴリを表示中
+            displayTags = [myLayerName]; // 親カテゴリ名を表示する
+          }
+          // 👆👆👆 🌟🌟🌟 切り替えロジックここまで 🌟🌟🌟 👆👆👆
+
+          return {
+            ...item,
+            layer: myLayerName,
+            tag: finalTag,
+            tags: displayTags, // ✅ 画面に表示するバッジをここで制御！
+            color: finalColor,
+          } as ScheduleItem;
+        });
+
+        translated[roomId][date] = newItems;
+      });
+    });
+
+    return translated;
+  }, [roomSchedules, sharedRooms, layerMaster, tagMaster, activeTags]); // 🌟 activeTagsを追加して、フィルター変更時に即切り替わるようにする！
+
+
   const displayData = useDisplayData(
     coloredScheduleData,
     externalEvents, // 🌟 外部予定（Appleカレンダー等）を復活！
@@ -1527,14 +1542,23 @@ function IndexContent() {
       !updatedSub.isDone
     ) {
       let triggerDate = new Date(updatedSub.endTime);
-      if (updatedSub.reminderOption === "1hour")
+      let bodyPrefix = "時間になりました";
+
+      if (updatedSub.reminderOption === "1hour") {
         triggerDate.setHours(triggerDate.getHours() - 1);
-      else if (updatedSub.reminderOption === "1day")
+        bodyPrefix = "1時間前";
+      } else if (updatedSub.reminderOption === "1day") {
         triggerDate.setDate(triggerDate.getDate() - 1);
+        bodyPrefix = "明日";
+      }
 
       if (triggerDate > new Date()) {
+        const subTime = new Date(updatedSub.endTime);
+        const subTimeString = `${subTime.getHours().toString().padStart(2, "0")}:${subTime.getMinutes().toString().padStart(2, "0")}〜`;
+
         const id = await scheduleItemNotification(
-          `🔔【${parentTitle}】${updatedSub.title}`,
+          `⏰ ${parentTitle}：${updatedSub.title}`, // 🌟 1行目（親タスク名：子タスク名 に統一！）
+          `${bodyPrefix} ${subTimeString}`,           // 🌟 2行目
           triggerDate,
         );
         if (id) updatedSub.notificationId = id;

@@ -634,18 +634,33 @@ const ScheduleModal = ({
         }
       }
 
+      // 🌟 通知デザインの決定（カテゴリ名：タイトル）
+      const displayCategory = formData.tag.trim() || selectedLayer;
+      const notifTitle = `⏰ ${displayCategory}：${formData.title}`;
+
+      const timeString = formData.isAllDay
+        ? "終日"
+        : `${formData.startTime.getHours().toString().padStart(2, "0")}:${formData.startTime.getMinutes().toString().padStart(2, "0")}〜`;
+
       if (selectedReminders.length > 0) {
         for (const option of selectedReminders) {
           if (option === "custom") continue;
           let triggerDate = new Date(formData.startDate);
+          let bodyPrefix = "予定のお時間です";
+
           if (formData.isAllDay) {
-            if (option === "morning") triggerDate.setHours(7, 0, 0, 0);
+            if (option === "morning") {
+              triggerDate.setHours(7, 0, 0, 0);
+              bodyPrefix = "本日";
+            }
             else if (option === "dayBefore") {
               triggerDate.setDate(triggerDate.getDate() - 1);
               triggerDate.setHours(21, 0, 0, 0);
+              bodyPrefix = "明日";
             } else if (option === "2daysBefore") {
               triggerDate.setDate(triggerDate.getDate() - 2);
               triggerDate.setHours(21, 0, 0, 0);
+              bodyPrefix = "明後日";
             }
           } else {
             triggerDate.setHours(
@@ -654,22 +669,36 @@ const ScheduleModal = ({
               0,
               0,
             );
-            if (option === "10min")
+            if (option === "exact") {
+              bodyPrefix = "時間になりました";
+            }
+            else if (option === "10min") {
               triggerDate.setMinutes(triggerDate.getMinutes() - 10);
-            else if (option === "30min")
+              bodyPrefix = "10分前";
+            }
+            else if (option === "30min") {
               triggerDate.setMinutes(triggerDate.getMinutes() - 30);
-            else if (option === "1hour")
+              bodyPrefix = "30分前";
+            }
+            else if (option === "1hour") {
               triggerDate.setHours(triggerDate.getHours() - 1);
-            else if (option === "morning") triggerDate.setHours(7, 0, 0, 0);
+              bodyPrefix = "1時間前";
+            }
+            else if (option === "morning") {
+              triggerDate.setHours(7, 0, 0, 0);
+              bodyPrefix = "本日";
+            }
             else if (option === "dayBefore") {
               triggerDate.setDate(triggerDate.getDate() - 1);
               triggerDate.setHours(21, 0, 0, 0);
+              bodyPrefix = "明日";
             }
           }
 
           if (triggerDate > new Date()) {
             const id = await scheduleItemNotification(
-              formData.title,
+              notifTitle, // 1行目
+              `${bodyPrefix} ${timeString}`, // 2行目
               triggerDate,
             );
             if (id) finalNotificationIds.push(id);
@@ -677,11 +706,13 @@ const ScheduleModal = ({
         }
       }
 
+      // 🌟 ここがカスタム通知対応部分！（引数を3つに修正済み）
       if (selectedReminders.includes("custom")) {
         for (const customTime of customReminderTimes) {
           if (customTime > new Date()) {
             const id = await scheduleItemNotification(
-              formData.title,
+              notifTitle, // 1行目
+              `カスタム ${timeString}`, // 2行目（例：カスタム設定 14:00〜）
               customTime,
             );
             if (id) finalNotificationIds.push(id);
@@ -689,6 +720,7 @@ const ScheduleModal = ({
         }
       }
 
+      // 🌟 重複エラー回避：updatedSubTasks の宣言はここ「1つだけ」にする！
       const updatedSubTasks = await Promise.all(
         subTasks.map(async (task) => {
           if (task.notificationId) {
@@ -702,13 +734,25 @@ const ScheduleModal = ({
             task.reminderOption !== "none"
           ) {
             let triggerDate = new Date(task.endTime);
-            if (task.reminderOption === "1hour")
+            let bodyPrefix = "時間になりました";
+
+            if (task.reminderOption === "1hour") {
               triggerDate.setHours(triggerDate.getHours() - 1);
-            else if (task.reminderOption === "1day")
+              bodyPrefix = "1時間前";
+            }
+            else if (task.reminderOption === "1day") {
               triggerDate.setDate(triggerDate.getDate() - 1);
+              bodyPrefix = "明日";
+            }
+
             if (triggerDate > new Date()) {
+              const subTime = new Date(task.endTime);
+              const subTimeString = `${subTime.getHours().toString().padStart(2, "0")}:${subTime.getMinutes().toString().padStart(2, "0")}〜`;
+              const subNotifTitle = `⏰ ${formData.title}：${task.title}`;
+
               const id = await scheduleItemNotification(
-                `子タスク: ${task.title}`,
+                subNotifTitle, // 1行目
+                `${bodyPrefix} ${subTimeString}`, // 2行目
                 triggerDate,
               );
               if (id) newNotifId = id;
@@ -717,6 +761,7 @@ const ScheduleModal = ({
           return { ...task, notificationId: newNotifId };
         }),
       );
+
 
       const pureTodos = updatedSubTasks.filter(
         (t) => !t.isExpense && !t.isIncome,
