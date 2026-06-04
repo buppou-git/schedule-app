@@ -373,11 +373,11 @@ function IndexContent() {
   const { cancelItemNotification, scheduleItemNotification } =
     useNotificationManager();
 
-  // 🌟 追加：最強の「自動翻訳システム」の完全修正版！
-  // TypeScriptのルール（2階層）を守りつつ、外側の箱のラベルを roomId から「自分のカテゴリ名」に張り替える！
+ // 🌟 追加：最強の「自動翻訳システム」の完全修正版！
+  // 描画システムが迷わないように、外箱のラベルは「roomId」のまま維持する！
   const translatedRoomSchedules = useMemo(() => {
-    // 🌟 修正：型は描画システムが期待する 2階層 のままにする！
-    const translated: { [layerName: string]: { [date: string]: ScheduleItem[] } } = {};
+    // 🌟 修正：型を元の描画システムが期待する `[roomId: string]` に戻す！
+    const translated: { [roomId: string]: { [date: string]: ScheduleItem[] } } = {};
 
     Object.keys(roomSchedules).forEach((roomId) => {
       // 自分がつけているカテゴリ名を探す（例：「ゼミ」）
@@ -386,17 +386,15 @@ function IndexContent() {
       ) || roomId;
 
       // 🌟🌟🌟 最大の修正ポイント 🌟🌟🌟
-      // 外側の箱のラベルを、roomId（room_123）ではなく、自分のカテゴリ名（ゼミ）にする！
-      if (!translated[myLayerName]) {
-        translated[myLayerName] = {};
-      }
+      // 外側の箱のラベルは絶対に roomId（room_123...）のままにする！
+      translated[roomId] = {};
 
       const datesData = roomSchedules[roomId] || {};
 
       Object.keys(datesData).forEach((date) => {
         const dailyItems = datesData[date] || [];
 
-        // 予定の中身を自分の色と名前に翻訳する
+        // 予定の中身だけを自分の色と名前に翻訳する
         const newItems = dailyItems.map((item: ScheduleItem) => {
           return {
             ...item,
@@ -407,19 +405,13 @@ function IndexContent() {
           } as ScheduleItem;
         });
 
-        // 日付の箱を用意して、予定を放り込む
-        if (!translated[myLayerName][date]) {
-          translated[myLayerName][date] = [];
-        }
-        translated[myLayerName][date] = [
-          ...translated[myLayerName][date],
-          ...newItems
-        ];
+        // 翻訳した予定を、roomId の箱の中の日付にしまう！
+        translated[roomId][date] = newItems;
       });
     });
 
     return translated;
-  }, [roomSchedules, sharedRooms, layerMaster]);
+  }, [roomSchedules, sharedRooms, layerMaster]); 
 
   const handleCopyExternal = (item: ScheduleItem) => {
     // 外部予定特有のデータを剥がす
