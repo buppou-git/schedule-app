@@ -111,6 +111,7 @@ export default function BudgetDashboard({
   const [newWishAutoDeposit, setNewWishAutoDeposit] = useState(false);
   const [newWishAutoAmount, setNewWishAutoAmount] = useState("");
   const [newWishIsShared, setNewWishIsShared] = useState(false);
+  const [selectedSharedRoom, setSelectedSharedRoom] = useState<string | null>(null);
 
   const [isDepositModalVisible, setIsDepositModalVisible] = useState(false);
   const [isCompleteModalVisible, setIsCompleteModalVisible] = useState(false);
@@ -571,8 +572,9 @@ export default function BudgetDashboard({
       return;
     }
 
-    const targetRoomId = (newWishIsShared && sharedRooms) ? Object.values(sharedRooms)[0] : undefined;
-
+    const targetRoomId = (newWishIsShared && selectedSharedRoom && sharedRooms)
+      ? sharedRooms[selectedSharedRoom]
+      : undefined;
     // 🌟 【After】savedItem を先に定義して、newList と同時に作る
     let savedItem: WishItem;
     let newList;
@@ -620,6 +622,7 @@ export default function BudgetDashboard({
     setEditingWishId(null);
     setNewWishAutoDeposit(false);
     setNewWishAutoAmount("");
+    setSelectedSharedRoom(null);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
@@ -1205,6 +1208,22 @@ export default function BudgetDashboard({
                           ? wish.autoDepositAmount.toString()
                           : "",
                       );
+
+                      // 🌟 追加：編集時に既存の共有設定を復元する
+                      if (wish.sharedRoomId && sharedRooms) {
+                        const roomName = Object.keys(sharedRooms).find(key => sharedRooms[key] === wish.sharedRoomId);
+                        if (roomName) {
+                          setNewWishIsShared(true);
+                          setSelectedSharedRoom(roomName);
+                        } else {
+                          setNewWishIsShared(false);
+                          setSelectedSharedRoom(null);
+                        }
+                      } else {
+                        setNewWishIsShared(false);
+                        setSelectedSharedRoom(null);
+                      }
+
                       setIsAddWishModalVisible(true);
                     }}
                     delayLongPress={400}
@@ -2244,17 +2263,48 @@ export default function BudgetDashboard({
                 </>
               )}
 
-              {/* 🌟 共有スイッチのUIを追加 */}
+              {/* 🌟 共有スイッチとレイヤー選択UI */}
               {sharedRooms && Object.keys(sharedRooms).length > 0 && (
-                <View style={styles.settingSwitchRow}>
-                  <Text style={styles.settingSwitchLabel}>
-                    パートナーと共有する
-                  </Text>
-                  <Switch
-                    value={newWishIsShared}
-                    onValueChange={setNewWishIsShared}
-                    trackColor={{ false: "#E5E5EA", true: newWishColor }}
-                  />
+                <View style={{ marginTop: 15 }}>
+                  <View style={styles.settingSwitchRow}>
+                    <Text style={styles.settingSwitchLabel}>
+                      夢を共有する
+                    </Text>
+                    <Switch
+                      value={newWishIsShared}
+                      onValueChange={(v) => {
+                        setNewWishIsShared(v);
+                        if (!v) setSelectedSharedRoom(null); // オフにしたら選択をクリア
+                      }}
+                      trackColor={{ false: "#E5E5EA", true: newWishColor }}
+                    />
+                  </View>
+
+                  {/* スイッチONの時だけ、カテゴリ選択ボタンを表示 */}
+                  {newWishIsShared && (
+                    <View style={{ marginTop: 10 }}>
+                      <Text style={styles.settingLabel}>共有先レイヤーを選択</Text>
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 5 }}>
+                        {Object.keys(sharedRooms).map((layer) => (
+                          <TouchableOpacity
+                            key={layer}
+                            style={[
+                              { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1 },
+                              {
+                                backgroundColor: selectedSharedRoom === layer ? newWishColor : "#F2F2F7",
+                                borderColor: selectedSharedRoom === layer ? newWishColor : "#E5E5EA"
+                              }
+                            ]}
+                            onPress={() => setSelectedSharedRoom(layer)}
+                          >
+                            <Text style={{ color: selectedSharedRoom === layer ? "#FFF" : "#333", fontSize: 12, fontWeight: "bold" }}>
+                              {layer}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  )}
                 </View>
               )}
 
