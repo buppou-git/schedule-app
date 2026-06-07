@@ -106,7 +106,8 @@ export default function BudgetDashboard({
 
   const [isDepositModalVisible, setIsDepositModalVisible] = useState(false);
   const [isCompleteModalVisible, setIsCompleteModalVisible] = useState(false);
-  const [selectedWish, setSelectedWish] = useState<WishItem | null>(null);
+  // 🌟 追加：動的計算された savedAmount を持てるように型を拡張
+  const [selectedWish, setSelectedWish] = useState<(WishItem & { dynamicSavedAmount: number }) | null>(null);
   const [depositAmount, setDepositAmount] = useState("");
 
   const [unallocatedSavings, setUnallocatedSavings] = useState(0);
@@ -407,7 +408,40 @@ export default function BudgetDashboard({
     0,
   );
   const remainingToAllocate = unallocatedSavings - totalSweeperAllocation;
-  const activeWishes = wishlist.filter((w) => w.savedAmount < w.targetAmount);
+
+  // 👇👇👇 🌟 カメレオン欲しいもの貯金システム 👇👇👇
+  const augmentedWishlist = useMemo(() => {
+    const isSingleLayerMode = activeTags.length === 1;
+
+    return wishlist.map((wish) => {
+      let dynamicSaved = wish.savedAmount; // 手動の入金分をベースにする
+
+      Object.values(displayData).forEach((items) => {
+        items.forEach((item) => {
+          const isShared = !!item.sharedRoomId;
+
+          // 全体表示の時は、共有カレンダーでの購入実績は合算しない
+          if (isShared && !isSingleLayerMode) return;
+
+          // 手動チャージ（category: "貯金"）は既に wish.savedAmount に入っているので無視
+          if (item.isExpense && item.category !== "貯金") {
+            // カテゴリかタグが「目標名」と同じ出費を見つけたら合算する！
+            if (
+              item.category === wish.name ||
+              item.tag === wish.name ||
+              item.tags?.includes(wish.name)
+            ) {
+              dynamicSaved += getItemTotalExpense(item);
+            }
+          }
+        });
+      });
+
+      return { ...wish, dynamicSavedAmount: dynamicSaved };
+    });
+  }, [wishlist, displayData, activeTags]);
+
+  const activeWishes = augmentedWishlist.filter((w) => w.dynamicSavedAmount < w.targetAmount);
 
   const daysToPayday = useMemo(() => {
     const today = new Date(todayStr);
@@ -762,6 +796,10 @@ export default function BudgetDashboard({
     cycleItems.forEach((item) => {
       const itemTotal = getItemTotalExpense(item);
       if (itemTotal === 0) return;
+
+      const isShared = !!item.sharedRoomId;
+      if (isShared && !isSingle) return;
+
       const itemTag = item.tags?.[0] || item.tag || "";
       const itemLayer = tagMaster[itemTag]?.layer || "共通";
       const isMatch = activeTags.length === 0 || activeTags.includes(itemLayer);
@@ -1099,10 +1137,10 @@ export default function BudgetDashboard({
                 </TouchableOpacity>
               )}
 
-              {wishlist.map((wish) => {
+              {augmentedWishlist.map((wish) => {
                 const progressVal = Math.min(
                   100,
-                  (wish.savedAmount / wish.targetAmount) * 100,
+                  (wish.dynamicSavedAmount / wish.targetAmount) * 100,
                 );
                 const isCompleted = progressVal >= 100;
                 return (
@@ -1190,7 +1228,7 @@ export default function BudgetDashboard({
                     </View>
 
                     <Text style={styles.wishProgressText}>
-                      ¥{wish.savedAmount.toLocaleString()}{" "}
+                      ¥{wish.dynamicSavedAmount.toLocaleString()}{" "}
                       <Text style={{ color: "#AEAEB2", fontSize: 9 }}>
                         / ¥{wish.targetAmount.toLocaleString()}
                       </Text>
@@ -2398,7 +2436,7 @@ export default function BudgetDashboard({
                           <Text style={{ fontSize: 10, color: "#8E8E93" }}>
                             あと ¥
                             {(
-                              wish.targetAmount - wish.savedAmount
+                              wish.targetAmount - wish.dynamicSavedAmount
                             ).toLocaleString()}
                           </Text>
                         </View>
@@ -2528,7 +2566,7 @@ export default function BudgetDashboard({
                     >
                       あと ¥
                       {(
-                        selectedWish.targetAmount - selectedWish.savedAmount
+                        selectedWish.targetAmount - selectedWish.dynamicSavedAmount
                       ).toLocaleString()}{" "}
                       で達成！
                     </Text>
