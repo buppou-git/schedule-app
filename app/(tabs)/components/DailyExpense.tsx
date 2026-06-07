@@ -418,6 +418,10 @@ export default function DailyExpense({
                 const isShared = !!i.sharedRoomId;
                 const isCrossedOut = isShared && !isSingleLayerMode;
 
+                // 🌟 追加：特定のレイヤーを指定している時以外（全体表示）は、レイヤー（メインカテゴリ）の色を使用する
+                const displayColor = isSingleLayerMode ? i.color : (layerMaster[itemLayer] || i.color);
+                const textColor = isSingleLayerMode ? themeColor : displayColor;
+
                 return (
                   <TouchableOpacity
                     key={i.id}
@@ -426,10 +430,12 @@ export default function DailyExpense({
                     onPress={() => handleOpenEdit(i, selectedDate)}
                   >
                     <View style={styles.dailyItemInfo}>
-                      <View style={[styles.dailyItemDot, { backgroundColor: isIncome ? "#8E8E93" : (i.externalEventId ? "#FF2D55" : i.color) }]} />
+                      {/* 🌟 i.color ではなく displayColor を適用 */}
+                      <View style={[styles.dailyItemDot, { backgroundColor: isIncome ? "#8E8E93" : (i.externalEventId ? "#FF2D55" : displayColor) }]} />
                       <View style={{ flex: 1 }}>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                          <Text style={{ fontWeight: "bold", fontSize: 11, color: isIncome ? "#8E8E93" : (i.externalEventId ? "#FF2D55" : themeColor) }} numberOfLines={1}>
+                          {/* 🌟 themeColor ではなく textColor を適用 */}
+                          <Text style={{ fontWeight: "bold", fontSize: 11, color: isIncome ? "#8E8E93" : (i.externalEventId ? "#FF2D55" : textColor) }} numberOfLines={1}>
                             {itemTag || i.category}
                           </Text>
 

@@ -1136,79 +1136,64 @@ function IndexContent() {
     const translated: { [roomId: string]: { [date: string]: ScheduleItem[] } } = {};
 
     Object.keys(roomSchedules).forEach((roomId) => {
-      // 自分がつけている親カテゴリ名を探す（例：「ゼミ」）
       const myLayerName =
-        Object.keys(sharedRooms).find((key) => sharedRooms[key] === roomId) ||
-        roomId;
+        Object.keys(sharedRooms).find((key) => sharedRooms[key] === roomId) || roomId;
 
       translated[roomId] = {};
-
       const datesData = roomSchedules[roomId] || {};
 
       Object.keys(datesData).forEach((date) => {
         const dailyItems = datesData[date] || [];
 
-        // 予定の中身を翻訳する
+        // 🌟 ここで map を使って新しい配列を作成
         const newItems = dailyItems.map((item: ScheduleItem) => {
           let finalTag = myLayerName;
           let finalColor = layerMaster[myLayerName] || item.color;
 
-          // 相手が送ってきた属性（サブカテゴリ）を特定
           if (item.tags && item.tags.length > 1) {
-            const subTag = item.tags[1]; // 例: "食費"
+            const subTag = item.tags[1];
             finalTag = subTag;
-
-            if (tagMaster[subTag]) {
-              finalColor = tagMaster[subTag].color;
-            } else {
-              finalColor = item.color;
-            }
-          } else if (
-            item.tag &&
-            item.tag !== item.layer &&
-            item.tag !== item.sharedLayer &&
-            item.tag !== myLayerName
-          ) {
+            finalColor = tagMaster[subTag] ? tagMaster[subTag].color : item.color;
+          } else if (item.tag && item.tag !== item.layer && item.tag !== item.sharedLayer && item.tag !== myLayerName) {
             finalTag = item.tag;
-            if (tagMaster[item.tag]) {
-              finalColor = tagMaster[item.tag].color;
-            } else {
-              finalColor = item.color;
-            }
+            finalColor = tagMaster[item.tag] ? tagMaster[item.tag].color : item.color;
           }
 
-          // 👇👇👇 🌟🌟🌟 ここがあなたの望みを叶える表示切り替えロジック 🌟🌟🌟 👇👇👇
+          const isSingleLayerMode = activeTags.length === 1 && activeTags[0] === myLayerName;
+
+          // 🌟 修正：属性がなくてもメインカテゴリ名を表示するように強化！
           let displayTags: string[] = [];
 
           if (activeTags.length === 1 && activeTags[0] === myLayerName) {
-            // ① 単一カテゴリ（「ゼミ」など）を選択中
+            // ① 単一カテゴリを選択中
             if (finalTag && finalTag !== myLayerName) {
-              displayTags = [finalTag]; // 属性があれば属性名だけを表示する
+              displayTags = [finalTag]; // 属性があれば属性名を表示
             } else {
-              displayTags = []; // 属性がなければスッキリさせるため非表示
+              displayTags = [myLayerName]; // 🌟 属性がなくても親カテゴリ名を表示する！
             }
           } else {
             // ② オールレイヤーや複数カテゴリを表示中
             displayTags = [myLayerName]; // 親カテゴリ名を表示する
           }
-          // 👆👆👆 🌟🌟🌟 切り替えロジックここまで 🌟🌟🌟 👆👆👆
+
+          const displayColor = isSingleLayerMode ? finalColor : (layerMaster[myLayerName] || finalColor);
 
           return {
             ...item,
             layer: myLayerName,
             tag: finalTag,
-            tags: displayTags, // ✅ 画面に表示するバッジをここで制御！
-            color: finalColor,
+            tags: displayTags,
+            color: displayColor,
           } as ScheduleItem;
         });
 
+        // 🌟 mapの外側で、作成した newItems を代入する
         translated[roomId][date] = newItems;
       });
     });
 
-    return translated;
-  }, [roomSchedules, sharedRooms, layerMaster, tagMaster, activeTags]); // 🌟 activeTagsを追加して、フィルター変更時に即切り替わるようにする！
-
+    return translated; // 🌟 最後はオブジェクトを返す
+  }, [roomSchedules, sharedRooms, layerMaster, tagMaster, activeTags]);
 
   const displayData = useDisplayData(
     coloredScheduleData,
