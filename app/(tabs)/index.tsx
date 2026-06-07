@@ -2389,6 +2389,7 @@ function IndexContent() {
                 activeTags={activeTags}
                 setHasUnsavedChanges={setHasUnsavedChanges}
                 isSummaryMode={isMoneySummaryMode}
+                displayData={displayData}
               />
             </ScrollView>
           )}

@@ -4,7 +4,7 @@
 export interface SubTask {
   id: number;
   title: string;
-  date: Date; // または string（API通信後など）;
+  date: Date; // または string（API通信後など）
   hasDateTime?: boolean;
   amount: number;
   isIncome?: boolean;
@@ -88,6 +88,7 @@ export interface ScheduleFormData {
   repeatType: "none" | "daily" | "weekly" | "monthly" | "custom";
   repeatDays: number[];
   repeatInterval: number;
+  repeatEndDate: Date | null;
   startDate: Date;
   endDate: Date;
   startTime: Date;

@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { memo, useState } from "react";
+import React, { memo, useMemo, useState } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -68,7 +68,8 @@ const TodoItem = memo(function TodoItem({
     daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     isFinalDay = daysLeft === 0;
   }
-
+  const isShared = useMemo(() => !!item.sharedRoomId, [item.sharedRoomId]);
+  
   return (
     <View style={{ marginBottom: 12 }}>
       {/* 親タスクのカード */}
@@ -87,6 +88,8 @@ const TodoItem = memo(function TodoItem({
             />
           ))}
         </View>
+
+
         <View style={styles.todoContent}>
           <View style={styles.todoMainRow}>
             <Text
@@ -95,6 +98,14 @@ const TodoItem = memo(function TodoItem({
             >
               {item.title}
             </Text>
+
+            {/* 🌟 共有のToDoならバッジを表示！ */}
+            {isShared && (
+              <View style={{ backgroundColor: "#E5E5EA", paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4, marginRight: 8 }}>
+                <Text style={{ fontSize: 8, color: "#8E8E93", fontWeight: "bold" }}>共有</Text>
+              </View>
+            )}
+
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}

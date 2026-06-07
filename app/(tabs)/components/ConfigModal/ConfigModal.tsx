@@ -216,7 +216,10 @@ export default function ConfigModal({
                     </TouchableOpacity>
                   </View>
 
-                  <Text style={styles.copyright}>UniCal</Text>
+                  <Text style={styles.copyright}>
+                    UniCal
+                  </Text>
+
                 </ScrollView>
               )}
             </View>

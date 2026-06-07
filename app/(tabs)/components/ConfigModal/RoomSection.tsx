@@ -44,13 +44,12 @@ export const RoomSection = React.memo(
     const handleShareRoom = useCallback(
       async (roomName: string, roomId: string) => {
         try {
-          // 🌟 修正：URLの最後に「&name=エンコードした名前」を付け足すだけ！
-          const url = `https://multi-calendar-app-1379f.web.app/join?room=${roomId}&name=${encodeURIComponent(roomName)}`;
+          const url = `https://multi-calendar-app-1379f.web.app/join?room=${roomId}`;
 
           await Share.share({
             message: `【UniCal】「${roomName}」の共有カレンダーに参加しよう！
     
-下のリンクをタッチして参加！
+    このリンクをタップするだけ👇
     ${url}`,
             title: "カレンダーの共有",
           });
@@ -62,7 +61,7 @@ export const RoomSection = React.memo(
       },
       [],
     );
-    ``;
+    ``
 
     const handleCreateRoom = useCallback(async () => {
       if (!newRoomName.trim()) return;

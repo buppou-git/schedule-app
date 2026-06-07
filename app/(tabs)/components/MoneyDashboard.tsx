@@ -1,4 +1,5 @@
 import React from "react";
+import { ScheduleItem } from "../../../types";
 import BudgetDashboard from "./BudgetDashboard";
 import DailyExpense from "./DailyExpense";
 
@@ -7,7 +8,7 @@ interface Props {
   activeTags: string[];
   setHasUnsavedChanges: (val: boolean) => void;
   isSummaryMode?: boolean;
-}
+  displayData: Record<string, ScheduleItem[]>;}
 
 /**
  * MoneyDashboard
@@ -19,10 +20,11 @@ export default function MoneyDashboard({
   activeTags,
   setHasUnsavedChanges,
   isSummaryMode,
+  displayData
 }: Props) {
   if (isSummaryMode) {
     return (
-      <BudgetDashboard selectedDate={selectedDate} activeTags={activeTags} setHasUnsavedChanges={setHasUnsavedChanges}/>
+      <BudgetDashboard selectedDate={selectedDate} activeTags={activeTags} setHasUnsavedChanges={setHasUnsavedChanges}displayData={displayData}/>
     );
   }
 
@@ -31,6 +33,7 @@ export default function MoneyDashboard({
       selectedDate={selectedDate}
       activeTags={activeTags}
       setHasUnsavedChanges={setHasUnsavedChanges}
+      displayData={displayData}
     />
   );
 }

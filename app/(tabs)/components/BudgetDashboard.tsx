@@ -33,6 +33,7 @@ interface BudgetDashboardProps {
   selectedDate: string;
   activeTags: string[];
   setHasUnsavedChanges: (val: boolean) => void;
+  displayData: Record<string, ScheduleItem[]>;
 }
 
 export interface WishItem {
@@ -49,6 +50,7 @@ export interface WishItem {
 export default function BudgetDashboard({
   activeTags,
   setHasUnsavedChanges,
+  displayData,
 }: BudgetDashboardProps) {
   const {
     scheduleData,
@@ -362,12 +364,19 @@ export default function BudgetDashboard({
       const cycleDates = getDatesInRange(cycleRange.start, cycleRange.end);
 
       cycleDates.forEach((date) => {
-        const items = scheduleData[date] || [];
+        const items = displayData[date] || []; // 🌟 displayData に変更
         items.forEach((item) => {
           const eTotal = getItemTotalExpense(item);
           const iTotal = getItemTotalIncome(item);
 
           if (iTotal > 0 || eTotal > 0) cItems.push(item);
+
+          // 🌟 魔法の条件分岐
+          const isSingleLayerMode = activeTags.length === 1;
+          const isShared = !!item.sharedRoomId;
+
+          // 🌟 全体表示の時だけ共有の出費を無視。単一表示の時は合算！
+          if (isShared && !isSingleLayerMode) return;
 
           if (iTotal > 0) tIncome += iTotal;
           if (eTotal > 0) {

@@ -26,12 +26,14 @@ interface DailyExpenseProps {
   selectedDate: string;
   activeTags: string[];
   setHasUnsavedChanges: (val: boolean) => void;
+  displayData: Record<string, ScheduleItem[]>;
 }
 
 export default function DailyExpense({
   selectedDate,
   activeTags,
   setHasUnsavedChanges,
+  displayData,
 }: DailyExpenseProps) {
   const {
     scheduleData,
@@ -179,11 +181,18 @@ export default function DailyExpense({
       )
         return;
 
-      dExpense += eTotal;
-      dIncome += iTotal;
+      // 🌟 共有データかどうかを判定
+      const isSingleLayerMode = activeTags.length === 1;
+      const isShared = !!item.sharedRoomId;
+
+      // 🌟 全体表示なら共有の出費を無視、単一カテゴリ表示なら合算する！
+      if (!isShared || isSingleLayerMode) {
+        dExpense += eTotal;
+        dIncome += iTotal;
+      }
     });
     return { dailyExpense: dExpense, dailyIncome: dIncome };
-  }, [selectedDate, scheduleData, activeTags, tagMaster]);
+  }, [selectedDate, displayData, activeTags, tagMaster]); // 🌟 依存配列も変更
 
   const toggleManualMode = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -388,7 +397,7 @@ export default function DailyExpense({
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            {(scheduleData[selectedDate] || [])
+            {(displayData[selectedDate] || [])
               .filter(
                 (i) => getItemTotalExpense(i) > 0 || getItemTotalIncome(i) > 0,
               )
@@ -404,46 +413,41 @@ export default function DailyExpense({
                 )
                   return null;
 
+                // 🌟 切り替えロジック
+                const isSingleLayerMode = activeTags.length === 1;
+                const isShared = !!i.sharedRoomId;
+                const isCrossedOut = isShared && !isSingleLayerMode;
+
                 return (
                   <TouchableOpacity
                     key={i.id}
-                    style={styles.dailyItemRow}
+                    // 🌟 対象外の時は行全体を少し薄くする
+                    style={[styles.dailyItemRow, isCrossedOut && { opacity: 0.5 }]}
                     onPress={() => handleOpenEdit(i, selectedDate)}
                   >
                     <View style={styles.dailyItemInfo}>
-                      <View
-                        style={[
-                          styles.dailyItemDot,
-                          {
-                            // 🌟 外部予定(externalEventIdがある)なら必ず赤、それ以外は設定色
-                            backgroundColor: isIncome ? "#8E8E93" : (i.externalEventId ? "#FF2D55" : i.color)
-                          },
-                        ]}
-                      />
+                      <View style={[styles.dailyItemDot, { backgroundColor: isIncome ? "#8E8E93" : (i.externalEventId ? "#FF2D55" : i.color) }]} />
                       <View style={{ flex: 1 }}>
-                        <Text
-                          style={{
-                            fontWeight: "bold",
-                            fontSize: 11,
-                            color: isIncome ? "#8E8E93" : (i.externalEventId ? "#FF2D55" : themeColor),
-                          }}
-                          numberOfLines={1}
-                        >
-                          {itemTag || i.category}
-                        </Text>
-                        <Text
-                          style={{ fontSize: 9, color: "#888" }}
-                          numberOfLines={1}
-                        >
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <Text style={{ fontWeight: "bold", fontSize: 11, color: isIncome ? "#8E8E93" : (i.externalEventId ? "#FF2D55" : themeColor) }} numberOfLines={1}>
+                            {itemTag || i.category}
+                          </Text>
+
+                          {/* 🌟 共有データにバッジをつける */}
+                          {isShared && (
+                            <View style={{ backgroundColor: isSingleLayerMode ? themeColor + "20" : "#E5E5EA", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                              <Text style={{ fontSize: 9, color: isSingleLayerMode ? themeColor : "#8E8E93", fontWeight: "bold" }}>
+                                {isSingleLayerMode ? "共有" : "集計対象外"}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={{ fontSize: 9, color: "#888" }} numberOfLines={1}>
                           {i.title !== i.category && i.title}
                         </Text>
                       </View>
-                      <Text
-                        style={[
-                          styles.dailyItemAmount,
-                          isIncome && { color: "#8E8E93" },
-                        ]}
-                      >
+
+                      <Text style={[styles.dailyItemAmount, isIncome && { color: "#8E8E93" }, isCrossedOut && { color: "#8E8E93" }]}>
                         {isIncome ? "+" : ""}¥{i.amount.toLocaleString()}
                       </Text>
                     </View>
