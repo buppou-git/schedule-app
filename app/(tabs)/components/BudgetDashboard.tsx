@@ -34,6 +34,9 @@ interface BudgetDashboardProps {
   activeTags: string[];
   setHasUnsavedChanges: (val: boolean) => void;
   displayData: Record<string, ScheduleItem[]>;
+  sharedRooms?: { [layerName: string]: string };
+  roomWishes?: Record<string, WishItem[]>; // 🌟 追加
+  safeDebouncedSyncWish?: (wish: WishItem, roomId: string) => void; // 🌟 追加
 }
 
 export interface WishItem {
@@ -45,12 +48,16 @@ export interface WishItem {
   color: string;
   autoDepositEnabled?: boolean;
   autoDepositAmount?: number;
+  sharedRoomId?: string;
 }
 
 export default function BudgetDashboard({
   activeTags,
   setHasUnsavedChanges,
   displayData,
+  sharedRooms,
+  roomWishes,
+  safeDebouncedSyncWish
 }: BudgetDashboardProps) {
   const {
     scheduleData,
@@ -103,6 +110,7 @@ export default function BudgetDashboard({
   const [newWishColor, setNewWishColor] = useState("#FF2D55");
   const [newWishAutoDeposit, setNewWishAutoDeposit] = useState(false);
   const [newWishAutoAmount, setNewWishAutoAmount] = useState("");
+  const [newWishIsShared, setNewWishIsShared] = useState(false);
 
   const [isDepositModalVisible, setIsDepositModalVisible] = useState(false);
   const [isCompleteModalVisible, setIsCompleteModalVisible] = useState(false);
@@ -409,23 +417,35 @@ export default function BudgetDashboard({
   );
   const remainingToAllocate = unallocatedSavings - totalSweeperAllocation;
 
-  // 👇👇👇 🌟 カメレオン欲しいもの貯金システム 👇👇👇
+  const combinedWishlist = useMemo(() => {
+    const localMap = new Map(wishlist.map(w => [w.id, w]));
+
+    if (roomWishes) {
+      Object.values(roomWishes).forEach(wishes => {
+        wishes.forEach(w => {
+          localMap.set(w.id, w);
+        });
+      });
+    }
+    return Array.from(localMap.values());
+  }, [wishlist, roomWishes]);
+
   const augmentedWishlist = useMemo(() => {
     const isSingleLayerMode = activeTags.length === 1;
 
     return wishlist.map((wish) => {
-      let dynamicSaved = wish.savedAmount; // 手動の入金分をベースにする
+      let dynamicSaved = wish.savedAmount; // 手動入金分がベース
 
       Object.values(displayData).forEach((items) => {
         items.forEach((item) => {
           const isShared = !!item.sharedRoomId;
 
-          // 全体表示の時は、共有カレンダーでの購入実績は合算しない
+          // 🌟 共有目標なのに全体表示で見ている時は、相手の出費を合算しない
+          // （※自分が払った分も、個人の目標として混ざらないように制御）
           if (isShared && !isSingleLayerMode) return;
 
-          // 手動チャージ（category: "貯金"）は既に wish.savedAmount に入っているので無視
+          // 手動チャージ（category: "貯金"）は既に savedAmount に入っているので無視
           if (item.isExpense && item.category !== "貯金") {
-            // カテゴリかタグが「目標名」と同じ出費を見つけたら合算する！
             if (
               item.category === wish.name ||
               item.tag === wish.name ||
@@ -551,23 +571,27 @@ export default function BudgetDashboard({
       return;
     }
 
+    const targetRoomId = (newWishIsShared && sharedRooms) ? Object.values(sharedRooms)[0] : undefined;
+
+    // 🌟 【After】savedItem を先に定義して、newList と同時に作る
+    let savedItem: WishItem;
     let newList;
+
     if (editingWishId) {
-      newList = wishlist.map((w) =>
-        w.id === editingWishId
-          ? {
-            ...w,
-            name: newWishName.trim(),
-            targetAmount,
-            icon: newWishIcon,
-            color: newWishColor,
-            autoDepositEnabled: newWishAutoDeposit,
-            autoDepositAmount: autoAmount,
-          }
-          : w,
-      );
+      savedItem = {
+        id: editingWishId,
+        name: newWishName.trim(),
+        targetAmount,
+        savedAmount: wishlist.find(w => w.id === editingWishId)?.savedAmount || 0,
+        icon: newWishIcon,
+        color: newWishColor,
+        autoDepositEnabled: newWishAutoDeposit,
+        autoDepositAmount: autoAmount,
+        sharedRoomId: targetRoomId,
+      };
+      newList = wishlist.map((w) => (w.id === editingWishId ? savedItem : w));
     } else {
-      const newItem: WishItem = {
+      savedItem = {
         id: Date.now().toString(),
         name: newWishName.trim(),
         targetAmount,
@@ -576,13 +600,19 @@ export default function BudgetDashboard({
         color: newWishColor,
         autoDepositEnabled: newWishAutoDeposit,
         autoDepositAmount: autoAmount,
+        sharedRoomId: targetRoomId,
       };
-      newList = [...wishlist, newItem];
+      newList = [...wishlist, savedItem];
     }
 
     setWishlist(newList);
     await AsyncStorage.setItem("wishlistData", JSON.stringify(newList));
     setTimeout(() => setHasUnsavedChanges(true), 100);
+
+    // 🌟 これなら savedItem は必ず存在するのでエラーになりません！
+    if (savedItem.sharedRoomId && typeof safeDebouncedSyncWish === 'function') {
+      safeDebouncedSyncWish(savedItem, savedItem.sharedRoomId);
+    }
 
     setIsAddWishModalVisible(false);
     setNewWishName("");
@@ -2212,6 +2242,20 @@ export default function BudgetDashboard({
                     onChangeText={setNewWishAutoAmount}
                   />
                 </>
+              )}
+
+              {/* 🌟 共有スイッチのUIを追加 */}
+              {sharedRooms && Object.keys(sharedRooms).length > 0 && (
+                <View style={styles.settingSwitchRow}>
+                  <Text style={styles.settingSwitchLabel}>
+                    パートナーと共有する
+                  </Text>
+                  <Switch
+                    value={newWishIsShared}
+                    onValueChange={setNewWishIsShared}
+                    trackColor={{ false: "#E5E5EA", true: newWishColor }}
+                  />
+                </View>
               )}
 
               <Text style={styles.settingLabel}>アイコンを選択</Text>

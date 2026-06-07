@@ -8,7 +8,11 @@ interface Props {
   activeTags: string[];
   setHasUnsavedChanges: (val: boolean) => void;
   isSummaryMode?: boolean;
-  displayData: Record<string, ScheduleItem[]>;}
+  displayData: Record<string, ScheduleItem[]>;
+  sharedRooms?: { [layerName: string]: string }; // 🌟 1. ここに型定義を追加！
+  roomWishes?: Record<string, any[]>; // 🌟 追加！
+  safeDebouncedSyncWish?: (wish: any, roomId: string) => void; // 🌟 追加！
+}
 
 /**
  * MoneyDashboard
@@ -20,11 +24,22 @@ export default function MoneyDashboard({
   activeTags,
   setHasUnsavedChanges,
   isSummaryMode,
-  displayData
+  displayData,
+  sharedRooms,
+  roomWishes,
+  safeDebouncedSyncWish
 }: Props) {
   if (isSummaryMode) {
     return (
-      <BudgetDashboard selectedDate={selectedDate} activeTags={activeTags} setHasUnsavedChanges={setHasUnsavedChanges}displayData={displayData}/>
+      <BudgetDashboard 
+        selectedDate={selectedDate} 
+        activeTags={activeTags} 
+        setHasUnsavedChanges={setHasUnsavedChanges}
+        displayData={displayData}
+        sharedRooms={sharedRooms} // 🌟 2. 欲しいものリストがあるBudgetDashboardに渡す！
+        roomWishes={roomWishes}
+        safeDebouncedSyncWish={safeDebouncedSyncWish}
+      />
     );
   }
 
@@ -34,6 +49,7 @@ export default function MoneyDashboard({
       activeTags={activeTags}
       setHasUnsavedChanges={setHasUnsavedChanges}
       displayData={displayData}
+      // 🌟 3. DailyExpenseには不要なので削除（エラー防止）
     />
   );
 }

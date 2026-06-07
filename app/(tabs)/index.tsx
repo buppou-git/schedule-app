@@ -334,7 +334,7 @@ function IndexContent() {
   const [deepLinkRoomName, setDeepLinkRoomName] = useState("");
   const [deepLinkRoomColor, setDeepLinkRoomColor] = useState("#007AFF");
 
-  const { roomSchedules, safeDebouncedSync } = useCloudSync(sharedRooms);
+  const { roomSchedules, roomWishes, safeDebouncedSync, safeDebouncedSyncWish } = useCloudSync(sharedRooms);
 
 
   const {
@@ -2390,6 +2390,9 @@ function IndexContent() {
                 setHasUnsavedChanges={setHasUnsavedChanges}
                 isSummaryMode={isMoneySummaryMode}
                 displayData={displayData}
+                sharedRooms={sharedRooms}
+                roomWishes={roomWishes} // 🌟 これを追加！
+                safeDebouncedSyncWish={safeDebouncedSyncWish} // 🌟 これを追加！
               />
             </ScrollView>
           )}

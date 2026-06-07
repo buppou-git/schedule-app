@@ -107,24 +107,29 @@ export const useNotificationManager = () => {
     return true;
   };
 
-  const scheduleItemNotification = async (title: string, triggerDate: Date) => {
+  // 🌟 修正：引数に body（2行目のメッセージ）を追加！
+  const scheduleItemNotification = async (title: string, body: string, triggerDate: Date) => {
     const hasPermission = await requestPermissionsAsync();
     if (!hasPermission) return null;
 
-    // triggerDate（指定した日時）に1回だけ鳴る通知をセット！
+    // 1分前ズレ解消ロジック
+    const exactTriggerDate = new Date(triggerDate);
+    exactTriggerDate.setSeconds(0, 0);
+
+    if (exactTriggerDate.getTime() <= Date.now()) return null;
+
     const id = await Notifications.scheduleNotificationAsync({
       content: {
-        title: "⏰ リマインダー",
-        body: title,
+        title: title, // 🌟 1行目：予定のタイトル（⏰ ゼミ など）
+        body: body,   // 🌟 2行目：状況＋時間（30分前 14:00〜 など）
         sound: true,
       },
-      // 🌟 ここを修正！「date」プロパティにして、channelIdと as any を追加！
       trigger: {
-        date: triggerDate,
+        date: exactTriggerDate,
         channelId: "default",
       } as Notifications.NotificationTriggerInput,
     });
-    return id; // この受付番号（ID）をScheduleItemに保存します
+    return id;
   };
 
   // 🌟 ここから追加！：個別の予定の通知をキャンセルする関数
