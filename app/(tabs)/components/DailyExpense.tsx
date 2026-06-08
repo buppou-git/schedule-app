@@ -27,6 +27,8 @@ interface DailyExpenseProps {
   activeTags: string[];
   setHasUnsavedChanges: (val: boolean) => void;
   displayData: Record<string, ScheduleItem[]>;
+  sharedRooms?: { [layerName: string]: string }; // 🌟 追加
+  safeDebouncedSync?: (item: ScheduleItem, date: string) => void; // 🌟 追加
 }
 
 export default function DailyExpense({
@@ -34,6 +36,8 @@ export default function DailyExpense({
   activeTags,
   setHasUnsavedChanges,
   displayData,
+  sharedRooms, // 🌟 追加
+  safeDebouncedSync, // 🌟 追加
 }: DailyExpenseProps) {
   const {
     scheduleData,
@@ -313,7 +317,8 @@ export default function DailyExpense({
     setEditModalVisible(true);
   };
 
-  const handleUpdate = async () => { // 🌟 async を追加
+  const handleUpdate = async () => {
+    // 🌟 async を追加
     if (!editingItem) return;
     const newAmount = parseInt(editAmount);
     if (isNaN(newAmount) || newAmount <= 0)
@@ -332,6 +337,14 @@ export default function DailyExpense({
     setScheduleData(newData);
     await AsyncStorage.setItem("scheduleData", JSON.stringify(newData));
     setHasUnsavedChanges(true);
+
+    // 🌟 追加：クラウドへの上書き同期
+    const updatedItem = newData[editingItem.date].find(
+      (i) => i.id === editingItem.item.id,
+    );
+    if (updatedItem && safeDebouncedSync) {
+      safeDebouncedSync(updatedItem, editingItem.date);
+    }
   };
 
   return (
@@ -419,41 +432,100 @@ export default function DailyExpense({
                 const isCrossedOut = isShared && !isSingleLayerMode;
 
                 // 🌟 追加：特定のレイヤーを指定している時以外（全体表示）は、レイヤー（メインカテゴリ）の色を使用する
-                const displayColor = isSingleLayerMode ? i.color : (layerMaster[itemLayer] || i.color);
+                const displayColor = isSingleLayerMode
+                  ? i.color
+                  : layerMaster[itemLayer] || i.color;
                 const textColor = isSingleLayerMode ? themeColor : displayColor;
 
                 return (
                   <TouchableOpacity
                     key={i.id}
                     // 🌟 対象外の時は行全体を少し薄くする
-                    style={[styles.dailyItemRow, isCrossedOut && { opacity: 0.5 }]}
+                    style={[
+                      styles.dailyItemRow,
+                      isCrossedOut && { opacity: 0.5 },
+                    ]}
                     onPress={() => handleOpenEdit(i, selectedDate)}
                   >
                     <View style={styles.dailyItemInfo}>
                       {/* 🌟 i.color ではなく displayColor を適用 */}
-                      <View style={[styles.dailyItemDot, { backgroundColor: isIncome ? "#8E8E93" : (i.externalEventId ? "#FF2D55" : displayColor) }]} />
+                      <View
+                        style={[
+                          styles.dailyItemDot,
+                          {
+                            backgroundColor: isIncome
+                              ? "#8E8E93"
+                              : i.externalEventId
+                                ? "#FF2D55"
+                                : displayColor,
+                          },
+                        ]}
+                      />
                       <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
                           {/* 🌟 themeColor ではなく textColor を適用 */}
-                          <Text style={{ fontWeight: "bold", fontSize: 11, color: isIncome ? "#8E8E93" : (i.externalEventId ? "#FF2D55" : textColor) }} numberOfLines={1}>
+                          <Text
+                            style={{
+                              fontWeight: "bold",
+                              fontSize: 11,
+                              color: isIncome
+                                ? "#8E8E93"
+                                : i.externalEventId
+                                  ? "#FF2D55"
+                                  : textColor,
+                            }}
+                            numberOfLines={1}
+                          >
                             {itemTag || i.category}
                           </Text>
 
                           {/* 🌟 共有データにバッジをつける */}
                           {isShared && (
-                            <View style={{ backgroundColor: isSingleLayerMode ? themeColor + "20" : "#E5E5EA", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                              <Text style={{ fontSize: 9, color: isSingleLayerMode ? themeColor : "#8E8E93", fontWeight: "bold" }}>
+                            <View
+                              style={{
+                                backgroundColor: isSingleLayerMode
+                                  ? themeColor + "20"
+                                  : "#E5E5EA",
+                                paddingHorizontal: 6,
+                                paddingVertical: 2,
+                                borderRadius: 4,
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  fontSize: 9,
+                                  color: isSingleLayerMode
+                                    ? themeColor
+                                    : "#8E8E93",
+                                  fontWeight: "bold",
+                                }}
+                              >
                                 {isSingleLayerMode ? "共有" : "集計対象外"}
                               </Text>
                             </View>
                           )}
                         </View>
-                        <Text style={{ fontSize: 9, color: "#888" }} numberOfLines={1}>
+                        <Text
+                          style={{ fontSize: 9, color: "#888" }}
+                          numberOfLines={1}
+                        >
                           {i.title !== i.category && i.title}
                         </Text>
                       </View>
 
-                      <Text style={[styles.dailyItemAmount, isIncome && { color: "#8E8E93" }, isCrossedOut && { color: "#8E8E93" }]}>
+                      <Text
+                        style={[
+                          styles.dailyItemAmount,
+                          isIncome && { color: "#8E8E93" },
+                          isCrossedOut && { color: "#8E8E93" },
+                        ]}
+                      >
                         {isIncome ? "+" : ""}¥{i.amount.toLocaleString()}
                       </Text>
                     </View>
@@ -478,17 +550,19 @@ export default function DailyExpense({
               const c =
                 l === "外部予定"
                   ? "#FF2D55" // 🌟 外部予定レイヤーなら強制的に赤！
-                  : (l === "ALL_LAYERS" ? "#8E8E93" : layerMaster[l] || themeColor);
+                  : l === "ALL_LAYERS"
+                    ? "#8E8E93"
+                    : layerMaster[l] || themeColor;
               const isAll = l === "ALL_LAYERS";
               const qTags =
                 quickMainTags[l] || quickMainTags["ALL_LAYERS"] || [];
               const sTags = isAll
                 ? Object.keys(tagMaster).filter(
-                  (t) => tagMaster[t].layer === "共通",
-                )
+                    (t) => tagMaster[t].layer === "共通",
+                  )
                 : Object.keys(tagMaster).filter(
-                  (t) => tagMaster[t].layer === l,
-                );
+                    (t) => tagMaster[t].layer === l,
+                  );
 
               return (
                 <View
@@ -731,16 +805,53 @@ export default function DailyExpense({
                   onPress={async () => {
                     if (!editingItem) return;
 
+                    const targetDate = editingItem.date;
+                    const itemToDelete = editingItem.item; // 🌟 消すアイテムを確保
+
                     const newData = { ...scheduleData };
-                    newData[editingItem.date] = newData[
-                      editingItem.date
-                    ].filter((i) => i.id !== editingItem.item.id);
+                    newData[targetDate] = newData[targetDate].filter(
+                      (i) => i.id !== itemToDelete.id,
+                    );
 
                     setScheduleData(newData);
-                    await AsyncStorage.setItem("scheduleData", JSON.stringify(newData));
+                    await AsyncStorage.setItem(
+                      "scheduleData",
+                      JSON.stringify(newData),
+                    );
                     setHasUnsavedChanges(true);
-
                     setEditModalVisible(false);
+
+                    // 🌟 追加：Firebase(クラウド)からの完全削除ロジック
+                    if (sharedRooms) {
+                      const itemTags =
+                        itemToDelete.tags ||
+                        (itemToDelete.tag ? [itemToDelete.tag] : []);
+                      const sharedLayerName =
+                        itemTags.find((tag) =>
+                          Object.keys(sharedRooms).includes(tag),
+                        ) || itemToDelete.layer;
+
+                      if (sharedLayerName && sharedRooms[sharedLayerName]) {
+                        try {
+                          const roomId = sharedRooms[sharedLayerName];
+                          const { deleteDoc, doc } =
+                            await import("firebase/firestore");
+                          const { db } =
+                            await import("../../../firebaseConfig");
+                          await deleteDoc(
+                            doc(
+                              db,
+                              "rooms",
+                              roomId,
+                              "schedules",
+                              itemToDelete.id,
+                            ),
+                          );
+                        } catch (e) {
+                          console.error("Firebase削除エラー:", e);
+                        }
+                      }
+                    }
                   }}
                   style={{
                     marginTop: 16,

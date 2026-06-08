@@ -12,6 +12,7 @@ interface Props {
   sharedRooms?: { [layerName: string]: string }; // 🌟 1. ここに型定義を追加！
   roomWishes?: Record<string, any[]>; // 🌟 追加！
   safeDebouncedSyncWish?: (wish: any, roomId: string) => void; // 🌟 追加！
+  safeDebouncedSync?: (item: any, date: string) => void;
 }
 
 /**
@@ -27,13 +28,14 @@ export default function MoneyDashboard({
   displayData,
   sharedRooms,
   roomWishes,
-  safeDebouncedSyncWish
+  safeDebouncedSyncWish,
+  safeDebouncedSync,
 }: Props) {
   if (isSummaryMode) {
     return (
-      <BudgetDashboard 
-        selectedDate={selectedDate} 
-        activeTags={activeTags} 
+      <BudgetDashboard
+        selectedDate={selectedDate}
+        activeTags={activeTags}
         setHasUnsavedChanges={setHasUnsavedChanges}
         displayData={displayData}
         sharedRooms={sharedRooms} // 🌟 2. 欲しいものリストがあるBudgetDashboardに渡す！
@@ -49,6 +51,8 @@ export default function MoneyDashboard({
       activeTags={activeTags}
       setHasUnsavedChanges={setHasUnsavedChanges}
       displayData={displayData}
+      sharedRooms={sharedRooms} // 🌟 復活！
+      safeDebouncedSync={safeDebouncedSync} // 🌟 追加！
       // 🌟 3. DailyExpenseには不要なので削除（エラー防止）
     />
   );
