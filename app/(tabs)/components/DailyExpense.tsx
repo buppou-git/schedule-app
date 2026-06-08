@@ -438,60 +438,39 @@ export default function DailyExpense({
                 );
                 const isCrossedOut = isShared && !isSingleLayerMode;
 
+                const { parent, sub } = resolveTags(i);
+
                 // 🌟 追加：特定のレイヤーを指定している時以外（全体表示）は、レイヤー（メインカテゴリ）の色を使用する
-                const displayColor = isSingleLayerMode
-                  ? i.color
-                  : layerMaster[itemLayer] || i.color;
+                const displayColor = isSingleLayerMode ? (tagMaster[sub]?.color || i.color) : (layerMaster[parent] || i.color);
                 const textColor = isSingleLayerMode ? themeColor : displayColor;
+
+                // 🌟 修正①：表示する文字をモードによって綺麗に切り替える！
+                const displayText = isSingleLayerMode ? sub : parent;
 
                 return (
                   <TouchableOpacity
                     key={i.id}
                     // 🌟 対象外の時は行全体を少し薄くする
-                    style={[
-                      styles.dailyItemRow,
-                      isCrossedOut && { opacity: 0.5 },
-                    ]}
+                    style={[styles.dailyItemRow, isCrossedOut && { opacity: 0.5 }]}
                     onPress={() => handleOpenEdit(i, selectedDate)}
                   >
                     <View style={styles.dailyItemInfo}>
                       {/* 🌟 i.color ではなく displayColor を適用 */}
-                      <View
-                        style={[
-                          styles.dailyItemDot,
-                          {
-                            backgroundColor: isIncome
-                              ? "#8E8E93"
-                              : i.externalEventId
-                                ? "#FF2D55"
-                                : displayColor,
-                          },
-                        ]}
-                      />
+                      <View style={[styles.dailyItemDot, { backgroundColor: isIncome ? "#8E8E93" : (i.externalEventId ? "#FF2D55" : displayColor) }]} />
                       <View style={{ flex: 1 }}>
-                        <View
-                          style={{
-                            flexDirection: "row",
-                            alignItems: "center",
-                            gap: 6,
-                          }}
-                        >
-                          {/* 🌟 themeColor ではなく textColor を適用 */}
+                        {/* 🌟 修正②：paddingRight を入れて右の金額との距離を確保する */}
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingRight: 8 }}>
+                          {/* 🌟 修正②：flexShrink: 1 を入れてバッジのはみ出しを完全ブロック！ */}
                           <Text
                             style={{
                               fontWeight: "bold",
                               fontSize: 11,
-                              color: isIncome
-                                ? "#8E8E93"
-                                : i.externalEventId
-                                  ? "#FF2D55"
-                                  : textColor,
+                              color: isIncome ? "#8E8E93" : (i.externalEventId ? "#FF2D55" : textColor),
+                              flexShrink: 1
                             }}
                             numberOfLines={1}
                           >
-                            {itemTag && itemTag !== itemLayer
-                              ? itemTag
-                              : itemLayer}
+                            {displayText}
                           </Text>
 
                           {/* 🌟 共有データにバッジをつける */}
@@ -567,11 +546,11 @@ export default function DailyExpense({
                 quickMainTags[l] || quickMainTags["ALL_LAYERS"] || [];
               const sTags = isAll
                 ? Object.keys(tagMaster).filter(
-                    (t) => tagMaster[t].layer === "共通",
-                  )
+                  (t) => tagMaster[t].layer === "共通",
+                )
                 : Object.keys(tagMaster).filter(
-                    (t) => tagMaster[t].layer === l,
-                  );
+                  (t) => tagMaster[t].layer === l,
+                );
 
               return (
                 <View

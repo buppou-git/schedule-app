@@ -1,7 +1,19 @@
 import React from "react";
-import { ScheduleItem } from "../../../types";
+import { ScheduleItem } from "../../../types"; // 🌟 必要に応じてWishItemのインポートも確認してください
 import BudgetDashboard from "./BudgetDashboard";
 import DailyExpense from "./DailyExpense";
+
+// 🌟 もしtypes等に共通化されていればそれをインポート、なければここで簡易的に型合わせします
+interface WishItem {
+  id: string;
+  name: string;
+  targetAmount: number;
+  savedAmount: number;
+  icon: string;
+  color: string;
+  sharedRoomId?: string;
+  [key: string]: any;
+}
 
 interface Props {
   selectedDate: string;
@@ -9,9 +21,9 @@ interface Props {
   setHasUnsavedChanges: (val: boolean) => void;
   isSummaryMode?: boolean;
   displayData: Record<string, ScheduleItem[]>;
-  sharedRooms?: { [layerName: string]: string }; // 🌟 1. ここに型定義を追加！
-  roomWishes?: Record<string, any[]>; // 🌟 追加！
-  safeDebouncedSyncWish?: (wish: any, roomId: string) => void; // 🌟 追加！
+  sharedRooms?: { [layerName: string]: string }; 
+  roomWishes?: Record<string, WishItem[]>; // 🌟 any[] から WishItem[] に修正！
+  safeDebouncedSyncWish?: (wish: WishItem, roomId: string) => void; // 🌟 wish: any から wish: WishItem に修正！
   safeDebouncedSync?: (item: any, date: string) => void;
 }
 
@@ -38,7 +50,7 @@ export default function MoneyDashboard({
         activeTags={activeTags}
         setHasUnsavedChanges={setHasUnsavedChanges}
         displayData={displayData}
-        sharedRooms={sharedRooms} // 🌟 2. 欲しいものリストがあるBudgetDashboardに渡す！
+        sharedRooms={sharedRooms} 
         roomWishes={roomWishes}
         safeDebouncedSyncWish={safeDebouncedSyncWish}
       />
@@ -51,9 +63,8 @@ export default function MoneyDashboard({
       activeTags={activeTags}
       setHasUnsavedChanges={setHasUnsavedChanges}
       displayData={displayData}
-      sharedRooms={sharedRooms} // 🌟 復活！
-      safeDebouncedSync={safeDebouncedSync} // 🌟 追加！
-      // 🌟 3. DailyExpenseには不要なので削除（エラー防止）
+      sharedRooms={sharedRooms} 
+      safeDebouncedSync={safeDebouncedSync} 
     />
   );
 }

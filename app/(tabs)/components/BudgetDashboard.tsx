@@ -166,6 +166,38 @@ export default function BudgetDashboard({
     "#AF52DE",
   ];
 
+  useEffect(() => {
+    if (!roomWishes || Object.keys(roomWishes).length === 0) return;
+
+    setWishlist((prevList) => {
+      // 1. まず、現在のリストから「共有ではない個人目標」だけを抽出して残す
+      const personalWishes = prevList.filter((w) => !w.sharedRoomId);
+
+      // 2. クラウドから届いているすべての共有目標を1つの平らな配列にまとめる
+      const incomingSharedWishes = Object.keys(roomWishes).reduce((acc, roomId) => {
+        const wishes = roomWishes[roomId] || [];
+        // 各目標に部屋IDを忘れずにセット
+        const cleanWishes = wishes.map((w) => ({ ...w, sharedRoomId: roomId }));
+        return [...acc, ...cleanWishes];
+      }, [] as WishItem[]);
+
+      // 3. 個人の目標と、クラウドから届いた最新の共有目標をガッチャンコして返す！
+      // 重複を防ぐため、個人と共有でIDが被らないようにします
+      const merged = [...personalWishes];
+      incomingSharedWishes.forEach((sharedWish) => {
+        if (!merged.some((w) => w.id === sharedWish.id)) {
+          merged.push(sharedWish);
+        } else {
+          // すでに存在する場合は中身を最新（進捗など）に更新
+          const idx = merged.findIndex((w) => w.id === sharedWish.id);
+          merged[idx] = sharedWish;
+        }
+      });
+
+      return merged;
+    });
+  }, [roomWishes]); // 🌟 roomWishes が更新されるたびに実行
+
   const getCycleRange = (dateStr: string, pDay: number) => {
     const date = new Date(dateStr);
     let startYear = date.getFullYear();
@@ -644,9 +676,14 @@ export default function BudgetDashboard({
     await AsyncStorage.setItem("wishlistData", JSON.stringify(newList));
     setTimeout(() => setHasUnsavedChanges(true), 100);
 
-    // 🌟 これなら savedItem は必ず存在するのでエラーになりません！
     if (savedItem.sharedRoomId && typeof safeDebouncedSyncWish === "function") {
+      console.log("🌟 共有目標を送信します:", savedItem);
       safeDebouncedSyncWish(savedItem, savedItem.sharedRoomId);
+    } else {
+      console.log("🌟 共有目標として送信されませんでした。理由:", 
+        !savedItem.sharedRoomId ? "sharedRoomIdがない" : 
+        typeof safeDebouncedSyncWish !== "function" ? "safeDebouncedSyncWish関数がない" : "不明"
+      );
     }
 
     setIsAddWishModalVisible(false);
