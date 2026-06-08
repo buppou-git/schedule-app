@@ -22,6 +22,8 @@ import {
   PRESET_COLORS,
 } from "../../../utils/helpers";
 
+import { resolveTags } from "../../../utils/tagUtils";
+
 interface DailyExpenseProps {
   selectedDate: string;
   activeTags: string[];
@@ -175,8 +177,7 @@ export default function DailyExpense({
       const iTotal = getItemTotalIncome(item);
       if (eTotal === 0 && iTotal === 0) return;
 
-      const itemTag = item.tags?.[0] || item.tag || "";
-      const itemLayer = tagMaster[itemTag]?.layer || "共通";
+      const { parent: itemLayer, sub: itemTag } = resolveTags(item);
 
       if (
         !item.isIncome &&
@@ -187,7 +188,7 @@ export default function DailyExpense({
 
       // 🌟 共有データかどうかを判定
       const isSingleLayerMode = activeTags.length === 1;
-      const isShared = !!item.sharedRoomId;
+      const isShared = Object.keys(sharedRooms || {}).includes(itemLayer);
 
       // 🌟 全体表示なら共有の出費を無視、単一カテゴリ表示なら合算する！
       if (!isShared || isSingleLayerMode) {
@@ -257,11 +258,16 @@ export default function DailyExpense({
       AsyncStorage.setItem("tagMasterData", JSON.stringify(newTagMaster));
     }
 
+    // 🌟 親レイヤーを正確に特定
+    const parentLayer = isAll ? "共通" : target;
+
     const newItem: ScheduleItem = {
       id: Date.now().toString(),
       category: selectedMainTag || "未分類",
+      layer: parentLayer, // 🌟 親レイヤーも明記
       tag: fTag,
-      tags: [fTag],
+      // 🌟 親とサブが同じなら1つ、違うなら2つ並べる構造に統一！
+      tags: fTag === parentLayer ? [parentLayer] : [parentLayer, fTag],
       title: isManualInput && manualTitle ? manualTitle : selectedMainTag,
       amount: amountNum,
       isDone: false,
@@ -416,9 +422,8 @@ export default function DailyExpense({
               )
               .map((i) => {
                 const isIncome = i.isIncome;
-                const itemTag = i.tags?.[0] || i.tag || "";
-                const itemLayer = tagMaster[itemTag]?.layer || "共通";
-
+                const { parent: itemLayer = "", sub: itemTag = "" } =
+                  resolveTags(i);
                 if (
                   !isIncome &&
                   activeTags.length > 0 &&
@@ -428,7 +433,9 @@ export default function DailyExpense({
 
                 // 🌟 切り替えロジック
                 const isSingleLayerMode = activeTags.length === 1;
-                const isShared = !!i.sharedRoomId;
+                const isShared = Object.keys(sharedRooms || {}).includes(
+                  itemLayer,
+                );
                 const isCrossedOut = isShared && !isSingleLayerMode;
 
                 // 🌟 追加：特定のレイヤーを指定している時以外（全体表示）は、レイヤー（メインカテゴリ）の色を使用する
@@ -482,7 +489,9 @@ export default function DailyExpense({
                             }}
                             numberOfLines={1}
                           >
-                            {itemTag || i.category}
+                            {itemTag && itemTag !== itemLayer
+                              ? itemTag
+                              : itemLayer}
                           </Text>
 
                           {/* 🌟 共有データにバッジをつける */}

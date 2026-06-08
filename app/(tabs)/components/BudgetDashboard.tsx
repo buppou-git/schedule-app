@@ -26,6 +26,7 @@ import {
   getItemTotalIncome,
   PRESET_COLORS,
 } from "../../../utils/helpers";
+import { resolveTags } from "../../../utils/tagUtils";
 
 import HistoryAnalytics from "./HistoryAnalytics";
 
@@ -57,7 +58,7 @@ export default function BudgetDashboard({
   displayData,
   sharedRooms,
   roomWishes,
-  safeDebouncedSyncWish
+  safeDebouncedSyncWish,
 }: BudgetDashboardProps) {
   const {
     scheduleData,
@@ -111,12 +112,16 @@ export default function BudgetDashboard({
   const [newWishAutoDeposit, setNewWishAutoDeposit] = useState(false);
   const [newWishAutoAmount, setNewWishAutoAmount] = useState("");
   const [newWishIsShared, setNewWishIsShared] = useState(false);
-  const [selectedSharedRoom, setSelectedSharedRoom] = useState<string | null>(null);
+  const [selectedSharedRoom, setSelectedSharedRoom] = useState<string | null>(
+    null,
+  );
 
   const [isDepositModalVisible, setIsDepositModalVisible] = useState(false);
   const [isCompleteModalVisible, setIsCompleteModalVisible] = useState(false);
   // 🌟 追加：動的計算された savedAmount を持てるように型を拡張
-  const [selectedWish, setSelectedWish] = useState<(WishItem & { dynamicSavedAmount: number }) | null>(null);
+  const [selectedWish, setSelectedWish] = useState<
+    (WishItem & { dynamicSavedAmount: number }) | null
+  >(null);
   const [depositAmount, setDepositAmount] = useState("");
 
   const [unallocatedSavings, setUnallocatedSavings] = useState(0);
@@ -179,7 +184,11 @@ export default function BudgetDashboard({
     // 🌟 0（文字が全消しされた時）は、一時的に1日として計算しアプリのクラッシュを防ぐ
     const calcDay = pDay === 0 ? 1 : pDay;
 
-    const currentMonthLastDay = new Date(startYear, startMonth + 1, 0).getDate();
+    const currentMonthLastDay = new Date(
+      startYear,
+      startMonth + 1,
+      0,
+    ).getDate();
     const actualPDay = Math.min(calcDay, currentMonthLastDay);
 
     if (date.getDate() < actualPDay) {
@@ -383,15 +392,18 @@ export default function BudgetDashboard({
 
           // 🌟 魔法の条件分岐
           const isSingleLayerMode = activeTags.length === 1;
-          const isShared = !!item.sharedRoomId;
+
+          const { parent: itemLayer = "" } = resolveTags(item);
+          const isShared = Object.keys(sharedRooms || {}).includes(itemLayer);
 
           // 🌟 全体表示の時だけ共有の出費を無視。単一表示の時は合算！
           if (isShared && !isSingleLayerMode) return;
 
           if (iTotal > 0) tIncome += iTotal;
           if (eTotal > 0) {
-            const itemTag = item.tags?.[0] || item.tag || "未分類";
-            const itemLayer = tagMaster[itemTag]?.layer || itemTag;
+            const { parent: itemLayer = "", sub: itemTag = "" } =
+              resolveTags(item);
+
             lActuals[itemLayer] = (lActuals[itemLayer] || 0) + eTotal;
             sActuals[itemTag] = (sActuals[itemTag] || 0) + eTotal;
             tExpense += eTotal;
@@ -419,11 +431,11 @@ export default function BudgetDashboard({
   const remainingToAllocate = unallocatedSavings - totalSweeperAllocation;
 
   const combinedWishlist = useMemo(() => {
-    const localMap = new Map(wishlist.map(w => [w.id, w]));
+    const localMap = new Map(wishlist.map((w) => [w.id, w]));
 
     if (roomWishes) {
-      Object.values(roomWishes).forEach(wishes => {
-        wishes.forEach(w => {
+      Object.values(roomWishes).forEach((wishes) => {
+        wishes.forEach((w) => {
           localMap.set(w.id, w);
         });
       });
@@ -439,7 +451,8 @@ export default function BudgetDashboard({
 
       Object.values(displayData).forEach((items) => {
         items.forEach((item) => {
-          const isShared = !!item.sharedRoomId;
+          const { parent: itemLayer = "" } = resolveTags(item);
+          const isShared = Object.keys(sharedRooms || {}).includes(itemLayer);
 
           // 🌟 共有目標なのに全体表示で見ている時は、相手の出費を合算しない
           // （※自分が払った分も、個人の目標として混ざらないように制御）
@@ -462,7 +475,9 @@ export default function BudgetDashboard({
     });
   }, [wishlist, displayData, activeTags]);
 
-  const activeWishes = augmentedWishlist.filter((w) => w.dynamicSavedAmount < w.targetAmount);
+  const activeWishes = augmentedWishlist.filter(
+    (w) => w.dynamicSavedAmount < w.targetAmount,
+  );
 
   const daysToPayday = useMemo(() => {
     const today = new Date(todayStr);
@@ -477,15 +492,31 @@ export default function BudgetDashboard({
     } else {
       // 🌟 通常の日付リセットの場合
       const calcDay = payday === 0 ? 1 : payday; // 0の時は1として扱う
-      const currentMonthLastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+      const currentMonthLastDay = new Date(
+        today.getFullYear(),
+        today.getMonth() + 1,
+        0,
+      ).getDate();
       const safePayday = Math.min(calcDay, currentMonthLastDay);
 
-      nextPaydayDate = new Date(today.getFullYear(), today.getMonth(), safePayday);
+      nextPaydayDate = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        safePayday,
+      );
 
       if (today.getDate() >= safePayday) {
-        const nextMonthLastDay = new Date(today.getFullYear(), today.getMonth() + 2, 0).getDate();
+        const nextMonthLastDay = new Date(
+          today.getFullYear(),
+          today.getMonth() + 2,
+          0,
+        ).getDate();
         const safeNextPayday = Math.min(calcDay, nextMonthLastDay);
-        nextPaydayDate = new Date(today.getFullYear(), today.getMonth() + 1, safeNextPayday);
+        nextPaydayDate = new Date(
+          today.getFullYear(),
+          today.getMonth() + 1,
+          safeNextPayday,
+        );
       }
     }
 
@@ -572,9 +603,10 @@ export default function BudgetDashboard({
       return;
     }
 
-    const targetRoomId = (newWishIsShared && selectedSharedRoom && sharedRooms)
-      ? sharedRooms[selectedSharedRoom]
-      : undefined;
+    const targetRoomId =
+      newWishIsShared && selectedSharedRoom && sharedRooms
+        ? sharedRooms[selectedSharedRoom]
+        : undefined;
     // 🌟 【After】savedItem を先に定義して、newList と同時に作る
     let savedItem: WishItem;
     let newList;
@@ -584,7 +616,8 @@ export default function BudgetDashboard({
         id: editingWishId,
         name: newWishName.trim(),
         targetAmount,
-        savedAmount: wishlist.find(w => w.id === editingWishId)?.savedAmount || 0,
+        savedAmount:
+          wishlist.find((w) => w.id === editingWishId)?.savedAmount || 0,
         icon: newWishIcon,
         color: newWishColor,
         autoDepositEnabled: newWishAutoDeposit,
@@ -612,7 +645,7 @@ export default function BudgetDashboard({
     setTimeout(() => setHasUnsavedChanges(true), 100);
 
     // 🌟 これなら savedItem は必ず存在するのでエラーになりません！
-    if (savedItem.sharedRoomId && typeof safeDebouncedSyncWish === 'function') {
+    if (savedItem.sharedRoomId && typeof safeDebouncedSyncWish === "function") {
       safeDebouncedSyncWish(savedItem, savedItem.sharedRoomId);
     }
 
@@ -629,10 +662,33 @@ export default function BudgetDashboard({
   const confirmDeleteWish = () => {
     const msg = "この目標を削除しますか？\n(入金済みの金額は残高に戻ります)";
     const deleteLogic = async () => {
+      // 🌟 消す対象の目標を確保しておく
+      const wishToDelete = wishlist.find((w) => w.id === editingWishId);
+
       const newList = wishlist.filter((w) => w.id !== editingWishId);
       setWishlist(newList);
       await AsyncStorage.setItem("wishlistData", JSON.stringify(newList));
       setTimeout(() => setHasUnsavedChanges(true), 100);
+
+      // 🌟 追加：共有目標だった場合、クラウド（Firestore）からも完全削除する！
+      if (wishToDelete?.sharedRoomId) {
+        try {
+          const { deleteDoc, doc } = await import("firebase/firestore");
+          const { db } = await import("../../../firebaseConfig");
+          await deleteDoc(
+            doc(
+              db,
+              "rooms",
+              wishToDelete.sharedRoomId,
+              "wishes",
+              wishToDelete.id,
+            ),
+          );
+        } catch (e) {
+          console.error("共有目標の削除エラー:", e);
+        }
+      }
+
       setEditingWishId(null);
       setIsAddWishModalVisible(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -777,9 +833,9 @@ export default function BudgetDashboard({
         updatedWishlist = updatedWishlist.map((w) =>
           w.id === id
             ? {
-              ...w,
-              savedAmount: Math.min(w.targetAmount, w.savedAmount + amount),
-            }
+                ...w,
+                savedAmount: Math.min(w.targetAmount, w.savedAmount + amount),
+              }
             : w,
         );
       }
@@ -830,11 +886,11 @@ export default function BudgetDashboard({
       const itemTotal = getItemTotalExpense(item);
       if (itemTotal === 0) return;
 
-      const isShared = !!item.sharedRoomId;
-      if (isShared && !isSingle) return;
+      const { parent: itemLayer = "" } = resolveTags(item);
+      const isShared = Object.keys(sharedRooms || {}).includes(itemLayer);
 
+      if (isShared && !isSingle) return;
       const itemTag = item.tags?.[0] || item.tag || "";
-      const itemLayer = tagMaster[itemTag]?.layer || "共通";
       const isMatch = activeTags.length === 0 || activeTags.includes(itemLayer);
 
       if (!isMatch) {
@@ -970,13 +1026,38 @@ export default function BudgetDashboard({
           showsVerticalScrollIndicator={false}
         >
           <Text style={styles.settingLabel}>リセット日指定</Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 15 }}>
-            <View style={[styles.settingInput, { flex: 1, marginBottom: 0, flexDirection: "row", alignItems: "center", padding: 0 }]}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10,
+              marginBottom: 15,
+            }}
+          >
+            <View
+              style={[
+                styles.settingInput,
+                {
+                  flex: 1,
+                  marginBottom: 0,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  padding: 0,
+                },
+              ]}
+            >
               <TextInput
-                style={{ flex: 1, padding: 12, fontSize: 16, color: payday === 99 ? "#8E8E93" : "#1C1C1E" }}
+                style={{
+                  flex: 1,
+                  padding: 12,
+                  fontSize: 16,
+                  color: payday === 99 ? "#8E8E93" : "#1C1C1E",
+                }}
                 keyboardType="numeric"
                 // 🌟 0の時は空っぽとして表示させる
-                value={payday === 99 ? "月末" : (payday === 0 ? "" : payday.toString())}
+                value={
+                  payday === 99 ? "月末" : payday === 0 ? "" : payday.toString()
+                }
                 onChangeText={(t) => {
                   const numStr = t.replace(/[^0-9]/g, "");
                   if (numStr === "") {
@@ -1003,7 +1084,18 @@ export default function BudgetDashboard({
                   }
                 }}
               />
-              {payday !== 99 && <Text style={{ fontSize: 16, color: "#1C1C1E", paddingRight: 12, fontWeight: "bold" }}>日</Text>}
+              {payday !== 99 && (
+                <Text
+                  style={{
+                    fontSize: 16,
+                    color: "#1C1C1E",
+                    paddingRight: 12,
+                    fontWeight: "bold",
+                  }}
+                >
+                  日
+                </Text>
+              )}
             </View>
             <TouchableOpacity
               style={{
@@ -1020,7 +1112,14 @@ export default function BudgetDashboard({
                 AsyncStorage.setItem("myPayday", "99");
               }}
             >
-              <Text style={{ fontWeight: "bold", color: payday === 99 ? "#FFF" : "#8E8E93" }}>月末にする</Text>
+              <Text
+                style={{
+                  fontWeight: "bold",
+                  color: payday === 99 ? "#FFF" : "#8E8E93",
+                }}
+              >
+                月末にする
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -1066,14 +1165,25 @@ export default function BudgetDashboard({
             <View style={styles.savingsAmountRow}>
               {/* 🌟 【修正】ここに flex: 1 と、ボタンとの余白(paddingRight)を追加！ */}
               <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, paddingRight: 10 }}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                  flex: 1,
+                  paddingRight: 10,
+                }}
               >
                 <Text
                   style={[
                     styles.savingsAmount,
                     {
                       color: currentUsable >= 0 ? "#1C1C1E" : "#FF3B30",
-                      fontSize: (isSavingsHidden ? 4 : currentUsable.toLocaleString().length) > 9 ? 18 : 26
+                      fontSize:
+                        (isSavingsHidden
+                          ? 4
+                          : currentUsable.toLocaleString().length) > 9
+                          ? 18
+                          : 26,
                     },
                   ]}
                   numberOfLines={1}
@@ -1211,7 +1321,9 @@ export default function BudgetDashboard({
 
                       // 🌟 追加：編集時に既存の共有設定を復元する
                       if (wish.sharedRoomId && sharedRooms) {
-                        const roomName = Object.keys(sharedRooms).find(key => sharedRooms[key] === wish.sharedRoomId);
+                        const roomName = Object.keys(sharedRooms).find(
+                          (key) => sharedRooms[key] === wish.sharedRoomId,
+                        );
                         if (roomName) {
                           setNewWishIsShared(true);
                           setSelectedSharedRoom(roomName);
@@ -1407,9 +1519,9 @@ export default function BudgetDashboard({
                               : key === "外部予定" // 🌟 ここを追加！
                                 ? "#FF2D55"
                                 : layerMaster[key] ||
-                                CHART_PALETTE[index % CHART_PALETTE.length]
+                                  CHART_PALETTE[index % CHART_PALETTE.length]
                             : tagMaster[key]?.color ||
-                            CHART_PALETTE[index % CHART_PALETTE.length],
+                              CHART_PALETTE[index % CHART_PALETTE.length],
                       legendFontColor: "#666",
                       legendFontSize: 11,
                     }))}
@@ -2171,7 +2283,7 @@ export default function BudgetDashboard({
                 // 🌟 魔法の動的スタイル：7文字を超えたら、自動的にフォントサイズを 16 に小さくする！
                 style={[
                   styles.editInputAmount,
-                  { fontSize: salaryInputAmount.length > 7 ? 16 : 24 }
+                  { fontSize: salaryInputAmount.length > 7 ? 16 : 24 },
                 ]}
                 keyboardType="numeric"
                 value={salaryInputAmount}
@@ -2267,9 +2379,7 @@ export default function BudgetDashboard({
               {sharedRooms && Object.keys(sharedRooms).length > 0 && (
                 <View style={{ marginTop: 15 }}>
                   <View style={styles.settingSwitchRow}>
-                    <Text style={styles.settingSwitchLabel}>
-                      夢を共有する
-                    </Text>
+                    <Text style={styles.settingSwitchLabel}>夢を共有する</Text>
                     <Switch
                       value={newWishIsShared}
                       onValueChange={(v) => {
@@ -2283,21 +2393,50 @@ export default function BudgetDashboard({
                   {/* スイッチONの時だけ、カテゴリ選択ボタンを表示 */}
                   {newWishIsShared && (
                     <View style={{ marginTop: 10 }}>
-                      <Text style={styles.settingLabel}>共有先レイヤーを選択</Text>
-                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 5 }}>
+                      <Text style={styles.settingLabel}>
+                        共有先レイヤーを選択
+                      </Text>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          flexWrap: "wrap",
+                          gap: 8,
+                          marginTop: 5,
+                        }}
+                      >
                         {Object.keys(sharedRooms).map((layer) => (
                           <TouchableOpacity
                             key={layer}
                             style={[
-                              { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1 },
                               {
-                                backgroundColor: selectedSharedRoom === layer ? newWishColor : "#F2F2F7",
-                                borderColor: selectedSharedRoom === layer ? newWishColor : "#E5E5EA"
-                              }
+                                paddingVertical: 8,
+                                paddingHorizontal: 12,
+                                borderRadius: 8,
+                                borderWidth: 1,
+                              },
+                              {
+                                backgroundColor:
+                                  selectedSharedRoom === layer
+                                    ? newWishColor
+                                    : "#F2F2F7",
+                                borderColor:
+                                  selectedSharedRoom === layer
+                                    ? newWishColor
+                                    : "#E5E5EA",
+                              },
                             ]}
                             onPress={() => setSelectedSharedRoom(layer)}
                           >
-                            <Text style={{ color: selectedSharedRoom === layer ? "#FFF" : "#333", fontSize: 12, fontWeight: "bold" }}>
+                            <Text
+                              style={{
+                                color:
+                                  selectedSharedRoom === layer
+                                    ? "#FFF"
+                                    : "#333",
+                                fontSize: 12,
+                                fontWeight: "bold",
+                              }}
+                            >
                               {layer}
                             </Text>
                           </TouchableOpacity>
@@ -2660,7 +2799,8 @@ export default function BudgetDashboard({
                     >
                       あと ¥
                       {(
-                        selectedWish.targetAmount - selectedWish.dynamicSavedAmount
+                        selectedWish.targetAmount -
+                        selectedWish.dynamicSavedAmount
                       ).toLocaleString()}{" "}
                       で達成！
                     </Text>
@@ -2673,7 +2813,7 @@ export default function BudgetDashboard({
                     // 🌟 魔法の動的スタイル：こちらも7文字を超えたら自動縮小！
                     style={[
                       styles.editInputAmount,
-                      { fontSize: depositAmount.length > 7 ? 16 : 24 }
+                      { fontSize: depositAmount.length > 7 ? 16 : 24 },
                     ]}
                     keyboardType="numeric"
                     placeholder="0"
@@ -2849,13 +2989,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    flexWrap: "nowrap",              // 🌟 1行に収める（改行させない）
+    flexWrap: "nowrap", // 🌟 1行に収める（改行させない）
   },
   savingsAmount: {
-    fontSize: 26,         // 🌟 少し縮小
+    fontSize: 26, // 🌟 少し縮小
     fontWeight: "900",
     letterSpacing: 0.5,
-    flexShrink: 1,      // 🌟 金額が長くなったら、ボタンを押し出さずに「ここが縮む」
+    flexShrink: 1, // 🌟 金額が長くなったら、ボタンを押し出さずに「ここが縮む」
   },
   expectedSavingsText: { fontSize: 11, fontWeight: "bold", color: "#999" },
   hugeSalaryBtn: {
@@ -2871,8 +3011,8 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 5,
     gap: 6,
-    flexShrink: 0,      // 🌟 どんなに金額が長くても、ボタンのサイズは絶対に維持する
-    marginLeft: 8,      // 金額との間の隙間
+    flexShrink: 0, // 🌟 どんなに金額が長くても、ボタンのサイズは絶対に維持する
+    marginLeft: 8, // 金額との間の隙間
   },
   hugeSalaryBtnText: { fontSize: 14, fontWeight: "bold", color: "#FFF" },
   addSubTagBtn: {

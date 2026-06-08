@@ -1,5 +1,7 @@
 import "react-native-get-random-values";
 
+import { resolveTags } from "../../utils/tagUtils";
+
 import * as Linking from "expo-linking";
 
 import * as Clipboard from "expo-clipboard";
@@ -235,7 +237,9 @@ function IndexContent() {
       if (!url) return;
       if (url === lastProcessedUrl) return; // 🌟 すでに処理済みのURLなら無視する！
 
+      if (!url) return;
       const parsedUrl = Linking.parse(url);
+
       const isJoinLink = url.includes("room=");
 
       if (isJoinLink) {
@@ -389,18 +393,14 @@ function IndexContent() {
       const datesData = roomSchedules[roomId] || {};
       Object.keys(datesData).forEach((date) => {
         datesData[date].forEach((item) => {
+          // 相手が送ってきた属性（サブカテゴリ）を特定
+          const { parent = "", sub = "" } = resolveTags(item) || {};
+
           let subTag = "";
 
-          // 相手が送ってきた属性（サブカテゴリ）を特定
-          if (item.tags && item.tags.length > 1) {
-            subTag = item.tags[1];
-          } else if (
-            item.tag &&
-            item.tag !== item.layer &&
-            item.tag !== item.sharedLayer &&
-            item.tag !== myLayerName
-          ) {
-            subTag = item.tag;
+          // 親と違えば sub とみなす
+          if (sub !== parent && sub !== myLayerName) {
+            subTag = sub;
           }
 
           // 🌟 自分の辞書（設定）にない未知の属性なら、自動で登録する！
@@ -434,7 +434,7 @@ function IndexContent() {
 
   const handleCopyExternal = (item: ScheduleItem) => {
     // 外部予定特有のデータを剥がす
-    const { externalEventId, color, ...rest } = item;
+    const { externalEventId, color, ...rest } = item || {};
 
     const newItem: ScheduleItem = {
       ...(rest as ScheduleItem), // 🌟 rest を ScheduleItem として扱う
@@ -590,10 +590,9 @@ function IndexContent() {
   };
 
   const isSharedItem = (item: ScheduleItem) => {
-    // 🌟 item.layer も判定に含めるように強化
-    const itemTags =
-      item.tags || (item.tag ? [item.tag] : item.layer ? [item.layer] : []);
-    return itemTags.some((tag) => Object.keys(sharedRooms).includes(tag));
+    const { parent } = resolveTags(item);
+
+    return Object.keys(sharedRooms).includes(parent);
   };
 
   // 🌟 共有カレンダーの予定を自動検知してFirestoreへ飛ばす最強の監視機構
@@ -633,9 +632,7 @@ function IndexContent() {
     targetLayer: string,
     isCopy: boolean,
   ) => {
-    // 🌟 魔法の修正1：元の親レイヤーを特定する
-    const oldParentLayer =
-      item.tags && item.tags.length > 0 ? item.tags[0] : item.tag;
+    const { parent: oldParentLayer, sub: oldSubTag } = resolveTags(item);
 
     // 🌟 魔法の修正2：選ばれたのが「カレンダー（大枠）」か「カテゴリ（小タグ）」かを判定
     const isTargetMainLayer = Object.keys(layerMaster).includes(targetLayer);
@@ -666,12 +663,11 @@ function IndexContent() {
       id: isCopy ? Date.now().toString() : item.id,
       tag: subTag || parentLayer,
       layer: parentLayer,
-      tags:
-        subTag && subTag !== parentLayer
-          ? [parentLayer, subTag]
-          : [parentLayer],
+      tags: [parentLayer, subTag || parentLayer],
       color: newColor,
-      category: item.isExpense ? subTag || targetLayer : item.category,
+      category: item.isExpense
+        ? subTag || targetLayer || item.category
+        : item.category,
     };
 
     const targetDate = item.date || selectedDate;
@@ -1060,23 +1056,13 @@ function IndexContent() {
       let dateChanged = false;
 
       const newItems = scheduleData[date].map((item: ScheduleItem) => {
-        const itemTag =
-          item.tag ||
-          (item.tags && item.tags.length > 1 ? item.tags[1] : item.tags?.[0]) ||
-          item.layer || // 🌟 追加：「生活」になる前に、保存されたレイヤー名を見に行く
-          "生活";
+        const { parent = "", sub = "" } = resolveTags(item) || {};
 
-        const parentTag =
-          item.tags && item.tags.length > 0
-            ? item.tags[0]
-            : tagMaster[itemTag]?.layer || item.layer || itemTag; // 🌟 追加
+        const itemTag = sub;
+        const parentTag = parent;
 
-        let latestColor = item.color;
-        if (item.tag && tagMaster[item.tag]) {
-          latestColor = tagMaster[item.tag].color;
-        } else if (parentTag && layerMaster[parentTag]) {
-          latestColor = layerMaster[parentTag];
-        }
+        const latestColor =
+          tagMaster[sub]?.color || layerMaster[parent] || item.color;
 
         let displayColor = latestColor;
         let displayTags: string[] = []; // 🌟 stringの配列であることを厳密に定義！
@@ -1087,9 +1073,9 @@ function IndexContent() {
               ? tagMaster[itemTag].color
               : latestColor;
           if (itemTag && itemTag !== parentTag) {
-            displayTags = [itemTag];
+            displayTags = [parentTag, itemTag];
           } else {
-            displayTags = [];
+            displayTags = [parentTag];
           }
         } else {
           displayColor = layerMaster[parentTag] || latestColor;
@@ -1156,17 +1142,18 @@ function IndexContent() {
       Object.keys(datesData).forEach((date) => {
         const dailyItems = datesData[date] || [];
 
-        // 🌟 ここで map を使って新しい配列を作成
         const newItems = dailyItems.map((item: ScheduleItem) => {
           let finalTag = myLayerName;
           let finalColor = layerMaster[myLayerName] || item.color;
 
-          if (item.tags && item.tags.length > 1) {
-            const subTag = item.tags[1];
-            finalTag = subTag;
-            finalColor = tagMaster[subTag]
-              ? tagMaster[subTag].color
-              : item.color;
+          const { parent = "", sub = "" } = resolveTags(item) || {};
+
+          // ✅ 必須追加
+          const itemTag = sub;
+
+          if (itemTag && tagMaster[itemTag]) {
+            finalTag = itemTag;
+            finalColor = tagMaster[itemTag].color;
           } else if (
             item.tag &&
             item.tag !== item.layer &&
@@ -1182,19 +1169,16 @@ function IndexContent() {
           const isSingleLayerMode =
             activeTags.length === 1 && activeTags[0] === myLayerName;
 
-          // 🌟 修正：属性がなくてもメインカテゴリ名を表示するように強化！
+          // ✅ ここが抜けるとエラーになる
           let displayTags: string[] = [];
 
-          if (activeTags.length === 1 && activeTags[0] === myLayerName) {
-            // ① 単一カテゴリを選択中
-            if (finalTag && finalTag !== myLayerName) {
-              displayTags = [finalTag]; // 属性があれば属性名を表示
-            } else {
-              displayTags = [myLayerName]; // 🌟 属性がなくても親カテゴリ名を表示する！
-            }
+          if (isSingleLayerMode) {
+            displayTags =
+              sub && sub !== parent
+                ? [myLayerName, sub] // ✅ 修正ポイント
+                : [myLayerName];
           } else {
-            // ② オールレイヤーや複数カテゴリを表示中
-            displayTags = [myLayerName]; // 親カテゴリ名を表示する
+            displayTags = [myLayerName];
           }
 
           const displayColor = isSingleLayerMode
@@ -1204,7 +1188,7 @@ function IndexContent() {
           return {
             ...item,
             layer: myLayerName,
-            tag: finalTag,
+            tag: itemTag || myLayerName,
             tags: displayTags,
             color: displayColor,
           } as ScheduleItem;
@@ -1482,16 +1466,8 @@ function IndexContent() {
       // 選択中の「月」のデータだけを集計する
       if (date.startsWith(targetMonthPrefix)) {
         displayData[date].forEach((item) => {
-          const itemTags =
-            item.tags && item.tags.length > 0
-              ? item.tags
-              : item.tag
-                ? [item.tag]
-                : [];
-          const matchLayer = itemTags.some(
-            (tag) =>
-              tag === targetLayer || tagMaster[tag]?.layer === targetLayer,
-          );
+          const { parent } = resolveTags(item);
+          const matchLayer = parent === targetLayer;
 
           if (matchLayer) {
             if (item.isEvent || item.isTodo) eventCount++;
@@ -1741,10 +1717,11 @@ function IndexContent() {
             await cancelItemNotification(id);
         }
         if (wasShared) {
-          const itemTags = item.tags || (item.tag ? [item.tag] : []);
-          const sharedLayerName = itemTags.find((tag) =>
-            Object.keys(sharedRooms).includes(tag),
-          );
+          const { parent } = resolveTags(item);
+
+          const sharedLayerName = Object.keys(sharedRooms).includes(parent)
+            ? parent
+            : null;
           if (sharedLayerName) {
             const roomId = sharedRooms[sharedLayerName];
             const { deleteDoc, doc } = await import("firebase/firestore");
