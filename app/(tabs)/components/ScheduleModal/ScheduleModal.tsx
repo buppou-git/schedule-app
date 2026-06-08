@@ -352,8 +352,7 @@ const ScheduleModal = ({
 
         updateForm({
           title: selectedItem.title || "",
-          amount:
-            selectedItem.amount > 0 ? selectedItem.amount.toString() : "",
+          amount: selectedItem.amount > 0 ? selectedItem.amount.toString() : "",
           isEvent: selectedItem.isEvent ?? true,
           isTodo: selectedItem.isTodo ?? false,
           isExpense: selectedItem.isExpense ?? false,
@@ -384,8 +383,7 @@ const ScheduleModal = ({
           selectedItem.notificationIds &&
           selectedItem.notificationIds.length > 0;
         setSelectedReminders(
-          selectedItem.reminderOptions ||
-          (hasOldNotification ? ["exact"] : []),
+          selectedItem.reminderOptions || (hasOldNotification ? ["exact"] : []),
         );
 
         if (selectedItem.customReminderTimes) {
@@ -568,9 +566,6 @@ const ScheduleModal = ({
   };
 
   const executeSave = async (mode: "normal" | "all" | "single") => {
-
-
-
     // 🌟 1. 保存中なら処理をブロック
     if (isSaving || isSavingRef.current) return;
 
@@ -652,8 +647,7 @@ const ScheduleModal = ({
             if (option === "morning") {
               triggerDate.setHours(7, 0, 0, 0);
               bodyPrefix = "本日";
-            }
-            else if (option === "dayBefore") {
+            } else if (option === "dayBefore") {
               triggerDate.setDate(triggerDate.getDate() - 1);
               triggerDate.setHours(21, 0, 0, 0);
               bodyPrefix = "明日";
@@ -671,24 +665,19 @@ const ScheduleModal = ({
             );
             if (option === "exact") {
               bodyPrefix = "時間になりました";
-            }
-            else if (option === "10min") {
+            } else if (option === "10min") {
               triggerDate.setMinutes(triggerDate.getMinutes() - 10);
               bodyPrefix = "10分前";
-            }
-            else if (option === "30min") {
+            } else if (option === "30min") {
               triggerDate.setMinutes(triggerDate.getMinutes() - 30);
               bodyPrefix = "30分前";
-            }
-            else if (option === "1hour") {
+            } else if (option === "1hour") {
               triggerDate.setHours(triggerDate.getHours() - 1);
               bodyPrefix = "1時間前";
-            }
-            else if (option === "morning") {
+            } else if (option === "morning") {
               triggerDate.setHours(7, 0, 0, 0);
               bodyPrefix = "本日";
-            }
-            else if (option === "dayBefore") {
+            } else if (option === "dayBefore") {
               triggerDate.setDate(triggerDate.getDate() - 1);
               triggerDate.setHours(21, 0, 0, 0);
               bodyPrefix = "明日";
@@ -739,8 +728,7 @@ const ScheduleModal = ({
             if (task.reminderOption === "1hour") {
               triggerDate.setHours(triggerDate.getHours() - 1);
               bodyPrefix = "1時間前";
-            }
-            else if (task.reminderOption === "1day") {
+            } else if (task.reminderOption === "1day") {
               triggerDate.setDate(triggerDate.getDate() - 1);
               bodyPrefix = "明日";
             }
@@ -762,7 +750,6 @@ const ScheduleModal = ({
         }),
       );
 
-
       const pureTodos = updatedSubTasks.filter(
         (t) => !t.isExpense && !t.isIncome,
       );
@@ -778,14 +765,15 @@ const ScheduleModal = ({
       const eDay = String(formData.endDate.getDate()).padStart(2, "0");
       const eStr = `${eYear}-${eMonth}-${eDay}`;
 
-      // 🌟 TypeScriptのエラーを回避するために any 型で宣言し、確実に layer を含める！
       const itemData: Omit<ScheduleItem, "id"> = {
         title: formData.title,
         tag: finalTag,
-        layer: selectedLayer, // 🌟 フィルター機能のための命綱を強制追加！
-        tags: formData.tag.trim()
-          ? [selectedLayer, formData.tag.trim()]
-          : [selectedLayer],
+        layer: selectedLayer, // 🌟 親レイヤーを明示
+        // 🌟 【超重要】親と子が同じなら1つ、違うなら2つ並べるルールに完全統一！
+        tags:
+          finalTag === selectedLayer
+            ? [selectedLayer]
+            : [selectedLayer, finalTag],
         amount: parseInt(formData.amount) || 0,
         isEvent: formData.isEvent,
         isTodo: formData.isTodo,
@@ -826,21 +814,21 @@ const ScheduleModal = ({
       const startForExport = formData.isAllDay
         ? formData.startDate
         : new Date(
-          formData.startDate.getFullYear(),
-          formData.startDate.getMonth(),
-          formData.startDate.getDate(),
-          formData.startTime.getHours(),
-          formData.startTime.getMinutes(),
-        );
+            formData.startDate.getFullYear(),
+            formData.startDate.getMonth(),
+            formData.startDate.getDate(),
+            formData.startTime.getHours(),
+            formData.startTime.getMinutes(),
+          );
       const endForExport = formData.isAllDay
         ? formData.endDate
         : new Date(
-          formData.endDate.getFullYear(),
-          formData.endDate.getMonth(),
-          formData.endDate.getDate(),
-          formData.endTime.getHours(),
-          formData.endTime.getMinutes(),
-        );
+            formData.endDate.getFullYear(),
+            formData.endDate.getMonth(),
+            formData.endDate.getDate(),
+            formData.endTime.getHours(),
+            formData.endTime.getMinutes(),
+          );
 
       const targetRoomId = sharedRooms[selectedLayer];
       const isShared = !!targetRoomId;
@@ -864,8 +852,8 @@ const ScheduleModal = ({
 
       const wasShared = selectedItem
         ? (selectedItem.tags || [selectedItem.tag || ""]).some((tag) =>
-          Object.keys(sharedRooms).includes(tag),
-        )
+            Object.keys(sharedRooms).includes(tag),
+          )
         : false;
 
       let hasCloudAction = false;
@@ -873,11 +861,10 @@ const ScheduleModal = ({
 
       // 🌟 修正②：古いカテゴリから移動した時の削除処理
       if (selectedItem && wasShared) {
-
         const oldLayer =
           selectedItem.sharedLayer ||
-          (selectedItem.tags || [selectedItem.tag || ""]).find(
-            (tag) => Object.keys(sharedRooms).includes(tag),
+          (selectedItem.tags || [selectedItem.tag || ""]).find((tag) =>
+            Object.keys(sharedRooms).includes(tag),
           );
 
         if (oldLayer && (!isShared || oldLayer !== selectedLayer)) {
@@ -920,7 +907,6 @@ const ScheduleModal = ({
         safeDebouncedSync(fixedItem, sStr);
       }
 
-
       // 🌟 削除アクション（古い部屋からの移動時など）があった場合のみ commit
       if (hasCloudAction) {
         await batch.commit().catch((e) => console.error("共有削除エラー:", e));
@@ -939,12 +925,12 @@ const ScheduleModal = ({
                 nextData[d] = nextData[d].map((i) =>
                   i.id === selectedItem.id
                     ? {
-                      ...i,
-                      exceptionDates: [
-                        ...(i.exceptionDates || []),
-                        selectedDate,
-                      ],
-                    }
+                        ...i,
+                        exceptionDates: [
+                          ...(i.exceptionDates || []),
+                          selectedDate,
+                        ],
+                      }
                     : i,
                 );
               }
@@ -1032,7 +1018,7 @@ const ScheduleModal = ({
       if (selectedItem.externalEventId) {
         try {
           await Calendar.deleteEventAsync(selectedItem.externalEventId);
-        } catch (e) { }
+        } catch (e) {}
       }
 
       const wasShared =
@@ -1058,11 +1044,10 @@ const ScheduleModal = ({
           }
         }
         if (wasShared) {
-
           const oldLayer =
             selectedItem.sharedLayer ||
-            (selectedItem.tags || [selectedItem.tag || ""]).find(
-              (tag) => Object.keys(sharedRooms).includes(tag),
+            (selectedItem.tags || [selectedItem.tag || ""]).find((tag) =>
+              Object.keys(sharedRooms).includes(tag),
             );
 
           const roomId = oldLayer ? sharedRooms[oldLayer] : null;
@@ -1079,11 +1064,10 @@ const ScheduleModal = ({
           targetDateObj.setDate(targetDateObj.getDate() - 1);
           const newEndDate = `${targetDateObj.getFullYear()}-${("0" + (targetDateObj.getMonth() + 1)).slice(-2)}-${("0" + targetDateObj.getDate()).slice(-2)}`;
 
-
           const oldLayer =
             selectedItem.sharedLayer ||
-            (selectedItem.tags || [selectedItem.tag || ""]).find(
-              (tag) => Object.keys(sharedRooms).includes(tag),
+            (selectedItem.tags || [selectedItem.tag || ""]).find((tag) =>
+              Object.keys(sharedRooms).includes(tag),
             );
 
           const roomId = oldLayer ? sharedRooms[oldLayer] : null;
@@ -1310,19 +1294,19 @@ const ScheduleModal = ({
 
           {(formData.isAllDay
             ? [
-              { label: "当日の朝(7:00)", value: "morning" },
-              { label: "前日", value: "dayBefore" },
-              { label: "2日前", value: "2daysBefore" },
-              { label: "カスタム", value: "custom" },
-            ]
+                { label: "当日の朝(7:00)", value: "morning" },
+                { label: "前日", value: "dayBefore" },
+                { label: "2日前", value: "2daysBefore" },
+                { label: "カスタム", value: "custom" },
+              ]
             : [
-              { label: "ちょうど", value: "exact" },
-              { label: "10分前", value: "10min" },
-              { label: "30分前", value: "30min" },
-              { label: "1時間前", value: "1hour" },
-              { label: "当日の朝", value: "morning" },
-              { label: "カスタム", value: "custom" },
-            ]
+                { label: "ちょうど", value: "exact" },
+                { label: "10分前", value: "10min" },
+                { label: "30分前", value: "30min" },
+                { label: "1時間前", value: "1hour" },
+                { label: "当日の朝", value: "morning" },
+                { label: "カスタム", value: "custom" },
+              ]
           ).map((opt) => {
             const isSelected = selectedReminders.includes(opt.value);
             return (
