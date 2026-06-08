@@ -162,6 +162,8 @@ const calculateStreak = (completedDates: string[] | undefined) => {
 function IndexContent() {
   const [debugMessage, setDebugMessage] = useState("");
 
+  const [pendingDeletes, setPendingDeletes] = useState<Set<string>>(new Set());
+
   const handleShareRoom = async (roomId: string) => {
     // 🌟 修正1：部屋IDから、自分がつけているカテゴリ名を逆引きする
     const myLayerName =
@@ -1055,52 +1057,55 @@ function IndexContent() {
       hasAnyChange = true;
       let dateChanged = false;
 
-      const newItems = scheduleData[date].map((item: ScheduleItem) => {
-        const { parent = "", sub = "" } = resolveTags(item) || {};
+      // 👇 🌟 修正：.filter(item => !pendingDeletes.has(item.id)) を追加！
+      const newItems = scheduleData[date]
+        .filter((item) => !pendingDeletes.has(item.id))
+        .map((item: ScheduleItem) => {
+          const { parent = "", sub = "" } = resolveTags(item) || {};
 
-        const itemTag = sub;
-        const parentTag = parent;
+          const itemTag = sub;
+          const parentTag = parent;
 
-        const latestColor =
-          tagMaster[sub]?.color || layerMaster[parent] || item.color;
+          const latestColor =
+            tagMaster[sub]?.color || layerMaster[parent] || item.color;
 
-        let displayColor = latestColor;
-        let displayTags: string[] = []; // 🌟 stringの配列であることを厳密に定義！
+          let displayColor = latestColor;
+          let displayTags: string[] = []; // 🌟 stringの配列であることを厳密に定義！
 
-        if (activeTags.length === 1 && activeTags[0] === parentTag) {
-          displayColor =
-            itemTag && tagMaster[itemTag]
-              ? tagMaster[itemTag].color
-              : latestColor;
-          if (itemTag && itemTag !== parentTag) {
-            displayTags = [parentTag, itemTag];
+          if (activeTags.length === 1 && activeTags[0] === parentTag) {
+            displayColor =
+              itemTag && tagMaster[itemTag]
+                ? tagMaster[itemTag].color
+                : latestColor;
+            if (itemTag && itemTag !== parentTag) {
+              displayTags = [parentTag, itemTag];
+            } else {
+              displayTags = [parentTag];
+            }
           } else {
+            displayColor = layerMaster[parentTag] || latestColor;
             displayTags = [parentTag];
           }
-        } else {
-          displayColor = layerMaster[parentTag] || latestColor;
-          displayTags = [parentTag];
-        }
 
-        const needsUpdate =
-          item.color !== displayColor ||
-          !item.tags ||
-          JSON.stringify(item.tags) !== JSON.stringify(displayTags);
+          const needsUpdate =
+            item.color !== displayColor ||
+            !item.tags ||
+            JSON.stringify(item.tags) !== JSON.stringify(displayTags);
 
-        if (needsUpdate) {
-          dateChanged = true;
-          // 🌟 TypeScriptが layer の存在を認めているため、エラー無く美しいオブジェクトを作れます
-          const updatedItem: ScheduleItem = {
-            ...item,
-            color: displayColor,
-            tag: itemTag,
-            layer: parentTag,
-            tags: displayTags,
-          };
-          return updatedItem;
-        }
-        return item;
-      });
+          if (needsUpdate) {
+            dateChanged = true;
+            // 🌟 TypeScriptが layer の存在を認めているため、エラー無く美しいオブジェクトを作れます
+            const updatedItem: ScheduleItem = {
+              ...item,
+              color: displayColor,
+              tag: itemTag,
+              layer: parentTag,
+              tags: displayTags,
+            };
+            return updatedItem;
+          }
+          return item;
+        });
 
       if (dateChanged) {
         nextData[date] = newItems;
@@ -1140,7 +1145,10 @@ function IndexContent() {
       const datesData = roomSchedules[roomId] || {};
 
       Object.keys(datesData).forEach((date) => {
-        const dailyItems = datesData[date] || [];
+        // 👇 🌟 修正： .filter(item => !pendingDeletes.has(item.id)) を追加！
+        const dailyItems = (datesData[date] || []).filter(
+          (item) => !pendingDeletes.has(item.id),
+        );
 
         const newItems = dailyItems.map((item: ScheduleItem) => {
           let finalTag = myLayerName;
@@ -1695,6 +1703,8 @@ function IndexContent() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     const targetDate = item.date || selectedDate;
 
+    setPendingDeletes((prev) => new Set(prev).add(item.id));
+
     try {
       // 1. 外部カレンダー連携があれば削除
       if (item.externalEventId) {
@@ -1797,6 +1807,13 @@ function IndexContent() {
     } catch (error) {
       console.error("Quick Delete Error:", error);
       Alert.alert("エラー", "削除に失敗しました。");
+    } finally {
+      // 👇 🌟 追加：処理が終わったら「削除中リスト」から外す
+      setPendingDeletes((prev) => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
     }
   };
 
