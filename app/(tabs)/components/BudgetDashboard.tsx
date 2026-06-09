@@ -50,6 +50,7 @@ export interface WishItem {
   autoDepositEnabled?: boolean;
   autoDepositAmount?: number;
   sharedRoomId?: string;
+  deleted?: boolean;
 }
 
 export default function BudgetDashboard({
@@ -167,36 +168,28 @@ export default function BudgetDashboard({
   ];
 
   useEffect(() => {
-    if (!roomWishes || Object.keys(roomWishes).length === 0) return;
-
     setWishlist((prevList) => {
-      // 1. まず、現在のリストから「共有ではない個人目標」だけを抽出して残す
+      // 個人目標だけ残す
       const personalWishes = prevList.filter((w) => !w.sharedRoomId);
 
-      // 2. クラウドから届いているすべての共有目標を1つの平らな配列にまとめる
-      const incomingSharedWishes = Object.keys(roomWishes).reduce((acc, roomId) => {
-        const wishes = roomWishes[roomId] || [];
-        // 各目標に部屋IDを忘れずにセット
-        const cleanWishes = wishes.map((w) => ({ ...w, sharedRoomId: roomId }));
-        return [...acc, ...cleanWishes];
-      }, [] as WishItem[]);
+      // 共有目標を roomWishes から毎回再構築
+      const incomingSharedWishes = Object.entries(roomWishes || {}).reduce(
+        (acc, [roomId, wishes]) => {
+          const cleanWishes = (wishes || [])
+            .filter((w) => !w.deleted) // 🌟 削除済みを除外
+            .map((w) => ({
+              ...w,
+              sharedRoomId: roomId,
+            }));
 
-      // 3. 個人の目標と、クラウドから届いた最新の共有目標をガッチャンコして返す！
-      // 重複を防ぐため、個人と共有でIDが被らないようにします
-      const merged = [...personalWishes];
-      incomingSharedWishes.forEach((sharedWish) => {
-        if (!merged.some((w) => w.id === sharedWish.id)) {
-          merged.push(sharedWish);
-        } else {
-          // すでに存在する場合は中身を最新（進捗など）に更新
-          const idx = merged.findIndex((w) => w.id === sharedWish.id);
-          merged[idx] = sharedWish;
-        }
-      });
+          return [...acc, ...cleanWishes];
+        },
+        [] as WishItem[],
+      );
 
-      return merged;
+      return [...personalWishes, ...incomingSharedWishes];
     });
-  }, [roomWishes]); // 🌟 roomWishes が更新されるたびに実行
+  }, [roomWishes]);
 
   const getCycleRange = (dateStr: string, pDay: number) => {
     const date = new Date(dateStr);
@@ -382,7 +375,13 @@ export default function BudgetDashboard({
       }
 
       setUnallocatedSavings(currentUnallocated);
-      setWishlist(parsedWishlist);
+
+      // 🌟 共有Wishを上書きで消さないようにする
+      setWishlist((prev) => {
+        const sharedOnly = prev.filter((w) => !!w.sharedRoomId);
+        const personalOnly = parsedWishlist.filter((w) => !w.sharedRoomId);
+        return [...personalOnly, ...sharedOnly];
+      });
     };
     load();
   }, []);
@@ -463,34 +462,45 @@ export default function BudgetDashboard({
   const remainingToAllocate = unallocatedSavings - totalSweeperAllocation;
 
   const combinedWishlist = useMemo(() => {
-    const localMap = new Map(wishlist.map((w) => [w.id, w]));
+    const localMap = new Map<string, WishItem>();
 
+    // まずローカルの個人目標を入れる
+    wishlist.forEach((w) => {
+      localMap.set(w.id, w);
+    });
+
+    // 共有目標を上書きで入れる
     if (roomWishes) {
-      Object.values(roomWishes).forEach((wishes) => {
+      Object.entries(roomWishes).forEach(([roomId, wishes]) => {
         wishes.forEach((w) => {
-          localMap.set(w.id, w);
+          if (!w.deleted) {
+            localMap.set(w.id, {
+              ...w,
+              sharedRoomId: roomId, // 🌟 共有元ルームを保持
+            });
+          }
         });
       });
     }
+
     return Array.from(localMap.values());
   }, [wishlist, roomWishes]);
 
   const augmentedWishlist = useMemo(() => {
     const isSingleLayerMode = activeTags.length === 1;
 
-    return wishlist.map((wish) => {
-      let dynamicSaved = wish.savedAmount; // 手動入金分がベース
+    return combinedWishlist.map((wish) => {
+      let dynamicSaved = wish.savedAmount;
 
       Object.values(displayData).forEach((items) => {
         items.forEach((item) => {
           const { parent: itemLayer = "" } = resolveTags(item);
           const isShared = Object.keys(sharedRooms || {}).includes(itemLayer);
 
-          // 🌟 共有目標なのに全体表示で見ている時は、相手の出費を合算しない
-          // （※自分が払った分も、個人の目標として混ざらないように制御）
+          // 全体表示では共有支出を除外、単一カテゴリなら含める
           if (isShared && !isSingleLayerMode) return;
 
-          // 手動チャージ（category: "貯金"）は既に savedAmount に入っているので無視
+          // 手動チャージ(category: "貯金") は savedAmount に既に入っているので除外
           if (item.isExpense && item.category !== "貯金") {
             if (
               item.category === wish.name ||
@@ -505,7 +515,7 @@ export default function BudgetDashboard({
 
       return { ...wish, dynamicSavedAmount: dynamicSaved };
     });
-  }, [wishlist, displayData, activeTags]);
+  }, [combinedWishlist, displayData, activeTags, sharedRooms]);
 
   const activeWishes = augmentedWishlist.filter(
     (w) => w.dynamicSavedAmount < w.targetAmount,
@@ -680,9 +690,13 @@ export default function BudgetDashboard({
       console.log("🌟 共有目標を送信します:", savedItem);
       safeDebouncedSyncWish(savedItem, savedItem.sharedRoomId);
     } else {
-      console.log("🌟 共有目標として送信されませんでした。理由:", 
-        !savedItem.sharedRoomId ? "sharedRoomIdがない" : 
-        typeof safeDebouncedSyncWish !== "function" ? "safeDebouncedSyncWish関数がない" : "不明"
+      console.log(
+        "🌟 共有目標として送信されませんでした。理由:",
+        !savedItem.sharedRoomId
+          ? "sharedRoomIdがない"
+          : typeof safeDebouncedSyncWish !== "function"
+            ? "safeDebouncedSyncWish関数がない"
+            : "不明",
       );
     }
 
@@ -707,11 +721,19 @@ export default function BudgetDashboard({
       await AsyncStorage.setItem("wishlistData", JSON.stringify(newList));
       setTimeout(() => setHasUnsavedChanges(true), 100);
 
-      // 🌟 追加：共有目標だった場合、クラウド（Firestore）からも完全削除する！
       if (wishToDelete?.sharedRoomId) {
         try {
+          // 🌟 先に相手にも削除状態を伝える
+          if (safeDebouncedSyncWish) {
+            safeDebouncedSyncWish(
+              { ...wishToDelete, deleted: true },
+              wishToDelete.sharedRoomId,
+            );
+          }
+
           const { deleteDoc, doc } = await import("firebase/firestore");
           const { db } = await import("../../../firebaseConfig");
+
           await deleteDoc(
             doc(
               db,
@@ -777,11 +799,24 @@ export default function BudgetDashboard({
 
   const processDeposit = async (amount: number) => {
     if (!selectedWish) return;
-    const updatedWishlist = wishlist.map((w) =>
-      w.id === selectedWish.id
-        ? { ...w, savedAmount: Math.max(0, w.savedAmount + amount) }
-        : w,
-    );
+
+    const updatedWishlist = wishlist.map((w) => {
+      if (w.id === selectedWish.id) {
+        const updated = {
+          ...w,
+          savedAmount: Math.max(0, w.savedAmount + amount),
+        };
+
+        // 🌟 共有Wishなら相手にも同期
+        if (updated.sharedRoomId && safeDebouncedSyncWish) {
+          safeDebouncedSyncWish(updated, updated.sharedRoomId);
+        }
+
+        return updated;
+      }
+      return w;
+    });
+
     setWishlist(updatedWishlist);
     await AsyncStorage.setItem("wishlistData", JSON.stringify(updatedWishlist));
 
@@ -802,12 +837,13 @@ export default function BudgetDashboard({
       isExpense: amount >= 0,
       isIncome: amount < 0,
     };
+
     const newScheduleData = {
       ...scheduleData,
       [todayStr]: [...(scheduleData[todayStr] || []), newItem],
     };
-    setScheduleData(newScheduleData);
 
+    setScheduleData(newScheduleData);
     setTimeout(() => setHasUnsavedChanges(true), 100);
     setIsDepositModalVisible(false);
     setDepositAmount("");
@@ -831,6 +867,7 @@ export default function BudgetDashboard({
       isExpense: false,
       isIncome: false,
     };
+
     const newScheduleData = {
       ...scheduleData,
       [todayStr]: [...(scheduleData[todayStr] || []), newItem],
@@ -841,9 +878,18 @@ export default function BudgetDashboard({
     setWishlist(updatedWishlist);
     await AsyncStorage.setItem("wishlistData", JSON.stringify(updatedWishlist));
 
+    // 🌟 共有Wishなら相手にも削除/完了を伝える
+    if (selectedWish.sharedRoomId && safeDebouncedSyncWish) {
+      safeDebouncedSyncWish(
+        { ...selectedWish, deleted: true },
+        selectedWish.sharedRoomId,
+      );
+    }
+
     setTimeout(() => setHasUnsavedChanges(true), 100);
     setIsCompleteModalVisible(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
     if (Platform.OS === "web")
       window.alert("カレンダーのToDoリストに予定を追加しました！");
     else
@@ -867,14 +913,22 @@ export default function BudgetDashboard({
     Object.entries(sweeperAllocations).forEach(([id, amount]) => {
       if (amount > 0) {
         hasUpdates = true;
-        updatedWishlist = updatedWishlist.map((w) =>
-          w.id === id
-            ? {
-                ...w,
-                savedAmount: Math.min(w.targetAmount, w.savedAmount + amount),
-              }
-            : w,
-        );
+        updatedWishlist = updatedWishlist.map((w) => {
+          if (w.id === id) {
+            const updated = {
+              ...w,
+              savedAmount: Math.min(w.targetAmount, w.savedAmount + amount),
+            };
+
+            // 🌟 共有Wishなら相手にも同期
+            if (updated.sharedRoomId && safeDebouncedSyncWish) {
+              safeDebouncedSyncWish(updated, updated.sharedRoomId);
+            }
+
+            return updated;
+          }
+          return w;
+        });
       }
     });
 
@@ -923,12 +977,14 @@ export default function BudgetDashboard({
       const itemTotal = getItemTotalExpense(item);
       if (itemTotal === 0) return;
 
-      const { parent: itemLayer = "" } = resolveTags(item);
-      const isShared = Object.keys(sharedRooms || {}).includes(itemLayer);
+      const { parent: resolvedLayer = "", sub: resolvedTag = "" } =
+        resolveTags(item);
+      const isShared = Object.keys(sharedRooms || {}).includes(resolvedLayer);
 
       if (isShared && !isSingle) return;
-      const itemTag = item.tags?.[0] || item.tag || "";
-      const isMatch = activeTags.length === 0 || activeTags.includes(itemLayer);
+
+      const isMatch =
+        activeTags.length === 0 || activeTags.includes(resolvedLayer);
 
       if (!isMatch) {
         if (!isSingle) {
@@ -939,17 +995,22 @@ export default function BudgetDashboard({
       }
 
       total += itemTotal;
+
       if (isSingle) {
-        totals[itemTag] = (totals[itemTag] || 0) + itemTotal;
+        const displayKey = resolvedTag || resolvedLayer || "未分類";
+        totals[displayKey] = (totals[displayKey] || 0) + itemTotal;
       } else {
-        let groupKey = itemTag;
-        if (chartGroupBy === "layer") groupKey = itemLayer;
+        let groupKey = resolvedTag || resolvedLayer;
+
+        if (chartGroupBy === "layer") groupKey = resolvedLayer;
         else if (chartGroupBy === "category")
-          groupKey = item.category || itemTag;
+          groupKey = item.category || resolvedTag || resolvedLayer;
+
         if (!groupKey) groupKey = item.category || "未分類";
         totals[groupKey] = (totals[groupKey] || 0) + itemTotal;
       }
     });
+
     return { total, totals };
   };
 
