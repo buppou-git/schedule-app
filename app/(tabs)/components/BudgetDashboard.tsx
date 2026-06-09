@@ -167,27 +167,36 @@ export default function BudgetDashboard({
     "#AF52DE",
   ];
 
+  const resetWishForm = () => {
+    setEditingWishId(null);
+    setNewWishName("");
+    setNewWishTarget("");
+    setNewWishIcon("musical-notes");
+    setNewWishColor("#FF2D55");
+    setNewWishAutoDeposit(false);
+    setNewWishAutoAmount("");
+    setNewWishIsShared(false);
+    setSelectedSharedRoom(null);
+  };
+
   useEffect(() => {
     setWishlist((prevList) => {
-      // 個人目標だけ残す
       const personalWishes = prevList.filter((w) => !w.sharedRoomId);
 
-      // 共有目標を roomWishes から毎回再構築
-      const incomingSharedWishes = Object.entries(roomWishes || {}).reduce(
-        (acc, [roomId, wishes]) => {
-          const cleanWishes = (wishes || [])
-            .filter((w) => !w.deleted) // 🌟 削除済みを除外
-            .map((w) => ({
+      const sharedMap = new Map<string, WishItem>();
+
+      Object.entries(roomWishes || {}).forEach(([roomId, wishes]) => {
+        (wishes || [])
+          .filter((w) => !w.deleted)
+          .forEach((w) => {
+            sharedMap.set(w.id, {
               ...w,
               sharedRoomId: roomId,
-            }));
+            });
+          });
+      });
 
-          return [...acc, ...cleanWishes];
-        },
-        [] as WishItem[],
-      );
-
-      return [...personalWishes, ...incomingSharedWishes];
+      return [...personalWishes, ...Array.from(sharedMap.values())];
     });
   }, [roomWishes]);
 
@@ -663,7 +672,7 @@ export default function BudgetDashboard({
 
     // 🌟 編集前のWishを確保（共有先変更 / 共有解除の検知に使う）
     const prevWish = editingWishId
-      ? wishlist.find((w) => w.id === editingWishId) || null
+      ? combinedWishlist.find((w) => w.id === editingWishId) || null
       : null;
 
     let savedItem: WishItem;
@@ -675,7 +684,8 @@ export default function BudgetDashboard({
         name: newWishName.trim(),
         targetAmount,
         savedAmount:
-          wishlist.find((w) => w.id === editingWishId)?.savedAmount || 0,
+          combinedWishlist.find((w) => w.id === editingWishId)?.savedAmount ||
+          0,
         icon: newWishIcon,
         color: newWishColor,
         autoDepositEnabled: newWishAutoDeposit,
@@ -740,14 +750,8 @@ export default function BudgetDashboard({
       safeDebouncedSyncWish(savedItem, savedItem.sharedRoomId);
     }
 
+    resetWishForm();
     setIsAddWishModalVisible(false);
-    setNewWishName("");
-    setNewWishTarget("");
-    setEditingWishId(null);
-    setNewWishAutoDeposit(false);
-    setNewWishAutoAmount("");
-    setNewWishIsShared(false);
-    setSelectedSharedRoom(null);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
@@ -755,7 +759,7 @@ export default function BudgetDashboard({
     const msg = "この目標を削除しますか？\n(入金済みの金額は残高に戻ります)";
     const deleteLogic = async () => {
       // 🌟 消す対象の目標を確保しておく
-      const wishToDelete = wishlist.find((w) => w.id === editingWishId);
+      const wishToDelete = combinedWishlist.find((w) => w.id === editingWishId);
 
       const newList = wishlist.filter((w) => w.id !== editingWishId);
       setWishlist(newList);
@@ -885,6 +889,8 @@ export default function BudgetDashboard({
     };
 
     setScheduleData(newScheduleData);
+    await AsyncStorage.setItem("scheduleData", JSON.stringify(newScheduleData));
+
     setTimeout(() => setHasUnsavedChanges(true), 100);
     setIsDepositModalVisible(false);
     setDepositAmount("");
@@ -914,6 +920,7 @@ export default function BudgetDashboard({
       [todayStr]: [...(scheduleData[todayStr] || []), newItem],
     };
     setScheduleData(newScheduleData);
+    await AsyncStorage.setItem("scheduleData", JSON.stringify(newScheduleData));
 
     const updatedWishlist = wishlist.filter((w) => w.id !== selectedWish.id);
     setWishlist(updatedWishlist);
@@ -1387,13 +1394,7 @@ export default function BudgetDashboard({
               <TouchableOpacity
                 style={styles.addWishPod}
                 onPress={() => {
-                  setEditingWishId(null);
-                  setNewWishName("");
-                  setNewWishTarget("");
-                  setNewWishIcon("musical-notes");
-                  setNewWishColor("#FF2D55");
-                  setNewWishAutoDeposit(false);
-                  setNewWishAutoAmount("");
+                  resetWishForm();
                   setIsAddWishModalVisible(true);
                 }}
               >
