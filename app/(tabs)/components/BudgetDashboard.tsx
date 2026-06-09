@@ -326,6 +326,7 @@ export default function BudgetDashboard({
                 wish.targetAmount - wish.savedAmount,
                 wish.autoDepositAmount,
               );
+
               hasAutoDeposits = true;
               autoDepositTotal += amountToAdd;
 
@@ -343,14 +344,26 @@ export default function BudgetDashboard({
                 isExpense: true,
                 isIncome: false,
               };
+
               newScheduleData[realCycleStart] = [
                 ...(newScheduleData[realCycleStart] || []),
                 newItem,
               ];
 
-              return { ...wish, savedAmount: wish.savedAmount + amountToAdd };
+              const updatedWish = {
+                ...wish,
+                savedAmount: wish.savedAmount + amountToAdd,
+              };
+
+              // 🌟 共有Wishなら相手にも同期
+              if (updatedWish.sharedRoomId && safeDebouncedSyncWish) {
+                safeDebouncedSyncWish(updatedWish, updatedWish.sharedRoomId);
+              }
+
+              return updatedWish;
             }
           }
+
           return wish;
         });
 
@@ -414,20 +427,18 @@ export default function BudgetDashboard({
       const cycleDates = getDatesInRange(cycleRange.start, cycleRange.end);
 
       cycleDates.forEach((date) => {
-        const items = displayData[date] || []; // 🌟 displayData に変更
+        const items = displayData[date] || [];
         items.forEach((item) => {
           const eTotal = getItemTotalExpense(item);
           const iTotal = getItemTotalIncome(item);
 
           if (iTotal > 0 || eTotal > 0) cItems.push(item);
 
-          // 🌟 魔法の条件分岐
           const isSingleLayerMode = activeTags.length === 1;
 
           const { parent: itemLayer = "" } = resolveTags(item);
           const isShared = Object.keys(sharedRooms || {}).includes(itemLayer);
 
-          // 🌟 全体表示の時だけ共有の出費を無視。単一表示の時は合算！
           if (isShared && !isSingleLayerMode) return;
 
           if (iTotal > 0) tIncome += iTotal;
@@ -448,7 +459,7 @@ export default function BudgetDashboard({
         cycleStats: { tIncome, tExpense },
         cycleItems: cItems,
       };
-    }, [scheduleData, cycleRange, tagMaster]);
+    }, [displayData, cycleRange, activeTags, sharedRooms, tagMaster]);
 
   const baseIncome =
     cycleStats.tIncome > 0 ? cycleStats.tIncome : monthlyBudget;
@@ -649,9 +660,14 @@ export default function BudgetDashboard({
       newWishIsShared && selectedSharedRoom && sharedRooms
         ? sharedRooms[selectedSharedRoom]
         : undefined;
-    // 🌟 【After】savedItem を先に定義して、newList と同時に作る
+
+    // 🌟 編集前のWishを確保（共有先変更 / 共有解除の検知に使う）
+    const prevWish = editingWishId
+      ? wishlist.find((w) => w.id === editingWishId) || null
+      : null;
+
     let savedItem: WishItem;
-    let newList;
+    let newList: WishItem[];
 
     if (editingWishId) {
       savedItem = {
@@ -666,6 +682,7 @@ export default function BudgetDashboard({
         autoDepositAmount: autoAmount,
         sharedRoomId: targetRoomId,
       };
+
       newList = wishlist.map((w) => (w.id === editingWishId ? savedItem : w));
     } else {
       savedItem = {
@@ -679,6 +696,7 @@ export default function BudgetDashboard({
         autoDepositAmount: autoAmount,
         sharedRoomId: targetRoomId,
       };
+
       newList = [...wishlist, savedItem];
     }
 
@@ -686,18 +704,40 @@ export default function BudgetDashboard({
     await AsyncStorage.setItem("wishlistData", JSON.stringify(newList));
     setTimeout(() => setHasUnsavedChanges(true), 100);
 
-    if (savedItem.sharedRoomId && typeof safeDebouncedSyncWish === "function") {
-      console.log("🌟 共有目標を送信します:", savedItem);
-      safeDebouncedSyncWish(savedItem, savedItem.sharedRoomId);
-    } else {
-      console.log(
-        "🌟 共有目標として送信されませんでした。理由:",
-        !savedItem.sharedRoomId
-          ? "sharedRoomIdがない"
-          : typeof safeDebouncedSyncWish !== "function"
-            ? "safeDebouncedSyncWish関数がない"
-            : "不明",
+    // =========================================================
+    // 🌟 追加1: 以前は共有だったのに、共有解除した場合
+    // =========================================================
+    if (
+      prevWish?.sharedRoomId &&
+      !savedItem.sharedRoomId &&
+      safeDebouncedSyncWish
+    ) {
+      safeDebouncedSyncWish(
+        { ...prevWish, deleted: true },
+        prevWish.sharedRoomId,
       );
+    }
+
+    // =========================================================
+    // 🌟 追加2: 共有先が変わった場合、古い共有先から消す
+    // =========================================================
+    if (
+      prevWish?.sharedRoomId &&
+      savedItem.sharedRoomId &&
+      prevWish.sharedRoomId !== savedItem.sharedRoomId &&
+      safeDebouncedSyncWish
+    ) {
+      safeDebouncedSyncWish(
+        { ...prevWish, deleted: true },
+        prevWish.sharedRoomId,
+      );
+    }
+
+    // =========================================================
+    // 🌟 追加3: 新しい共有先へ保存/更新
+    // =========================================================
+    if (savedItem.sharedRoomId && typeof safeDebouncedSyncWish === "function") {
+      safeDebouncedSyncWish(savedItem, savedItem.sharedRoomId);
     }
 
     setIsAddWishModalVisible(false);
@@ -706,6 +746,7 @@ export default function BudgetDashboard({
     setEditingWishId(null);
     setNewWishAutoDeposit(false);
     setNewWishAutoAmount("");
+    setNewWishIsShared(false);
     setSelectedSharedRoom(null);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
@@ -1016,7 +1057,7 @@ export default function BudgetDashboard({
 
   const stats = useMemo(
     () => getStatsForCycle(cycleRange.start, cycleRange.end),
-    [cycleItems, cycleRange, activeTags, tagMaster, chartGroupBy],
+    [cycleItems, cycleRange, activeTags, tagMaster, chartGroupBy, sharedRooms],
   );
 
   const globalBudgetCalc = useMemo(() => {
