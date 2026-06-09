@@ -1,19 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { memo, useMemo, useState } from "react";
-import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useAppStore } from "../../../store/useAppStore";
 import { ScheduleItem, SubTask } from "../../../types";
+
+import { resolveTags } from "../../../utils/tagUtils";
 
 interface TodoItemProps {
   item: ScheduleItem;
   itemDate: string;
   selectedDate: string;
+  activeTags: string[];
   formatEventTime: (item: ScheduleItem) => string;
   openEditModal: (item: ScheduleItem) => void;
   toggleTodo: (date: string, id: string) => void;
@@ -36,6 +33,7 @@ const TodoItem = memo(function TodoItem({
   item,
   itemDate,
   selectedDate,
+  activeTags,
   formatEventTime,
   openEditModal,
   toggleTodo,
@@ -48,14 +46,11 @@ const TodoItem = memo(function TodoItem({
   const [isExpanded, setIsExpanded] = useState(false);
   const { tagMaster, layerMaster } = useAppStore();
 
-  const itemTags =
-    item.tags && item.tags.length > 0 ? item.tags : item.tag ? [item.tag] : [];
-
-  const displayColors = itemTags.map((tag: string) => {
-    const color = tagMaster[tag]?.color || layerMaster[tag] || "#999";
-    return color;
-  });
-  const uniqueColors = Array.from(new Set(displayColors));
+  const { parent, sub } = resolveTags(item);
+  const isSingleLayerMode = activeTags && activeTags.length === 1;
+  const displayTag = isSingleLayerMode && sub ? sub : parent;
+  const displayColor =
+    tagMaster[displayTag]?.color || layerMaster[displayTag] || "#999";
 
   const isPeriodTask = item.endDate && item.startDate !== item.endDate;
   let daysLeft = null;
@@ -69,7 +64,7 @@ const TodoItem = memo(function TodoItem({
     isFinalDay = daysLeft === 0;
   }
   const isShared = useMemo(() => !!item.sharedRoomId, [item.sharedRoomId]);
-  
+
   return (
     <View style={{ marginBottom: 12 }}>
       {/* 親タスクのカード */}
@@ -81,14 +76,11 @@ const TodoItem = memo(function TodoItem({
         delayLongPress={300} // 0.3秒で発火
       >
         <View style={styles.stripeContainer}>
-          {uniqueColors.map((color: string, idx: number) => (
-            <View
-              key={idx}
-              style={[styles.todoAccent, { backgroundColor: color }]}
-            />
-          ))}
+          {/* 🌟 1本のラインに統一 */}
+          <View
+            style={[styles.todoAccent, { backgroundColor: displayColor }]}
+          />
         </View>
-
 
         <View style={styles.todoContent}>
           <View style={styles.todoMainRow}>
@@ -101,35 +93,39 @@ const TodoItem = memo(function TodoItem({
 
             {/* 🌟 共有のToDoならバッジを表示！ */}
             {isShared && (
-              <View style={{ backgroundColor: "#E5E5EA", paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4, marginRight: 8 }}>
-                <Text style={{ fontSize: 8, color: "#8E8E93", fontWeight: "bold" }}>共有</Text>
+              <View
+                style={{
+                  backgroundColor: "#E5E5EA",
+                  paddingHorizontal: 4,
+                  paddingVertical: 2,
+                  borderRadius: 4,
+                  marginRight: 8,
+                }}
+              >
+                <Text
+                  style={{ fontSize: 8, color: "#8E8E93", fontWeight: "bold" }}
+                >
+                  共有
+                </Text>
               </View>
             )}
 
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 4 }}
-            >
-              {itemTags.map((tag: string, idx: number) => (
-                <View
-                  key={idx}
-                  style={[
-                    styles.miniTagBadge,
-                    {
-                      backgroundColor: displayColors[idx] + "15",
-                      borderColor: displayColors[idx],
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[styles.miniTagText, { color: displayColors[idx] }]}
-                  >
-                    {tag}
-                  </Text>
-                </View>
-              ))}
-            </ScrollView>
+            {/* 🌟 バッジを1つだけ美しく表示する！ */}
+            {displayTag && (
+              <View
+                style={[
+                  styles.miniTagBadge,
+                  {
+                    backgroundColor: displayColor + "15",
+                    borderColor: displayColor,
+                  },
+                ]}
+              >
+                <Text style={[styles.miniTagText, { color: displayColor }]}>
+                  {displayTag}
+                </Text>
+              </View>
+            )}
           </View>
           <View style={styles.todoSubRow}>
             {streakCount > 0 && (
