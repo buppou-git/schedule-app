@@ -21,22 +21,39 @@ export default function EventItem({
   openEditModal,
   onLongPress,
 }: EventItemProps) {
-  // 1. まず予定が持っているタグを取得
-  const baseTags = item.tags && item.tags.length > 0 ? item.tags : item.tag ? [item.tag] : [];
+  const baseTags =
+    item.tags && item.tags.length > 0 ? item.tags : item.tag ? [item.tag] : [];
 
-  // 2. 🌟 外部カレンダーなどでタグが空の場合は、「外部予定」という仮のバッジを表示させる
-  const displayTags = baseTags.length > 0 ? baseTags : [(item.category === "外部カレンダー" || item.externalEventId) ? "外部予定" : "予定"];
+  const isSingleLayerMode = activeTags.length === 1;
 
-  // 3. 🌟 カレンダー側と同じ「最強の設計（優先順位）」で色を決める！
+  // 🌟 文字列比較しない。位置だけで決める
+  let displayTags: string[] = [];
+
+  if (baseTags.length > 0) {
+    if (isSingleLayerMode) {
+      // 単一カテゴリ表示なら sub を優先（tags[1]）
+      displayTags = [baseTags[1] || baseTags[0]];
+    } else {
+      // 複数/全体表示なら親カテゴリ（tags[0]）だけ
+      displayTags = [baseTags[0]];
+    }
+  } else {
+    displayTags = [
+      item.category === "外部カレンダー" || item.externalEventId
+        ? "外部予定"
+        : "予定",
+    ];
+  }
+
   const displayColors = displayTags.map((tag: string) => {
     const info = tagMaster[tag] || { layer: tag };
 
-    return (
-      item.color ||                   // ① 予定個別の色（外部カレンダーの赤などはここで一発決定！）
-      tagMaster[tag]?.color ||        // ② タグごとの色
-      layerMaster[info.layer] ||      // ③ レイヤー全体の色
-      "#999"                          // ④ どれもなければグレー
-    );
+    return isSingleLayerMode
+      ? tagMaster[tag]?.color || item.color || layerMaster[info.layer] || "#999"
+      : layerMaster[info.layer] ||
+          item.color ||
+          tagMaster[tag]?.color ||
+          "#999";
   });
 
   return (
