@@ -117,6 +117,9 @@ export function useCalendarData(
             isTodo: false,
             color: "#FF3B30", // 祝日は赤
             tag: "祝日",
+            tags: ["祝日"],
+            layer: "祝日",
+            category: "祝日",
             // 🌟 不足していた必須プロパティを追加
             amount: 0,
             isDone: false,

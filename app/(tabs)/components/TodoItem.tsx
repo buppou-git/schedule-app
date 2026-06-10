@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics"; // 🌟 Hapticsを追加（ボタンの振動用）
-import React, { memo, useEffect, useMemo, useState } from "react";
+import React, { memo, useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useAppStore } from "../../../store/useAppStore";
 import { ScheduleItem, SubTask } from "../../../types";
@@ -50,26 +50,43 @@ const TodoItem = memo(function TodoItem({
   // =========================================================
   const [optItem, setOptItem] = useState(item);
 
+  // 🌟 2. 追加：親からの古いデータをブロックするバリア
+  const isUpdating = useRef(false);
+
   // クラウド同期などで親の最新データが降ってきたら、それに合わせる
   useEffect(() => {
-    setOptItem(item);
+    // 🌟 3. 変更：バリアが張られていない時だけ、親のデータを受け入れる
+    if (!isUpdating.current) {
+      setOptItem(item);
+    }
   }, [item]);
 
   // 🌟 魔法の即時関数（親タスク用）
   const handleToggleTodo = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    isUpdating.current = true; // 🌟 バリアを展開！（親からの古い先祖返りデータをシャットアウト）
+
     // 1. UIを爆速（0ミリ秒）で切り替える
     setOptItem((prev) => ({ ...prev, isDone: !prev.isDone }));
 
-    // 2. アニメーションの邪魔をしないように、少しだけ遅らせて裏で重い保存処理を投げる
+    // 2. アニメーションを最優先させ、50ms 待ってから裏でクラウド保存処理を走らせる
     setTimeout(() => {
       toggleTodo(itemDate, item.id);
-    }, 10);
+
+      // 🌟 クラウドの同期処理が完了して親のデータが最新になる頃合い（1秒後）にバリアを解除！
+      setTimeout(() => {
+        isUpdating.current = false;
+      }, 1000);
+    }, 50);
   };
 
   // 🌟 魔法の即時関数（サブタスク用）
   const handleToggleSubTodo = (subTaskId: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    isUpdating.current = true; // 🌟 こちらもバリアを展開！
+
     // 1. サブタスクのUIを爆速で切り替える
     setOptItem((prev) => {
       if (!prev.subTasks) return prev;
@@ -85,10 +102,15 @@ const TodoItem = memo(function TodoItem({
       return { ...prev, subTasks: newSubTasks, isDone: isAllDone };
     });
 
-    // 2. 裏で本物の保存処理を投げる
+    // 2. 50ms の猶予を持って裏で本物の保存処理を投げる
     setTimeout(() => {
       toggleSubTodo(itemDate, item.id, subTaskId);
-    }, 10);
+
+      // 🌟 同じく1秒後に古いデータからの上書きを許可する状態に戻す
+      setTimeout(() => {
+        isUpdating.current = false;
+      }, 1000);
+    }, 50);
   };
 
   // 👇 以降の表示ロジックは、すべて `optItem` (見た目上の最新データ) をもとに描画します
