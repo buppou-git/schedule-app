@@ -219,5 +219,30 @@ export function useCalendarData(
     [markedDatesBase, selectedDate, activeTags, layerMaster],
   );
 
-  return { expandedScheduleData, currentMarkedDates };
+  // 🌟 追加：今選択されている日の祝日をピンポイントで特定する
+  const currentHoliday = useMemo(() => {
+    if (!isHolidayEnabled) return null;
+    const tDate = new Date(selectedDate);
+    const hName = JapaneseHolidays.isHoliday(tDate);
+    if (hName) {
+      return {
+        id: `holiday-${selectedDate}`,
+        title: hName,
+        startDate: `${selectedDate}T00:00:00`,
+        endDate: `${selectedDate}T23:59:59`,
+        isEvent: true,
+        isTodo: false,
+        color: "#FF3B30", // 祝日の赤
+        tag: "祝日",
+        amount: 0,
+        isDone: false,
+        isExpense: false,
+        subTasks: [],
+      } as ScheduleItem;
+    }
+    return null;
+  }, [selectedDate, isHolidayEnabled]);
+
+  // 🌟 変更：currentHoliday も一緒に返してあげる
+  return { expandedScheduleData, currentMarkedDates, currentHoliday };
 }

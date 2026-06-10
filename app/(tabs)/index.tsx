@@ -1255,16 +1255,17 @@ function IndexContent() {
     tagMaster,
   );
 
-  const { expandedScheduleData, currentMarkedDates } = useCalendarData(
-    displayData,
-    activeMode,
-    activeTags,
-    layerMaster,
-    tagMaster,
-    selectedDate,
-    hiddenExternalIds,
-    isHolidayEnabled,
-  );
+  const { expandedScheduleData, currentMarkedDates, currentHoliday } =
+    useCalendarData(
+      displayData,
+      activeMode,
+      activeTags,
+      layerMaster,
+      tagMaster,
+      selectedDate,
+      hiddenExternalIds,
+      isHolidayEnabled,
+    );
 
   const { dayTasks, upcomingTasks, dayEvents } = useDailyItems(
     expandedScheduleData,
@@ -1274,6 +1275,15 @@ function IndexContent() {
     activeMode,
     tagMaster,
   );
+
+  // 🌟 追加：他のデータプロセッサーのフィルターをすり抜けて、予定欄の先頭に祝日を強制結合する
+  const finalDayEvents = useMemo(() => {
+    if (currentHoliday) {
+      const exists = dayEvents.some((i) => i.id === currentHoliday.id);
+      if (!exists) return [currentHoliday, ...dayEvents];
+    }
+    return dayEvents;
+  }, [dayEvents, currentHoliday]);
 
   const currentSolidColor = useMemo(() => {
     if (activeTags.length === 1) {
@@ -2402,7 +2412,7 @@ function IndexContent() {
           {activeMode === "calendar" && (
             <View style={{ flex: 1 }}>
               <EventDashboard
-                dayEvents={dayEvents}
+                dayEvents={finalDayEvents} // 🌟 変更：祝日がマージされた配列を渡す！
                 selectedDate={selectedDate}
                 currentSolidColor={currentSolidColor}
                 activeTags={activeTags}
