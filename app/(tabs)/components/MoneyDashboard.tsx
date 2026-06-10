@@ -21,10 +21,15 @@ interface Props {
   setHasUnsavedChanges: (val: boolean) => void;
   isSummaryMode?: boolean;
   displayData: Record<string, ScheduleItem[]>;
-  sharedRooms?: { [layerName: string]: string }; 
+  sharedRooms?: { [layerName: string]: string };
   roomWishes?: Record<string, WishItem[]>; // 🌟 any[] から WishItem[] に修正！
   safeDebouncedSyncWish?: (wish: WishItem, roomId: string) => void; // 🌟 wish: any から wish: WishItem に修正！
   safeDebouncedSync?: (item: any, date: string) => void;
+  safeDebouncedSyncTag?: (
+    tagName: string,
+    tagData: any,
+    roomId: string,
+  ) => void;
 }
 
 /**
@@ -42,6 +47,7 @@ export default function MoneyDashboard({
   roomWishes,
   safeDebouncedSyncWish,
   safeDebouncedSync,
+  safeDebouncedSyncTag,
 }: Props) {
   if (isSummaryMode) {
     return (
@@ -50,9 +56,10 @@ export default function MoneyDashboard({
         activeTags={activeTags}
         setHasUnsavedChanges={setHasUnsavedChanges}
         displayData={displayData}
-        sharedRooms={sharedRooms} 
+        sharedRooms={sharedRooms}
         roomWishes={roomWishes}
         safeDebouncedSyncWish={safeDebouncedSyncWish}
+        safeDebouncedSyncTag={safeDebouncedSyncTag}
       />
     );
   }
@@ -63,8 +70,8 @@ export default function MoneyDashboard({
       activeTags={activeTags}
       setHasUnsavedChanges={setHasUnsavedChanges}
       displayData={displayData}
-      sharedRooms={sharedRooms} 
-      safeDebouncedSync={safeDebouncedSync} 
+      sharedRooms={sharedRooms}
+      safeDebouncedSync={safeDebouncedSync}
     />
   );
 }

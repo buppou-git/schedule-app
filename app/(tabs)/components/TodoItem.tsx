@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { memo, useMemo, useState } from "react";
+import * as Haptics from "expo-haptics"; // 🌟 Hapticsを追加（ボタンの振動用）
+import React, { memo, useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useAppStore } from "../../../store/useAppStore";
 import { ScheduleItem, SubTask } from "../../../types";
@@ -15,17 +16,14 @@ interface TodoItemProps {
   openEditModal: (item: ScheduleItem) => void;
   toggleTodo: (date: string, id: string) => void;
   toggleSubTodo: (date: string, parentId: string, subTaskId: number) => void;
-
-  // 🌟 ここは「どんなオブジェクトを受け取るか」を明確に定義！
   setEditingSubTaskInfo: (info: {
     parentId: string;
     parentTitle: string;
     date: string;
     subTask: SubTask;
   }) => void;
-
   setSubTaskModalVisible: (visible: boolean) => void;
-  onLongPress: (item: ScheduleItem) => void; // 🌟
+  onLongPress: (item: ScheduleItem) => void;
   streakCount: number;
 }
 
@@ -46,37 +44,87 @@ const TodoItem = memo(function TodoItem({
   const [isExpanded, setIsExpanded] = useState(false);
   const { tagMaster, layerMaster } = useAppStore();
 
-  const { parent, sub } = resolveTags(item);
+  // =========================================================
+  // 🌟 追加：楽観的UI (Optimistic UI) の魔法
+  // 親の処理を待たずに、見た目だけを「0秒」で切り替えるためのローカルステート
+  // =========================================================
+  const [optItem, setOptItem] = useState(item);
+
+  // クラウド同期などで親の最新データが降ってきたら、それに合わせる
+  useEffect(() => {
+    setOptItem(item);
+  }, [item]);
+
+  // 🌟 魔法の即時関数（親タスク用）
+  const handleToggleTodo = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // 1. UIを爆速（0ミリ秒）で切り替える
+    setOptItem((prev) => ({ ...prev, isDone: !prev.isDone }));
+
+    // 2. アニメーションの邪魔をしないように、少しだけ遅らせて裏で重い保存処理を投げる
+    setTimeout(() => {
+      toggleTodo(itemDate, item.id);
+    }, 10);
+  };
+
+  // 🌟 魔法の即時関数（サブタスク用）
+  const handleToggleSubTodo = (subTaskId: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // 1. サブタスクのUIを爆速で切り替える
+    setOptItem((prev) => {
+      if (!prev.subTasks) return prev;
+      const newSubTasks = prev.subTasks.map((sub) =>
+        sub.id === subTaskId ? { ...sub, isDone: !sub.isDone } : sub,
+      );
+
+      // お金以外のタスクが全て完了したか判定し、親のチェックも自動でつける
+      const pureTodos = newSubTasks.filter((s) => !s.isExpense && !s.isIncome);
+      const isAllDone =
+        pureTodos.length > 0 ? pureTodos.every((s) => s.isDone) : prev.isDone;
+
+      return { ...prev, subTasks: newSubTasks, isDone: isAllDone };
+    });
+
+    // 2. 裏で本物の保存処理を投げる
+    setTimeout(() => {
+      toggleSubTodo(itemDate, item.id, subTaskId);
+    }, 10);
+  };
+
+  // 👇 以降の表示ロジックは、すべて `optItem` (見た目上の最新データ) をもとに描画します
+  const { parent, sub } = resolveTags(optItem);
   const isSingleLayerMode = activeTags && activeTags.length === 1;
   const displayTag = isSingleLayerMode && sub ? sub : parent;
   const displayColor =
     tagMaster[displayTag]?.color || layerMaster[displayTag] || "#999";
 
-  const isPeriodTask = item.endDate && item.startDate !== item.endDate;
+  const isPeriodTask = optItem.endDate && optItem.startDate !== optItem.endDate;
   let daysLeft = null;
   let isFinalDay = false;
 
-  if (isPeriodTask && item.endDate) {
+  if (isPeriodTask && optItem.endDate) {
     const targetD = new Date(selectedDate);
-    const endD = new Date(item.endDate);
+    const endD = new Date(optItem.endDate);
     const diffTime = endD.getTime() - targetD.getTime();
     daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     isFinalDay = daysLeft === 0;
   }
-  const isShared = useMemo(() => !!item.sharedRoomId, [item.sharedRoomId]);
+  const isShared = useMemo(
+    () => !!optItem.sharedRoomId,
+    [optItem.sharedRoomId],
+  );
 
   return (
     <View style={{ marginBottom: 12 }}>
       {/* 親タスクのカード */}
       <TouchableOpacity
-        style={[styles.todoCard, item.isDone && styles.todoCardDone]}
-        onPress={() => openEditModal(item)}
+        style={[styles.todoCard, optItem.isDone && styles.todoCardDone]}
+        onPress={() => openEditModal(optItem)}
         activeOpacity={0.7}
-        onLongPress={() => onLongPress(item)}
-        delayLongPress={300} // 0.3秒で発火
+        onLongPress={() => onLongPress(optItem)}
+        delayLongPress={300}
       >
         <View style={styles.stripeContainer}>
-          {/* 🌟 1本のラインに統一 */}
           <View
             style={[styles.todoAccent, { backgroundColor: displayColor }]}
           />
@@ -85,13 +133,12 @@ const TodoItem = memo(function TodoItem({
         <View style={styles.todoContent}>
           <View style={styles.todoMainRow}>
             <Text
-              style={[styles.todoTitle, item.isDone && styles.todoTitleDone]}
+              style={[styles.todoTitle, optItem.isDone && styles.todoTitleDone]}
               numberOfLines={1}
             >
-              {item.title}
+              {optItem.title}
             </Text>
 
-            {/* 🌟 共有のToDoならバッジを表示！ */}
             {isShared && (
               <View
                 style={{
@@ -110,7 +157,6 @@ const TodoItem = memo(function TodoItem({
               </View>
             )}
 
-            {/* 🌟 バッジを1つだけ美しく表示する！ */}
             {displayTag && (
               <View
                 style={[
@@ -140,7 +186,7 @@ const TodoItem = memo(function TodoItem({
               </View>
             )}
 
-            {isFinalDay && !item.isDone ? (
+            {isFinalDay && !optItem.isDone ? (
               <View style={styles.deadlineBadgeUrgent}>
                 <Ionicons
                   name="flame"
@@ -152,7 +198,7 @@ const TodoItem = memo(function TodoItem({
                   TODAY: 最終日!
                 </Text>
               </View>
-            ) : daysLeft !== null && daysLeft > 0 && !item.isDone ? (
+            ) : daysLeft !== null && daysLeft > 0 && !optItem.isDone ? (
               <View style={styles.deadlineBadgeSafe}>
                 <Ionicons
                   name="leaf-outline"
@@ -167,39 +213,40 @@ const TodoItem = memo(function TodoItem({
             ) : null}
             <View style={styles.todoTimeRow}>
               <Ionicons name="time-outline" size={10} color="#8E8E93" />
-              <Text style={styles.todoTimeText}>{formatEventTime(item)}</Text>
+              <Text style={styles.todoTimeText}>
+                {formatEventTime(optItem)}
+              </Text>
             </View>
           </View>
         </View>
 
-        {!item.subTasks || item.subTasks.length === 0 ? (
+        {!optItem.subTasks || optItem.subTasks.length === 0 ? (
           <TouchableOpacity
             style={styles.checkButton}
-            onPress={() => toggleTodo(itemDate, item.id)}
+            onPress={handleToggleTodo} // 🌟 魔法の即時関数に変更！
           >
             <Ionicons
-              name={item.isDone ? "checkmark-circle" : "ellipse-outline"}
+              name={optItem.isDone ? "checkmark-circle" : "ellipse-outline"}
               size={24}
-              color={item.isDone ? "#34C759" : "#C7C7CC"}
+              color={optItem.isDone ? "#34C759" : "#C7C7CC"}
             />
           </TouchableOpacity>
         ) : (
           <View style={[styles.checkButton, { opacity: 0.5 }]}>
             <Ionicons
               name={
-                item.isDone ? "checkmark-done-circle" : "list-circle-outline"
+                optItem.isDone ? "checkmark-done-circle" : "list-circle-outline"
               }
               size={24}
-              color={item.isDone ? "#34C759" : "#AEAEB2"}
+              color={optItem.isDone ? "#34C759" : "#AEAEB2"}
             />
           </View>
         )}
       </TouchableOpacity>
 
-      {/* 🌟 サブタスクの表示 */}
-      {item.subTasks && item.subTasks.length > 0 && (
+      {/* サブタスクの表示 */}
+      {optItem.subTasks && optItem.subTasks.length > 0 && (
         <View>
-          {/* 🌟 展開用トグルボタン */}
           <TouchableOpacity
             style={{
               flexDirection: "row",
@@ -225,21 +272,19 @@ const TodoItem = memo(function TodoItem({
               }}
             >
               サブタスク (
-              {item.subTasks.filter((s: SubTask) => s.isDone).length}/
-              {item.subTasks.length})
+              {optItem.subTasks.filter((s: SubTask) => s.isDone).length}/
+              {optItem.subTasks.length})
             </Text>
           </TouchableOpacity>
 
-          {/* 🌟 開いている時だけ中身を表示 */}
           {isExpanded && (
             <View style={styles.subTaskListContainer}>
-              {item.subTasks.map((sub: SubTask) => (
+              {optItem.subTasks.map((sub: SubTask) => (
                 <TouchableOpacity
                   key={sub.id}
                   style={styles.subTaskMiniCard}
-                  onPress={() => toggleSubTodo(itemDate, item.id, sub.id)}
+                  onPress={() => handleToggleSubTodo(sub.id)} // 🌟 魔法の即時関数に変更！
                 >
-                  {/* 🌟 支出（お金の記録）以外の場合のみチェックボックスを表示 */}
                   {!sub.isExpense && (
                     <Ionicons
                       name={sub.isDone ? "checkbox" : "square-outline"}
@@ -260,7 +305,6 @@ const TodoItem = memo(function TodoItem({
                     {sub.title}
                   </Text>
 
-                  {/* サブタスクの時間 */}
                   {sub.hasDateTime && sub.endTime && (
                     <View
                       style={{
@@ -276,7 +320,6 @@ const TodoItem = memo(function TodoItem({
                         style={{ marginRight: 4 }}
                       />
                       <Text style={{ fontSize: 10, color: "#8E8E93" }}>
-                        {/* 🌟 データの型が何であっても、確実に文字の時刻にして表示する */}
                         {sub.endTime instanceof Date
                           ? `${("0" + sub.endTime.getHours()).slice(-2)}:${("0" + sub.endTime.getMinutes()).slice(-2)}`
                           : String(sub.endTime)}
@@ -284,7 +327,6 @@ const TodoItem = memo(function TodoItem({
                     </View>
                   )}
 
-                  {/* お金の表示 */}
                   {(sub.isExpense || sub.isIncome) && (
                     <Text
                       style={{
@@ -302,8 +344,8 @@ const TodoItem = memo(function TodoItem({
                     style={{ padding: 4 }}
                     onPress={() => {
                       setEditingSubTaskInfo({
-                        parentId: item.id,
-                        parentTitle: item.title,
+                        parentId: optItem.id,
+                        parentTitle: optItem.title,
                         date: itemDate,
                         subTask: sub,
                       });
@@ -451,4 +493,3 @@ const styles = StyleSheet.create({
 });
 
 export default TodoItem;
-//

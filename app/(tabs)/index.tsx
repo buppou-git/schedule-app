@@ -343,8 +343,10 @@ function IndexContent() {
   const {
     roomSchedules,
     roomWishes,
+    roomTags,
     safeDebouncedSync,
     safeDebouncedSyncWish,
+    safeDebouncedSyncTag,
   } = useCloudSync(sharedRooms);
 
   const {
@@ -378,6 +380,36 @@ function IndexContent() {
     activeMode,
     setActiveMode,
   } = useAppStore();
+
+  useEffect(() => {
+    if (!roomTags || Object.keys(roomTags).length === 0) return;
+
+    let hasChanges = false;
+    const newTagMaster = { ...tagMaster };
+
+    Object.values(roomTags).forEach((tags) => {
+      Object.entries(tags).forEach(([tagName, tagData]) => {
+        const currentTag = newTagMaster[tagName];
+        // 自分のスマホに無い、または色が違うなら、クラウドの最新版で上書き！
+        if (
+          !currentTag ||
+          currentTag.color !== tagData.color ||
+          currentTag.layer !== tagData.layer
+        ) {
+          newTagMaster[tagName] = {
+            layer: tagData.layer,
+            color: tagData.color,
+          };
+          hasChanges = true;
+        }
+      });
+    });
+
+    if (hasChanges) {
+      setTagMaster(newTagMaster); // 画面を更新
+      AsyncStorage.setItem("tagMasterData", JSON.stringify(newTagMaster)); // スマホに保存
+    }
+  }, [roomTags, tagMaster, setTagMaster]); // クラウドの属性に変化があったら発動
 
   useEffect(() => {
     // まだアプリの準備ができていない時はスキップ
@@ -2395,6 +2427,7 @@ function IndexContent() {
                 roomWishes={roomWishes} // 🌟 これを追加！
                 safeDebouncedSyncWish={safeDebouncedSyncWish} // 🌟 これを追加！
                 safeDebouncedSync={safeDebouncedSync}
+                safeDebouncedSyncTag={safeDebouncedSyncTag}
               />
             </ScrollView>
           )}
