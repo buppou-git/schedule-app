@@ -185,25 +185,27 @@ export default function BudgetDashboard({
   };
 
   useEffect(() => {
-    // 🌟 クラウドからデータが届く前の初期状態({})なら、ローカルデータを破壊しないようリターン！
-    if (!roomWishes || Object.keys(roomWishes).length === 0) return;
-
     setWishlist((prevList) => {
       const personalWishes = prevList.filter((w) => !w.sharedRoomId);
       const sharedMap = new Map<string, WishItem>();
 
-      Object.entries(roomWishes).forEach(([roomId, wishes]) => {
+      Object.entries(roomWishes || {}).forEach(([roomId, wishes]) => {
         (wishes || [])
           .filter((w) => !w.deleted)
           .forEach((w) => {
-            sharedMap.set(w.id, { ...w, sharedRoomId: roomId });
+            sharedMap.set(w.id, {
+              ...w,
+              sharedRoomId: roomId,
+            });
           });
       });
 
       const mergedList = [...personalWishes, ...Array.from(sharedMap.values())];
 
-      // 🌟 クラウドの最新状態を AsyncStorage にもバックアップ（タスクキル対策）
-      AsyncStorage.setItem("wishlistData", JSON.stringify(mergedList));
+      // 🌟 最新状態をバックアップ
+      AsyncStorage.setItem("wishlistData", JSON.stringify(mergedList)).catch(
+        console.error,
+      );
 
       return mergedList;
     });
@@ -406,8 +408,14 @@ export default function BudgetDashboard({
 
       setUnallocatedSavings(currentUnallocated);
 
-      // 🌟 ローカルに保存されているすべての目標（個人＋共有）をまずは全復元する
-      setWishlist(parsedWishlist);
+
+      // 🌟 個人目標はローカルから復元し、共有目標は既に届いているものを保持
+      setWishlist((prev) => {
+        const sharedOnly = prev.filter((w) => !!w.sharedRoomId);
+        const personalOnly = parsedWishlist.filter((w) => !w.sharedRoomId);
+        return [...personalOnly, ...sharedOnly];
+      });
+
     };
     load();
   }, []);
@@ -1663,9 +1671,9 @@ export default function BudgetDashboard({
                               : key === "外部予定" // 🌟 ここを追加！
                                 ? "#FF2D55"
                                 : layerMaster[key] ||
-                                  CHART_PALETTE[index % CHART_PALETTE.length]
+                                CHART_PALETTE[index % CHART_PALETTE.length]
                             : tagMaster[key]?.color ||
-                              CHART_PALETTE[index % CHART_PALETTE.length],
+                            CHART_PALETTE[index % CHART_PALETTE.length],
                       legendFontColor: "#666",
                       legendFontSize: 11,
                     }))}

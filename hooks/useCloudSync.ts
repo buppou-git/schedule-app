@@ -37,12 +37,14 @@ export function useCloudSync(sharedRooms: { [layerName: string]: string }) {
 
   const [isAuthReady, setIsAuthReady] = useState(false);
 
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) setIsAuthReady(true);
+      setIsAuthReady(!!user);
     });
     return () => unsubscribe();
   }, []);
+
 
   const syncQueue = useRef<{
     [id: string]: {
@@ -67,73 +69,102 @@ export function useCloudSync(sharedRooms: { [layerName: string]: string }) {
   useEffect(() => {
     if (!isAuthReady) return;
 
-    const roomIds = Object.values(sharedRooms);
+    // 🌟 roomId を正規化（空除外・重複除外）
+    const roomIds = [...new Set(
+      Object.values(sharedRooms || {}).filter(
+        (id): id is string => typeof id === "string" && id.trim().length > 0,
+      ),
+    )];
+
     if (roomIds.length === 0) {
       setRoomSchedules({});
       setRoomWishes({});
-      setRoomTags({}); // 🌟 追加
+      setRoomTags({});
       return;
     }
 
-    const unsubscribes: (() => void)[] = [];
+    const unsubscribes: Array<() => void> = [];
 
     roomIds.forEach((roomId) => {
-      // ① スケジュールの監視
+      // ① schedules
       const unsubSchedules = onSnapshot(
         collection(db, "rooms", roomId, "schedules"),
         (snapshot) => {
           const itemsByDate: { [date: string]: ScheduleItem[] } = {};
+
           snapshot.forEach((docSnap) => {
             const data = docSnap.data();
-            if (data.date) {
-              if (!itemsByDate[data.date]) itemsByDate[data.date] = [];
-              itemsByDate[data.date].push({
-                id: docSnap.id,
-                ...data,
-                layer: data.layer || data.sharedLayer,
-              } as ScheduleItem);
-            }
+            if (!data.date) return;
+
+            if (!itemsByDate[data.date]) itemsByDate[data.date] = [];
+
+            itemsByDate[data.date].push({
+              id: docSnap.id,
+              ...data,
+              layer: data.layer || data.sharedLayer,
+            } as ScheduleItem);
           });
-          setRoomSchedules((prev) => ({ ...prev, [roomId]: itemsByDate }));
+
+          setRoomSchedules((prev) => ({
+            ...prev,
+            [roomId]: itemsByDate,
+          }));
         },
         (error) => console.error(`Room ${roomId} schedules sync error:`, error),
       );
       unsubscribes.push(unsubSchedules);
 
-      // ② 目標（Wishes）の監視
+      // ② wishes
       const unsubWishes = onSnapshot(
         collection(db, "rooms", roomId, "wishes"),
         (snapshot) => {
           const wishes: SharedWishItem[] = [];
+
           snapshot.forEach((docSnap) => {
             wishes.push({
               id: docSnap.id,
               ...docSnap.data(),
             } as SharedWishItem);
           });
-          setRoomWishes((prev) => ({ ...prev, [roomId]: wishes }));
+
+          setRoomWishes((prev) => ({
+            ...prev,
+            [roomId]: wishes,
+          }));
         },
         (error) => console.error(`Room ${roomId} wishes sync error:`, error),
       );
       unsubscribes.push(unsubWishes);
 
-      // 🌟 ③ 追加：属性（Tags）の監視
+      // ③ tags
       const unsubTags = onSnapshot(
         collection(db, "rooms", roomId, "tags"),
         (snapshot) => {
-          const tags: any = {};
+          const tags: { [tagName: string]: { layer: string; color: string } } = {};
+
           snapshot.forEach((docSnap) => {
-            tags[docSnap.id] = docSnap.data();
+            tags[docSnap.id] = docSnap.data() as {
+              layer: string;
+              color: string;
+            };
           });
-          setRoomTags((prev) => ({ ...prev, [roomId]: tags }));
+
+          setRoomTags((prev) => ({
+            ...prev,
+            [roomId]: tags,
+          }));
         },
         (error) => console.error(`Room ${roomId} tags sync error:`, error),
       );
       unsubscribes.push(unsubTags);
     });
 
-    return () => unsubscribes.forEach((unsub) => unsub());
+    return () => {
+      unsubscribes.forEach((unsub) => unsub());
+    };
   }, [sharedRooms, isAuthReady]);
+
+
 
   // ==========================================
   // 2. 送信ロジック（予定 ＆ 目標 ＆ 属性）
@@ -208,18 +239,21 @@ export function useCloudSync(sharedRooms: { [layerName: string]: string }) {
     }
   };
 
-  // 目標のデバウンス送信（連打防止）
   const safeDebouncedSyncWish = useCallback(
     (wish: SharedWishItem, roomId: string) => {
       if (!roomId) return;
-      const key = String(wish.id);
-      if (wishSyncQueue.current[key])
+  
+      const key = `${roomId}:${wish.id}`;
+  
+      if (wishSyncQueue.current[key]) {
         clearTimeout(wishSyncQueue.current[key].timer);
-
+      }
+  
       const timer = setTimeout(() => {
         handleSaveWish(wish, roomId);
         delete wishSyncQueue.current[key];
       }, 1000);
+  
       wishSyncQueue.current[key] = { wish, roomId, timer };
     },
     [],
