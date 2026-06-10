@@ -10,6 +10,7 @@ import {
   Linking,
   Modal,
   ScrollView,
+  Switch,
   Text,
   TouchableOpacity,
   TouchableWithoutFeedback,
@@ -33,6 +34,8 @@ interface ConfigModalProps {
   onDeleteAccount: () => void;
   sharedRooms: { [layerName: string]: string };
   onAddSharedRoom: (layerName: string, roomId: string) => void;
+  isHolidayEnabled?: boolean;
+  onHolidayToggle?: (val: boolean) => void;
 }
 
 const WEB_CLIENT_ID =
@@ -52,6 +55,8 @@ export default function ConfigModal({
   onDeleteAccount,
   sharedRooms,
   onAddSharedRoom,
+  isHolidayEnabled,
+  onHolidayToggle,
 }: ConfigModalProps) {
   const [isReady, setIsReady] = useState(false);
 
@@ -153,7 +158,6 @@ export default function ConfigModal({
                     isPinEnabled={isPinEnabled}
                     setIsPinEnabled={setIsPinEnabled}
                   />
-
                   <SyncAndBackupSection
                     isCalendarSyncEnabled={isCalendarSyncEnabled}
                     setIsCalendarSyncEnabled={(val) => {
@@ -165,6 +169,28 @@ export default function ConfigModal({
                     onRestore={onRestore}
                     onBackup={onBackup}
                   />
+
+                  {/* 👇 🌟 追加：カレンダー設定（祝日のオンオフ） */}
+                  <Text style={[styles.sectionLabel, { marginTop: 20 }]}>
+                    CALENDAR SETTINGS
+                  </Text>
+                  <View style={styles.card}>
+                    <View style={styles.row}>
+                      <View style={styles.rowLeft}>
+                        <Ionicons
+                          name="flag-outline"
+                          size={20}
+                          color="#1C1C1E"
+                        />
+                        <Text style={styles.rowText}>日本の祝日を表示</Text>
+                      </View>
+                      <Switch // ← もしSwitchが未importなら、ファイルの上のreact-nativeからのimportにSwitchを追加してください
+                        value={isHolidayEnabled}
+                        onValueChange={onHolidayToggle}
+                        trackColor={{ false: "#E5E5EA", true: "#34C759" }}
+                      />
+                    </View>
+                  </View>
 
                   <Text style={[styles.sectionLabel, { marginTop: 20 }]}>
                     LEGAL
@@ -216,10 +242,7 @@ export default function ConfigModal({
                     </TouchableOpacity>
                   </View>
 
-                  <Text style={styles.copyright}>
-                    UniCal
-                  </Text>
-
+                  <Text style={styles.copyright}>UniCal</Text>
                 </ScrollView>
               )}
             </View>

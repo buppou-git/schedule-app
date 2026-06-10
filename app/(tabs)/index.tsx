@@ -366,6 +366,7 @@ function IndexContent() {
   const { scheduleData, setScheduleData, lastSyncedAt } = useScheduleManager();
 
   const [isExternalSyncEnabled, setIsExternalSyncEnabled] = useState(false);
+  const [isHolidayEnabled, setIsHolidayEnabled] = useState(true);
 
   const { externalEvents } = useExternalCalendar(
     selectedDate,
@@ -526,6 +527,10 @@ function IndexContent() {
     AsyncStorage.getItem("externalCalendarSync").then((val) =>
       setIsExternalSyncEnabled(val === "true"),
     );
+    // 👇 🌟 追加：起動時に祝日設定もストレージから読み込む
+    AsyncStorage.getItem("isHolidayEnabled").then((val) => {
+      if (val !== null) setIsHolidayEnabled(val === "true");
+    });
   }, []);
 
   const [tempPresetName, setTempPresetName] = useState("");
@@ -1258,6 +1263,7 @@ function IndexContent() {
     tagMaster,
     selectedDate,
     hiddenExternalIds,
+    isHolidayEnabled,
   );
 
   const { dayTasks, upcomingTasks, dayEvents } = useDailyItems(
@@ -2819,6 +2825,12 @@ function IndexContent() {
         sharedRooms={sharedRooms}
         onAddSharedRoom={handleAddSharedRoom}
         onDeleteAccount={handleDeleteAccount}
+        isHolidayEnabled={isHolidayEnabled}
+        onHolidayToggle={(val) => {
+          setIsHolidayEnabled(val);
+          AsyncStorage.setItem("isHolidayEnabled", val ? "true" : "false");
+          setCalendarResetKey((prev) => prev + 1); // 切り替えた瞬間にカレンダーを即再描画！
+        }}
       />
       <SubTaskEditModal
         visible={subTaskModalVisible}

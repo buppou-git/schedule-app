@@ -10,6 +10,7 @@ export function useCalendarData(
   tagMaster: Record<string, { layer: string; color: string }>,
   selectedDate: string,
   hiddenExternalIds: string[] = [],
+  isHolidayEnabled: boolean = true,
 ) {
   // 🧠 1. 繰り返し予定を自動生成するロジック（🔥 遅延評価アルゴリズム）
   const expandedScheduleData = useMemo(() => {
@@ -93,8 +94,10 @@ export function useCalendarData(
     // --- 祝日の自動生成 ---
     let currentDate = new Date(limitStartDate);
     while (currentDate <= limitEndDate) {
-      // 🌟 型定義ファイルを作ったので、ここが string | undefined として認識されます
-      const holidayName = JapaneseHolidays.isHoliday(currentDate);
+      // 🌟 修正：スイッチがオンの時だけ判定する！
+      const holidayName = isHolidayEnabled
+        ? JapaneseHolidays.isHoliday(currentDate)
+        : undefined;
 
       if (holidayName) {
         const dateStr = currentDate.toISOString().split("T")[0];
@@ -129,8 +132,8 @@ export function useCalendarData(
     }
 
     return expanded;
-    // 🌟 修正：selectedDate 全体ではなく「年月」部分だけを監視する
-  }, [scheduleData, selectedDate.substring(0, 7)]);
+    // 🌟 修正：設定が変わった時にも再計算するように isHolidayEnabled を追加
+  }, [scheduleData, selectedDate.substring(0, 7), isHolidayEnabled]);
 
   // 🧠 2. カレンダーのドット（色）を計算するロジック
   const markedDatesBase = useMemo(() => {

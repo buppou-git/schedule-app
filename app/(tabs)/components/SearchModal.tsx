@@ -59,6 +59,7 @@ export default function SearchModal({
 
     Object.entries(scheduleData).forEach(([date, items]) => {
       items.forEach((item) => {
+        if (item.tag === "祝日" || item.category === "祝日") return;
         if (selectedFilters.length > 0) {
           const itemTags =
             item.tags && item.tags.length > 0
@@ -74,10 +75,10 @@ export default function SearchModal({
             if (filter === "money") return isMoney;
             if (filter === "todo") return item.isTodo;
             if (filter === "event") return item.isEvent;
-            
+
             // 🌟 追加：外部予定をフィルターで拾えるようにする
-            if (filter === "external") return !!item.externalEventId; 
-            
+            if (filter === "external") return !!item.externalEventId;
+
             return itemTags.some(
               (tag) => tag === filter || tagMaster[tag]?.layer === filter,
             );
@@ -347,8 +348,8 @@ export default function SearchModal({
                   </Text>
                 </TouchableOpacity>
 
-               {/* レイヤーフィルター */}
-               {Object.keys(layerMaster).map((layer) => (
+                {/* レイヤーフィルター */}
+                {Object.keys(layerMaster).map((layer) => (
                   <TouchableOpacity
                     key={layer}
                     style={[
