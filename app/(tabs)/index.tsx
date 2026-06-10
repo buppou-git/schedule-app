@@ -2385,6 +2385,7 @@ function IndexContent() {
                 upcomingTasks={upcomingTasks}
                 selectedDate={selectedDate}
                 currentSolidColor={currentSolidColor}
+                activeTags={activeTags}
                 formatEventTime={stableFormatEventTime}
                 openEditModal={stableOpenEditModal}
                 toggleTodo={stableToggleTodo}

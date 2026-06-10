@@ -107,7 +107,9 @@ export function useCalendarData(
         const exists = expanded[dateStr].some((i) => i.id === holidayId);
 
         if (!exists) {
-          // 🌟 不足していた型プロパティをすべて埋めてエラーを解消
+          // 🌟 魔法の補正：現在絞り込み中ならそのカレンダーに所属させ、全体表示なら「共通」にする
+          const holidayLayer = activeTags.length === 1 ? activeTags[0] : "共通";
+
           const holidayItem: ScheduleItem = {
             id: holidayId,
             title: holidayName,
@@ -115,12 +117,14 @@ export function useCalendarData(
             endDate: `${dateStr}T23:59:59`,
             isEvent: true,
             isTodo: false,
-            color: "#FF3B30", // 祝日は赤
+            color: "#FF3B30", // 祝日は真っ赤なデザイン
             tag: "祝日",
-            tags: ["祝日"],
-            layer: "祝日",
+
+            // 🌟 所属先をシステムが認める正しいレイヤー名に偽装する
+            tags: [holidayLayer, "祝日"],
+            layer: holidayLayer,
             category: "祝日",
-            // 🌟 不足していた必須プロパティを追加
+
             amount: 0,
             isDone: false,
             isExpense: false,
