@@ -10,7 +10,7 @@ export function useCalendarData(
   tagMaster: Record<string, { layer: string; color: string }>,
   selectedDate: string,
   hiddenExternalIds: string[] = [],
-  isHolidayEnabled: boolean = true,
+  isHolidayEnabled: boolean = true, // 🌟 追加：オンオフ設定の引数を受け取る
 ) {
   // 🧠 1. 繰り返し予定を自動生成するロジック（🔥 遅延評価アルゴリズム）
   const expandedScheduleData = useMemo(() => {
@@ -94,7 +94,7 @@ export function useCalendarData(
     // --- 祝日の自動生成 ---
     let currentDate = new Date(limitStartDate);
     while (currentDate <= limitEndDate) {
-      // 🌟 修正：スイッチがオンの時だけ判定する！
+      // 🌟 修正：スイッチがオンの時だけ祝日を判定・生成する
       const holidayName = isHolidayEnabled
         ? JapaneseHolidays.isHoliday(currentDate)
         : undefined;
@@ -107,8 +107,16 @@ export function useCalendarData(
         const exists = expanded[dateStr].some((i) => i.id === holidayId);
 
         if (!exists) {
-          // 🌟 魔法の補正：現在絞り込み中ならそのカレンダーに所属させ、全体表示なら「共通」にする
-          const holidayLayer = activeTags.length === 1 ? activeTags[0] : "共通";
+          // 🌟 究極のフィルター突破ロジック：
+          // リスト表示側の裏側にある「実在するカレンダーチェック」を確実に突破させるため、
+          // 単一レイヤーモードならそのレイヤー、全体表示ならlayerMasterに実在する最初のレイヤーに所属を動的に偽装します！
+          const validLayers = Object.keys(layerMaster);
+          const holidayLayer =
+            activeTags.length === 1
+              ? activeTags[0]
+              : validLayers.length > 0
+                ? validLayers[0]
+                : "共通";
 
           const holidayItem: ScheduleItem = {
             id: holidayId,
@@ -120,7 +128,7 @@ export function useCalendarData(
             color: "#FF3B30", // 祝日は真っ赤なデザイン
             tag: "祝日",
 
-            // 🌟 所属先をシステムが認める正しいレイヤー名に偽装する
+            // 🌟 フィルターをすり抜けるための正しいカレンダー情報を注入
             tags: [holidayLayer, "祝日"],
             layer: holidayLayer,
             category: "祝日",
@@ -139,12 +147,18 @@ export function useCalendarData(
     }
 
     return expanded;
-    // 🌟 修正：設定が変わった時にも再計算するように isHolidayEnabled を追加
-  }, [scheduleData, selectedDate.substring(0, 7), isHolidayEnabled]);
+    // 🌟 修正：設定（オンオフ）やカレンダー切り替え（activeTags）が変わった時にも即座に再計算を走らせる
+  }, [
+    scheduleData,
+    selectedDate.substring(0, 7),
+    isHolidayEnabled,
+    activeTags,
+    layerMaster,
+    hiddenExternalIds,
+  ]);
 
   // 🧠 2. カレンダーのドット（色）を計算するロジック
   const markedDatesBase = useMemo(() => {
-    // 🌟 カレンダーのドットデータの型を厳密に定義！
     const marked: Record<string, { dots: { color: string }[] }> = {};
     const activeTagsSet = new Set(activeTags);
     const isAllLayers = activeTags.length === 0;
@@ -158,7 +172,6 @@ export function useCalendarData(
           (activeMode === "money" && item.isExpense);
         if (!matchesMode) return;
 
-        // 1. まずこの予定に付随するタグ（または単一のタグ）を取得
         const itemTags =
           item.tags && item.tags.length > 0
             ? item.tags
@@ -169,7 +182,6 @@ export function useCalendarData(
         itemTags.forEach((tag: string) => {
           const info = tagMaster[tag] || { layer: tag };
 
-          // 🌟 ここが「優先順位」のポイント！左から順にチェックします
           const finalColor =
             item.color || // ① 個別の色設定（外部カレンダーやカスタム色）
             tagMaster[tag]?.color || // ② タグごとの色
@@ -180,7 +192,6 @@ export function useCalendarData(
           if (!isAllLayers && !activeTagsSet.has(info.layer) && tag !== "祝日")
             return;
 
-          // 決定した色をドットとして追加
           dayDots.add(finalColor);
         });
       });
@@ -197,7 +208,7 @@ export function useCalendarData(
     () => ({
       ...markedDatesBase,
       [selectedDate]: {
-        ...(markedDatesBase[selectedDate] || {}), // 🌟 修正：空だった時のために || {} を追加！
+        ...(markedDatesBase[selectedDate] || {}),
         selected: true,
         selectedColor:
           activeTags.length === 1
@@ -208,6 +219,5 @@ export function useCalendarData(
     [markedDatesBase, selectedDate, activeTags, layerMaster],
   );
 
-  // 🌟 ここが消えていた（または外れていた）のが原因です！
   return { expandedScheduleData, currentMarkedDates };
 }
