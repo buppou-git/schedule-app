@@ -1284,17 +1284,24 @@ function IndexContent() {
   } = useNotificationManager();
 
   useEffect(() => {
-    // 通知がオフ、または時間が未設定の場合は何もしない
-    if (!isNotificationEnabled || !notificationTime) return;
+    // 🌟 修正：古い記憶（ステート）での判定をやめるため、ここでは弾かない
+    // if (!isNotificationEnabled || !notificationTime) return;
 
     const updateNotification = async () => {
+      // 🌟 ① 記憶のすれ違いを防ぐため、ストレージから「今この瞬間の最新設定」を直接引き抜く！
+      const savedEnabledStr = await AsyncStorage.getItem("isNotificationEnabled");
+      if (savedEnabledStr === "false") return; // OFFならここでストップ
+
+      const savedTimeStr = await AsyncStorage.getItem("notificationTime");
+      if (!savedTimeStr) return; // 時間が未設定ならストップ
+
+      const latestTime = new Date(savedTimeStr);
+      if (isNaN(latestTime.getTime())) return;
+
+      const safeHours = latestTime.getHours();
+      const safeMinutes = latestTime.getMinutes();
+
       const now = new Date();
-
-      // 🌟 ① 13:30リセット問題を完全に防ぐ：
-      // notificationTimeから「時間」と「分」だけを安全に抽出する
-      const safeHours = notificationTime.getHours();
-      const safeMinutes = notificationTime.getMinutes();
-
       const targetDate = new Date();
       targetDate.setHours(safeHours, safeMinutes, 0, 0);
 
@@ -1309,12 +1316,11 @@ function IndexContent() {
       const d = String(targetDate.getDate()).padStart(2, "0");
       const targetDateStr = `${y}-${m}-${d}`;
 
-      // 🌟 ② 予定件数のカウント問題（相手の予定が出ない）を修正：
-      // expandedScheduleData（ローカル）ではなく displayData（共有・外部マージ済み全体）を見る！
+      // 予定件数のカウント
       const targetDayItems = displayData[targetDateStr] || [];
       const eventCount = targetDayItems.filter((item) => item.isEvent).length;
 
-      // 🌟 誤書き換え防止：純粋な時間だけを持ったクリーンなDateを作成して渡す
+      // 🌟 純粋な時間だけを持ったクリーンなDateを作成して渡す
       const safeNotificationTime = new Date();
       safeNotificationTime.setHours(safeHours, safeMinutes, 0, 0);
 
@@ -1322,7 +1328,7 @@ function IndexContent() {
     };
 
     updateNotification();
-  }, [displayData, isNotificationEnabled, notificationTime]);
+  }, [displayData]); // 🌟 依存配列も displayData（予定の変動）だけに絞ることで暴走を防ぐ
   // 👆👆👆 ここまで追加・修正 👆👆👆
 
   // 🌟 追加：他のデータプロセッサーのフィルターをすり抜けて、予定欄の先頭に祝日を強制結合する
