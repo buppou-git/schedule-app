@@ -218,6 +218,7 @@ function IndexContent() {
       "layerMasterData",
       JSON.stringify(newLayerMaster),
     );
+    setCalendarResetKey((prev) => prev + 1);
   };
 
   // 🌟 追加：共有カレンダーの個別削除（接続解除）関数

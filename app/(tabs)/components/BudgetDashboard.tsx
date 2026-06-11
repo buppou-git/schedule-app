@@ -864,7 +864,7 @@ export default function BudgetDashboard({
 
     // 🌟 修正②：目標金額をオーバーしないように入金額をキャップ（制限）する
     const remainingAmount = selectedWish.targetAmount - selectedWish.dynamicSavedAmount;
-    
+
     // プラスの入金の場合、残り必要額を上限とする（あふれた分は使えるお金にそのまま残る）
     const actualDeposit = amount > 0 ? Math.min(amount, remainingAmount) : amount;
 
@@ -878,7 +878,7 @@ export default function BudgetDashboard({
     if (amount > remainingAmount && amount > 0) {
       const excess = amount - remainingAmount;
       const msg = `目標金額を ¥${excess.toLocaleString()} オーバーしたため、余剰分はお財布（使えるお金）に戻しました！\n\n残りぴったりの ¥${actualDeposit.toLocaleString()} をチャージします。`;
-      
+
       if (Platform.OS === "web") {
         window.alert(msg);
       } else {
@@ -905,13 +905,18 @@ export default function BudgetDashboard({
     setWishlist(updatedWishlist);
     await AsyncStorage.setItem("wishlistData", JSON.stringify(updatedWishlist));
 
+    // 🌟 追加：現在開いているレイヤー（家計簿など）を取得
+    const targetLayer = currentActiveLayer || "共通";
+
     const newItem: ScheduleItem = {
       id: Date.now().toString(),
       category: "貯金",
       tag: selectedWish.name,
-      tags: ["貯金"],
+      layer: targetLayer, // 🌟 追加：迷子にならないようにレイヤーを指定
+      tags: [targetLayer, selectedWish.name], // 🌟 修正：階層構造を正しく設定
       title:
         actualDeposit >= 0
+          // ...(略)
           ? `${selectedWish.name}へチャージ`
           : `${selectedWish.name}から戻入`,
       amount: Math.abs(actualDeposit), // 🌟 補正したぴったり金額を支出として記録
@@ -941,11 +946,15 @@ export default function BudgetDashboard({
   const executeCompleteWish = async () => {
     if (!selectedWish) return;
 
+    // 🌟 追加：現在開いているレイヤーを取得
+    const targetLayer = currentActiveLayer || "共通";
+
     const newItem: ScheduleItem = {
       id: Date.now().toString(),
       category: "予定",
       tag: "達成",
-      tags: ["達成"],
+      layer: targetLayer, // 🌟 追加
+      tags: [targetLayer, "達成"], // 🌟 修正
       title: `🎉 ${selectedWish.name} を実現する！`,
       amount: 0,
       color: selectedWish.color,
@@ -1034,11 +1043,14 @@ export default function BudgetDashboard({
 
           // 🌟 修正①：スウィーパーのチャージもカレンダー履歴に残す！
           // これで日別詳細から分配をキャンセルできるようになります
+          const targetLayer = currentActiveLayer || "共通"; // 🌟 追加
+
           const newItem: ScheduleItem = {
             id: Date.now().toString() + Math.random().toString(),
             category: "貯金",
             tag: currentWish?.name || "貯金",
-            tags: ["貯金"],
+            layer: targetLayer, // 🌟 追加
+            tags: [targetLayer, currentWish?.name || "貯金"], // 🌟 修正
             title: `${currentWish?.name}へチャージ(残金分配)`,
             amount: allowedAmount, // 補正された金額
             color: currentWish?.color || "#8E8E93",
