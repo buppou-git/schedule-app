@@ -192,7 +192,6 @@ export default function BudgetDashboard({
     }
   };
 
-
   // 🌟 修正：自分の入力がクラウドの古いデータに上書きされて消えるのを防ぐマージ方式！
   useEffect(() => {
     if (!roomWishes) return;
@@ -203,7 +202,9 @@ export default function BudgetDashboard({
 
       Object.entries(roomWishes).forEach(([roomId, wishes]) => {
         (wishes || []).forEach((cloudWish) => {
-          const existingIndex = nextList.findIndex((w) => w.id === cloudWish.id);
+          const existingIndex = nextList.findIndex(
+            (w) => w.id === cloudWish.id,
+          );
 
           if (cloudWish.deleted) {
             if (existingIndex >= 0) {
@@ -213,7 +214,10 @@ export default function BudgetDashboard({
           } else {
             const wishWithRoom = { ...cloudWish, sharedRoomId: roomId };
             if (existingIndex >= 0) {
-              if (JSON.stringify(nextList[existingIndex]) !== JSON.stringify(wishWithRoom)) {
+              if (
+                JSON.stringify(nextList[existingIndex]) !==
+                JSON.stringify(wishWithRoom)
+              ) {
                 nextList[existingIndex] = wishWithRoom;
                 hasChanges = true;
               }
@@ -226,7 +230,9 @@ export default function BudgetDashboard({
       });
 
       if (hasChanges) {
-        AsyncStorage.setItem("wishlistData", JSON.stringify(nextList)).catch(console.error);
+        AsyncStorage.setItem("wishlistData", JSON.stringify(nextList)).catch(
+          console.error,
+        );
         return nextList;
       }
       return prevList;
@@ -431,10 +437,8 @@ export default function BudgetDashboard({
 
       setUnallocatedSavings(currentUnallocated);
 
-
       // 🌟 修正：ストレージには共有目標もキャッシュされているので、そのまま復元する（起動時のチラつき防止）
       setWishlist(parsedWishlist);
-
     };
     load();
   }, []);
@@ -756,10 +760,26 @@ export default function BudgetDashboard({
     }
 
     // =========================================================
-    // 🌟 追加3: 新しい共有先へ保存/更新
+    // 🌟 追加3: 新しい共有先へ保存/更新（究極のデバッグ版）
     // =========================================================
-    if (savedItem.sharedRoomId && typeof safeDebouncedSyncWish === "function") {
-      safeDebouncedSyncWish(savedItem, savedItem.sharedRoomId);
+    if (newWishIsShared && !savedItem.sharedRoomId) {
+      // 🚨 落とし穴1：スイッチはONなのに共有先が空っぽだった場合
+      Alert.alert(
+        "送信失敗",
+        "共有先のレイヤー（例：家計簿など）が選択されていません！",
+      );
+      return; // 処理をストップ
+    } else if (savedItem.sharedRoomId) {
+      // 🚨 落とし穴2：大元からの関数が届いていない場合
+      if (typeof safeDebouncedSyncWish !== "function") {
+        Alert.alert(
+          "通信エラー",
+          "大元の index.tsx から safeDebouncedSyncWish 関数が渡されていません！\nindex.tsx の <MoneyDashboard> に渡し忘れがないか確認してください。",
+        );
+      } else {
+        // 🚀 全て完璧な場合、ついに発射！
+        safeDebouncedSyncWish(savedItem, savedItem.sharedRoomId);
+      }
     }
 
     resetWishForm();
@@ -1671,9 +1691,9 @@ export default function BudgetDashboard({
                               : key === "外部予定" // 🌟 ここを追加！
                                 ? "#FF2D55"
                                 : layerMaster[key] ||
-                                CHART_PALETTE[index % CHART_PALETTE.length]
+                                  CHART_PALETTE[index % CHART_PALETTE.length]
                             : tagMaster[key]?.color ||
-                            CHART_PALETTE[index % CHART_PALETTE.length],
+                              CHART_PALETTE[index % CHART_PALETTE.length],
                       legendFontColor: "#666",
                       legendFontSize: 11,
                     }))}
@@ -2536,7 +2556,18 @@ export default function BudgetDashboard({
                       value={newWishIsShared}
                       onValueChange={(v) => {
                         setNewWishIsShared(v);
-                        if (!v) setSelectedSharedRoom(null); // オフにしたら選択をクリア
+                        if (v && sharedRooms) {
+                          // 🌟 追加：ONにした瞬間に、自動で最初の共有ルームを選択状態にする（選択忘れ防止！）
+                          const availableRooms = Object.keys(sharedRooms);
+                          if (
+                            availableRooms.length > 0 &&
+                            !selectedSharedRoom
+                          ) {
+                            setSelectedSharedRoom(availableRooms[0]);
+                          }
+                        } else if (!v) {
+                          setSelectedSharedRoom(null); // オフにしたら選択をクリア
+                        }
                       }}
                       trackColor={{ false: "#E5E5EA", true: newWishColor }}
                     />
