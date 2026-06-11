@@ -1276,42 +1276,54 @@ function IndexContent() {
     tagMaster,
   );
 
-  const { isNotificationEnabled, notificationTime, scheduleDailyNotification } =
-    useNotificationManager();
+  // 👇👇👇 ここから追加・修正（毎日の通知の自動更新ロジック） 👇👇👇
+  const {
+    isNotificationEnabled,
+    notificationTime,
+    scheduleDailyNotification,
+  } = useNotificationManager();
 
-  // 🌟 魔法の追加処理：データが変わるたびに「明日の通知内容」を自動アップデートする！
   useEffect(() => {
-    if (!isNotificationEnabled) return;
+    // 通知がオフ、または時間が未設定の場合は何もしない
+    if (!isNotificationEnabled || !notificationTime) return;
 
     const updateNotification = async () => {
-      // 1. 「今日の朝」か「明日の朝」に鳴らすために、直近の通知日を計算
       const now = new Date();
-      const targetDate = new Date();
-      targetDate.setHours(
-        notificationTime.getHours(),
-        notificationTime.getMinutes(),
-        0,
-        0,
-      );
 
-      // すでに今日の通知時間が過ぎていれば「明日」の分を計算する
+      // 🌟 ① 13:30リセット問題を完全に防ぐ：
+      // notificationTimeから「時間」と「分」だけを安全に抽出する
+      const safeHours = notificationTime.getHours();
+      const safeMinutes = notificationTime.getMinutes();
+
+      const targetDate = new Date();
+      targetDate.setHours(safeHours, safeMinutes, 0, 0);
+
+      // すでに今日の通知時間を過ぎていれば「明日」の予定数を計算する
       if (now > targetDate) {
         targetDate.setDate(targetDate.getDate() + 1);
       }
 
-      // 2. その日（ターゲット日）の文字列（YYYY-MM-DD）を作る
-      const targetDateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, "0")}-${String(targetDate.getDate()).padStart(2, "0")}`;
+      // 日本時間のフォーマットで安全に YYYY-MM-DD を生成
+      const y = targetDate.getFullYear();
+      const m = String(targetDate.getMonth() + 1).padStart(2, "0");
+      const d = String(targetDate.getDate()).padStart(2, "0");
+      const targetDateStr = `${y}-${m}-${d}`;
 
-      // 3. その日の「予定（isEvent = true）」の件数を数える
-      const targetDayItems = expandedScheduleData[targetDateStr] || [];
+      // 🌟 ② 予定件数のカウント問題（相手の予定が出ない）を修正：
+      // expandedScheduleData（ローカル）ではなく displayData（共有・外部マージ済み全体）を見る！
+      const targetDayItems = displayData[targetDateStr] || [];
       const eventCount = targetDayItems.filter((item) => item.isEvent).length;
 
-      // 4. 最新の件数を持たせて通知をセットし直す（裏側で静かに上書きされる）
-      await scheduleDailyNotification(notificationTime, eventCount);
+      // 🌟 誤書き換え防止：純粋な時間だけを持ったクリーンなDateを作成して渡す
+      const safeNotificationTime = new Date();
+      safeNotificationTime.setHours(safeHours, safeMinutes, 0, 0);
+
+      await scheduleDailyNotification(safeNotificationTime, eventCount);
     };
 
     updateNotification();
-  }, [scheduleData, isNotificationEnabled, notificationTime]); // 予定データや通知設定が変わるたびに走る
+  }, [displayData, isNotificationEnabled, notificationTime]);
+  // 👆👆👆 ここまで追加・修正 👆👆👆
 
   // 🌟 追加：他のデータプロセッサーのフィルターをすり抜けて、予定欄の先頭に祝日を強制結合する
   const finalDayEvents = useMemo(() => {
@@ -1796,7 +1808,7 @@ function IndexContent() {
         try {
           const Calendar = await import("expo-calendar");
           await Calendar.deleteEventAsync(item.externalEventId);
-        } catch (e) {}
+        } catch (e) { }
       }
 
       const wasShared = isSharedItem(item);
@@ -1857,9 +1869,9 @@ function IndexContent() {
               nextData[d] = nextData[d].map((i) =>
                 i.id === item.id
                   ? {
-                      ...i,
-                      exceptionDates: [...(i.exceptionDates || []), targetDate],
-                    }
+                    ...i,
+                    exceptionDates: [...(i.exceptionDates || []), targetDate],
+                  }
                   : i,
               );
             }
@@ -2262,75 +2274,75 @@ function IndexContent() {
 
               {(activeMode === "todo" ||
                 (activeMode === "money" && !isMoneySummaryMode)) && (
-                <View style={styles.weekCalendarWrapper}>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      paddingRight: 20,
-                    }}
-                  >
-                    <Text style={styles.monthLabel}>
-                      {parseInt(selectedDate.split("-")[1])}月
-                    </Text>
-                    {/* 🌟 変更：「今日に戻る」ボタンと「＋」ボタンを横並びにする */}
+                  <View style={styles.weekCalendarWrapper}>
                     <View
                       style={{
                         flexDirection: "row",
+                        justifyContent: "space-between",
                         alignItems: "center",
-                        gap: 12,
+                        paddingRight: 20,
                       }}
                     >
-                      <TouchableOpacity
-                        onPress={() => setSelectedDate(getTodayString())}
+                      <Text style={styles.monthLabel}>
+                        {parseInt(selectedDate.split("-")[1])}月
+                      </Text>
+                      {/* 🌟 変更：「今日に戻る」ボタンと「＋」ボタンを横並びにする */}
+                      <View
                         style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: 16,
-                          backgroundColor: currentSolidColor + "10", // 月間カレンダーと同じ美しい透け感
+                          flexDirection: "row",
                           alignItems: "center",
-                          justifyContent: "center",
-                          borderWidth: 1,
-                          borderColor: currentSolidColor + "30",
-                          shadowColor: "#000",
-                          shadowOpacity: 0.05,
-                          shadowRadius: 2,
-                          elevation: 1,
+                          gap: 12,
                         }}
                       >
-                        <Ionicons
-                          name="return-down-back-outline" // 同じアイコンを使用
-                          size={18}
-                          color={currentSolidColor}
-                        />
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={handleOpenNewModal}>
-                        <Ionicons
-                          name="add-circle"
-                          size={30}
-                          color={currentSolidColor}
-                        />
-                      </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => setSelectedDate(getTodayString())}
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            backgroundColor: currentSolidColor + "10", // 月間カレンダーと同じ美しい透け感
+                            alignItems: "center",
+                            justifyContent: "center",
+                            borderWidth: 1,
+                            borderColor: currentSolidColor + "30",
+                            shadowColor: "#000",
+                            shadowOpacity: 0.05,
+                            shadowRadius: 2,
+                            elevation: 1,
+                          }}
+                        >
+                          <Ionicons
+                            name="return-down-back-outline" // 同じアイコンを使用
+                            size={18}
+                            color={currentSolidColor}
+                          />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={handleOpenNewModal}>
+                          <Ionicons
+                            name="add-circle"
+                            size={30}
+                            color={currentSolidColor}
+                          />
+                        </TouchableOpacity>
+                      </View>
                     </View>
+                    <CalendarProvider
+                      date={selectedDate}
+                      onDateChanged={setSelectedDate}
+                    >
+                      <WeekCalendar
+                        firstDay={1}
+                        markedDates={currentMarkedDates}
+                        theme={{
+                          calendarBackground: "transparent",
+                          todayTextColor: "#FFF",
+                          todayBackgroundColor: currentSolidColor + "33",
+                          selectedDayBackgroundColor: currentSolidColor,
+                        }}
+                      />
+                    </CalendarProvider>
                   </View>
-                  <CalendarProvider
-                    date={selectedDate}
-                    onDateChanged={setSelectedDate}
-                  >
-                    <WeekCalendar
-                      firstDay={1}
-                      markedDates={currentMarkedDates}
-                      theme={{
-                        calendarBackground: "transparent",
-                        todayTextColor: "#FFF",
-                        todayBackgroundColor: currentSolidColor + "33",
-                        selectedDayBackgroundColor: currentSolidColor,
-                      }}
-                    />
-                  </CalendarProvider>
-                </View>
-              )}
+                )}
             </>
           )}
 
@@ -2605,13 +2617,13 @@ function IndexContent() {
                         styles.gridCard,
                         tempActiveTags.includes("外部予定")
                           ? {
-                              backgroundColor: "#FF2D55",
-                              borderColor: "#FF2D55",
-                            }
+                            backgroundColor: "#FF2D55",
+                            borderColor: "#FF2D55",
+                          }
                           : [
-                              styles.gridCardGhost,
-                              { borderColor: "#FF2D5540" },
-                            ],
+                            styles.gridCardGhost,
+                            { borderColor: "#FF2D5540" },
+                          ],
                       ]}
                       onPress={() => toggleTempTag("外部予定")}
                     >
@@ -2671,13 +2683,13 @@ function IndexContent() {
                           styles.gridCard,
                           isSelected
                             ? {
-                                backgroundColor: displayColor,
-                                borderColor: displayColor,
-                              }
+                              backgroundColor: displayColor,
+                              borderColor: displayColor,
+                            }
                             : [
-                                styles.gridCardGhost,
-                                { borderColor: displayColor + "40" },
-                              ],
+                              styles.gridCardGhost,
+                              { borderColor: displayColor + "40" },
+                            ],
                         ]}
                         onPress={() => toggleTempTag(layer)}
                       >
@@ -2845,6 +2857,7 @@ function IndexContent() {
           onForceRender={() => setCalendarResetKey((prev) => prev + 1)}
           safeDebouncedSync={safeDebouncedSync}
           setDebugMessage={setDebugMessage}
+          safeDebouncedSyncTag={safeDebouncedSyncTag}
         />
       )}
       <LayerManagementModal
