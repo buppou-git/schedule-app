@@ -182,34 +182,57 @@ export default function BudgetDashboard({
     setNewWishAutoAmount("");
     setNewWishIsShared(false);
     setSelectedSharedRoom(null);
+
+    if (currentActiveLayer && sharedRooms && sharedRooms[currentActiveLayer]) {
+      setNewWishIsShared(true);
+      setSelectedSharedRoom(currentActiveLayer);
+    } else {
+      setNewWishIsShared(false);
+      setSelectedSharedRoom(null);
+    }
   };
 
-  useEffect(() => {
-    setWishlist((prevList) => {
-      const personalWishes = prevList.filter((w) => !w.sharedRoomId);
-      const sharedMap = new Map<string, WishItem>();
 
-      Object.entries(roomWishes || {}).forEach(([roomId, wishes]) => {
-        (wishes || [])
-          .filter((w) => !w.deleted)
-          .forEach((w) => {
-            sharedMap.set(w.id, {
-              ...w,
-              sharedRoomId: roomId,
-            });
-          });
+  // 🌟 修正：自分の入力がクラウドの古いデータに上書きされて消えるのを防ぐマージ方式！
+  useEffect(() => {
+    if (!roomWishes) return;
+
+    setWishlist((prevList) => {
+      let hasChanges = false;
+      const nextList = [...prevList];
+
+      Object.entries(roomWishes).forEach(([roomId, wishes]) => {
+        (wishes || []).forEach((cloudWish) => {
+          const existingIndex = nextList.findIndex((w) => w.id === cloudWish.id);
+
+          if (cloudWish.deleted) {
+            if (existingIndex >= 0) {
+              nextList.splice(existingIndex, 1);
+              hasChanges = true;
+            }
+          } else {
+            const wishWithRoom = { ...cloudWish, sharedRoomId: roomId };
+            if (existingIndex >= 0) {
+              if (JSON.stringify(nextList[existingIndex]) !== JSON.stringify(wishWithRoom)) {
+                nextList[existingIndex] = wishWithRoom;
+                hasChanges = true;
+              }
+            } else {
+              nextList.push(wishWithRoom);
+              hasChanges = true;
+            }
+          }
+        });
       });
 
-      const mergedList = [...personalWishes, ...Array.from(sharedMap.values())];
-
-      // 🌟 最新状態をバックアップ
-      AsyncStorage.setItem("wishlistData", JSON.stringify(mergedList)).catch(
-        console.error,
-      );
-
-      return mergedList;
+      if (hasChanges) {
+        AsyncStorage.setItem("wishlistData", JSON.stringify(nextList)).catch(console.error);
+        return nextList;
+      }
+      return prevList;
     });
   }, [roomWishes]);
+
   const getCycleRange = (dateStr: string, pDay: number) => {
     const date = new Date(dateStr);
     let startYear = date.getFullYear();
@@ -409,12 +432,8 @@ export default function BudgetDashboard({
       setUnallocatedSavings(currentUnallocated);
 
 
-      // 🌟 個人目標はローカルから復元し、共有目標は既に届いているものを保持
-      setWishlist((prev) => {
-        const sharedOnly = prev.filter((w) => !!w.sharedRoomId);
-        const personalOnly = parsedWishlist.filter((w) => !w.sharedRoomId);
-        return [...personalOnly, ...sharedOnly];
-      });
+      // 🌟 修正：ストレージには共有目標もキャッシュされているので、そのまま復元する（起動時のチラつき防止）
+      setWishlist(parsedWishlist);
 
     };
     load();
@@ -493,30 +512,11 @@ export default function BudgetDashboard({
   );
   const remainingToAllocate = unallocatedSavings - totalSweeperAllocation;
 
+  // 🌟 修正：すでに上の useEffect 側でデータを綺麗に結合しているので、ここでの「二重上書き」をやめる！
+  // これにより、入金した瞬間にクラウドの古いデータが被さって反映されないバグが完全に直ります。
   const combinedWishlist = useMemo(() => {
-    const localMap = new Map<string, WishItem>();
-
-    // まずローカルの個人目標を入れる
-    wishlist.forEach((w) => {
-      localMap.set(w.id, w);
-    });
-
-    // 共有目標を上書きで入れる
-    if (roomWishes) {
-      Object.entries(roomWishes).forEach(([roomId, wishes]) => {
-        wishes.forEach((w) => {
-          if (!w.deleted) {
-            localMap.set(w.id, {
-              ...w,
-              sharedRoomId: roomId, // 🌟 共有元ルームを保持
-            });
-          }
-        });
-      });
-    }
-
-    return Array.from(localMap.values());
-  }, [wishlist, roomWishes]);
+    return wishlist.filter((w) => !w.deleted);
+  }, [wishlist]);
 
   const augmentedWishlist = useMemo(() => {
     const isSingleLayerMode = activeTags.length === 1;
