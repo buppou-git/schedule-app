@@ -526,18 +526,19 @@ export default function BudgetDashboard({
     const isSingleLayerMode = activeTags.length === 1;
 
     return combinedWishlist.map((wish) => {
-      let dynamicSaved = wish.savedAmount;
+      // 🌟 修正①：日別詳細でのキャンセルを反映させるため、基礎値を0にし、カレンダーの履歴を100%正とする
+      let dynamicSaved = 0;
 
       Object.values(displayData).forEach((items) => {
         items.forEach((item) => {
           const { parent: itemLayer = "" } = resolveTags(item);
           const isShared = Object.keys(sharedRooms || {}).includes(itemLayer);
 
-          // 全体表示では共有支出を除外、単一カテゴリなら含める
           if (isShared && !isSingleLayerMode) return;
 
-          // 手動チャージ(category: "貯金") は savedAmount に既に入っているので除外
-          if (item.isExpense && item.category !== "貯金") {
+          // 🌟 修正①：手動チャージ（貯金）も含めて、関連する支出を「すべて」合算する！
+          // これにより、日別詳細から履歴を消した瞬間に、夢リストの金額も自動で減るようになります。
+          if (item.isExpense) {
             if (
               item.category === wish.name ||
               item.tag === wish.name ||
@@ -861,14 +862,37 @@ export default function BudgetDashboard({
   const processDeposit = async (amount: number) => {
     if (!selectedWish) return;
 
+    // 🌟 修正②：目標金額をオーバーしないように入金額をキャップ（制限）する
+    const remainingAmount = selectedWish.targetAmount - selectedWish.dynamicSavedAmount;
+    
+    // プラスの入金の場合、残り必要額を上限とする（あふれた分は使えるお金にそのまま残る）
+    const actualDeposit = amount > 0 ? Math.min(amount, remainingAmount) : amount;
+
+    if (actualDeposit === 0 && amount > 0) {
+      Alert.alert("確認", "この目標はすでに達成されています🎉");
+      setIsDepositModalVisible(false);
+      return;
+    }
+
+    // 🌟 追加：余剰分が発生した場合にアラートで優しくお知らせする！
+    if (amount > remainingAmount && amount > 0) {
+      const excess = amount - remainingAmount;
+      const msg = `目標金額を ¥${excess.toLocaleString()} オーバーしたため、余剰分はお財布（使えるお金）に戻しました！\n\n残りぴったりの ¥${actualDeposit.toLocaleString()} をチャージします。`;
+      
+      if (Platform.OS === "web") {
+        window.alert(msg);
+      } else {
+        Alert.alert("金額の自動補正 💰", msg);
+      }
+    }
+
     const updatedWishlist = wishlist.map((w) => {
       if (w.id === selectedWish.id) {
         const updated = {
           ...w,
-          savedAmount: Math.max(0, w.savedAmount + amount),
+          savedAmount: Math.max(0, w.savedAmount + actualDeposit),
         };
 
-        // 🌟 共有Wishなら相手にも同期
         if (updated.sharedRoomId && safeDebouncedSyncWish) {
           safeDebouncedSyncWish(updated, updated.sharedRoomId);
         }
@@ -887,17 +911,18 @@ export default function BudgetDashboard({
       tag: selectedWish.name,
       tags: ["貯金"],
       title:
-        amount >= 0
+        actualDeposit >= 0
           ? `${selectedWish.name}へチャージ`
           : `${selectedWish.name}から戻入`,
-      amount: Math.abs(amount),
+      amount: Math.abs(actualDeposit), // 🌟 補正したぴったり金額を支出として記録
       color: selectedWish.color,
       isDone: true,
       isEvent: false,
       isTodo: false,
-      isExpense: amount >= 0,
-      isIncome: amount < 0,
+      isExpense: actualDeposit >= 0,
+      isIncome: actualDeposit < 0,
     };
+
 
     const newScheduleData = {
       ...scheduleData,
@@ -973,37 +998,77 @@ export default function BudgetDashboard({
 
     let updatedWishlist = [...wishlist];
     let hasUpdates = false;
+    let actualTotalAllocated = 0; // 🌟 実際に割り当てられた額の合計
+
+    const newScheduleData = { ...scheduleData };
+    let scheduleUpdated = false;
 
     Object.entries(sweeperAllocations).forEach(([id, amount]) => {
       if (amount > 0) {
-        hasUpdates = true;
-        updatedWishlist = updatedWishlist.map((w) => {
-          if (w.id === id) {
-            const updated = {
-              ...w,
-              savedAmount: Math.min(w.targetAmount, w.savedAmount + amount),
-            };
+        // 🌟 修正②：オーバー分をカットする
+        const currentWish = augmentedWishlist.find((w) => w.id === id);
+        const dynamicSaved = currentWish ? currentWish.dynamicSavedAmount : 0;
+        const remaining = Math.max(0, (currentWish?.targetAmount || 0) - dynamicSaved);
 
-            // 🌟 共有Wishなら相手にも同期
-            if (updated.sharedRoomId && safeDebouncedSyncWish) {
-              safeDebouncedSyncWish(updated, updated.sharedRoomId);
+        const allowedAmount = Math.min(amount, remaining);
+
+        if (allowedAmount > 0) {
+          hasUpdates = true;
+          actualTotalAllocated += allowedAmount;
+
+          updatedWishlist = updatedWishlist.map((w) => {
+            if (w.id === id) {
+              const updated = {
+                ...w,
+                savedAmount: w.savedAmount + allowedAmount,
+              };
+
+              if (updated.sharedRoomId && safeDebouncedSyncWish) {
+                safeDebouncedSyncWish(updated, updated.sharedRoomId);
+              }
+
+              return updated;
             }
+            return w;
+          });
 
-            return updated;
-          }
-          return w;
-        });
+          // 🌟 修正①：スウィーパーのチャージもカレンダー履歴に残す！
+          // これで日別詳細から分配をキャンセルできるようになります
+          const newItem: ScheduleItem = {
+            id: Date.now().toString() + Math.random().toString(),
+            category: "貯金",
+            tag: currentWish?.name || "貯金",
+            tags: ["貯金"],
+            title: `${currentWish?.name}へチャージ(残金分配)`,
+            amount: allowedAmount, // 補正された金額
+            color: currentWish?.color || "#8E8E93",
+            isDone: true,
+            isEvent: false,
+            isTodo: false,
+            isExpense: true,
+            isIncome: false,
+          };
+
+          newScheduleData[todayStr] = [
+            ...(newScheduleData[todayStr] || []),
+            newItem,
+          ];
+          scheduleUpdated = true;
+        }
       }
     });
 
     if (hasUpdates) {
       setWishlist(updatedWishlist);
-      await AsyncStorage.setItem(
-        "wishlistData",
-        JSON.stringify(updatedWishlist),
-      );
+      await AsyncStorage.setItem("wishlistData", JSON.stringify(updatedWishlist));
 
-      const newUnallocated = unallocatedSavings - totalSweeperAllocation;
+      if (scheduleUpdated) {
+        setScheduleData(newScheduleData);
+        await AsyncStorage.setItem("scheduleData", JSON.stringify(newScheduleData));
+      }
+
+      // 🌟 オーバーしてカットされた分は引かずに未配分プールに残す
+      const newUnallocated = unallocatedSavings - actualTotalAllocated;
       setUnallocatedSavings(newUnallocated);
       await AsyncStorage.setItem(
         "unallocatedSavingsData",
@@ -1675,9 +1740,9 @@ export default function BudgetDashboard({
                               : key === "外部予定" // 🌟 ここを追加！
                                 ? "#FF2D55"
                                 : layerMaster[key] ||
-                                  CHART_PALETTE[index % CHART_PALETTE.length]
+                                CHART_PALETTE[index % CHART_PALETTE.length]
                             : tagMaster[key]?.color ||
-                              CHART_PALETTE[index % CHART_PALETTE.length],
+                            CHART_PALETTE[index % CHART_PALETTE.length],
                       legendFontColor: "#666",
                       legendFontSize: 11,
                     }))}
