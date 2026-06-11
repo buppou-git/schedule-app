@@ -2236,84 +2236,89 @@ const ScheduleModal = ({
             transparent
             animationType="fade"
           >
-            <View style={styles.modalOverlay}>
-              <TouchableOpacity
-                style={StyleSheet.absoluteFill}
-                activeOpacity={1}
-                onPress={() => setEditSubTagModalVisible(false)}
-              />
-              <View
-                style={[
-                  styles.modalContent,
-                  {
-                    height: "auto",
-                    borderTopWidth: 8,
-                    borderTopColor: editingSubTagColor || uiThemeColor,
-                  },
-                ]}
-              >
-                <Text style={[styles.modalTitle, { marginBottom: 15 }]}>
-                  属性の編集
-                </Text>
-                <Text style={styles.label}>属性名</Text>
-                <TextInput
-                  style={styles.input}
-                  value={editingSubTagName}
-                  onChangeText={setEditingSubTagName}
-                  autoFocus
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : "height"}
+              style={{ flex: 1 }}
+            >
+              <View style={styles.modalOverlay}>
+                <TouchableOpacity
+                  style={StyleSheet.absoluteFill}
+                  activeOpacity={1}
+                  onPress={() => setEditSubTagModalVisible(false)}
                 />
-                <Text style={[styles.label, { marginTop: 15 }]}>カラー</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={{ marginBottom: 20, paddingBottom: 5 }}
-                >
-                  {PRESET_COLORS.map((color) => (
-                    <TouchableOpacity
-                      key={color}
-                      style={[
-                        {
-                          width: 30,
-                          height: 30,
-                          borderRadius: 15,
-                          backgroundColor: color,
-                          marginRight: 10,
-                        },
-                        editingSubTagColor === color && {
-                          borderWidth: 3,
-                          borderColor: "#1C1C1E",
-                        },
-                      ]}
-                      onPress={() => setEditingSubTagColor(color)}
-                    />
-                  ))}
-                </ScrollView>
                 <View
                   style={[
-                    styles.actionButtons,
-                    { justifyContent: "space-between", marginTop: 0 },
+                    styles.modalContent,
+                    {
+                      height: "auto",
+                      borderTopWidth: 8,
+                      borderTopColor: editingSubTagColor || uiThemeColor,
+                    },
                   ]}
                 >
-                  <TouchableOpacity
-                    onPress={deleteSubTag}
-                    style={styles.cancelBtn}
+                  <Text style={[styles.modalTitle, { marginBottom: 15 }]}>
+                    属性の編集
+                  </Text>
+                  <Text style={styles.label}>属性名</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={editingSubTagName}
+                    onChangeText={setEditingSubTagName}
+                    autoFocus
+                  />
+                  <Text style={[styles.label, { marginTop: 15 }]}>カラー</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={{ marginBottom: 20, paddingBottom: 5 }}
                   >
-                    <Text style={{ color: "#FF3B30", fontWeight: "bold" }}>
-                      削除
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
+                    {PRESET_COLORS.map((color) => (
+                      <TouchableOpacity
+                        key={color}
+                        style={[
+                          {
+                            width: 30,
+                            height: 30,
+                            borderRadius: 15,
+                            backgroundColor: color,
+                            marginRight: 10,
+                          },
+                          editingSubTagColor === color && {
+                            borderWidth: 3,
+                            borderColor: "#1C1C1E",
+                          },
+                        ]}
+                        onPress={() => setEditingSubTagColor(color)}
+                      />
+                    ))}
+                  </ScrollView>
+                  <View
                     style={[
-                      styles.saveBtn,
-                      { backgroundColor: editingSubTagColor || uiThemeColor },
+                      styles.actionButtons,
+                      { justifyContent: "space-between", marginTop: 0 },
                     ]}
-                    onPress={saveEditedSubTag}
                   >
-                    <Text style={styles.saveBtnText}>保存</Text>
-                  </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={deleteSubTag}
+                      style={styles.cancelBtn}
+                    >
+                      <Text style={{ color: "#FF3B30", fontWeight: "bold" }}>
+                        削除
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.saveBtn,
+                        { backgroundColor: editingSubTagColor || uiThemeColor },
+                      ]}
+                      onPress={saveEditedSubTag}
+                    >
+                      <Text style={styles.saveBtnText}>保存</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
-            </View>
+            </KeyboardAvoidingView>
           </Modal>
         )}
 
@@ -2322,54 +2327,59 @@ const ScheduleModal = ({
         {/* ======================= */}
         {editQuickTagModal && (
           <Modal visible={editQuickTagModal} transparent animationType="fade">
-            <View style={styles.modalOverlay}>
-              <TouchableOpacity
-                style={StyleSheet.absoluteFill}
-                activeOpacity={1}
-                onPress={() => setEditQuickTagModal(false)}
-              />
-              <View
-                style={[
-                  styles.modalContent,
-                  {
-                    height: "auto",
-                    borderTopWidth: 8,
-                    borderTopColor: uiThemeColor,
-                  },
-                ]}
-              >
-                <Text style={[styles.modalTitle, { marginBottom: 15 }]}>
-                  カテゴリ名の編集
-                </Text>
-                <Text style={styles.label}>新しい名称を入力</Text>
-                <TextInput
-                  style={styles.input}
-                  value={tempQuickTagText}
-                  onChangeText={setTempQuickTagText}
-                  autoFocus
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : "height"}
+              style={{ flex: 1 }}
+            >
+              <View style={styles.modalOverlay}>
+                <TouchableOpacity
+                  style={StyleSheet.absoluteFill}
+                  activeOpacity={1}
+                  onPress={() => setEditQuickTagModal(false)}
                 />
                 <View
                   style={[
-                    styles.actionButtons,
-                    { justifyContent: "center", marginTop: 20 },
+                    styles.modalContent,
+                    {
+                      height: "auto",
+                      borderTopWidth: 8,
+                      borderTopColor: uiThemeColor,
+                    },
                   ]}
                 >
-                  <TouchableOpacity
+                  <Text style={[styles.modalTitle, { marginBottom: 15 }]}>
+                    カテゴリ名の編集
+                  </Text>
+                  <Text style={styles.label}>新しい名称を入力</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={tempQuickTagText}
+                    onChangeText={setTempQuickTagText}
+                    autoFocus
+                  />
+                  <View
                     style={[
-                      styles.saveBtn,
-                      {
-                        backgroundColor: uiThemeColor,
-                        width: "100%",
-                        alignItems: "center",
-                      },
+                      styles.actionButtons,
+                      { justifyContent: "center", marginTop: 20 },
                     ]}
-                    onPress={saveQuickTag}
                   >
-                    <Text style={styles.saveBtnText}>保存する</Text>
-                  </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.saveBtn,
+                        {
+                          backgroundColor: uiThemeColor,
+                          width: "100%",
+                          alignItems: "center",
+                        },
+                      ]}
+                      onPress={saveQuickTag}
+                    >
+                      <Text style={styles.saveBtnText}>保存する</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
-            </View>
+            </KeyboardAvoidingView>
           </Modal>
         )}
 

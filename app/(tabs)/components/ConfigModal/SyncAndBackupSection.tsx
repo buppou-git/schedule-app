@@ -4,7 +4,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Calendar from "expo-calendar";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useRef, useState } from "react"; // 🌟 useRef を追加！
 import {
   Alert,
   Platform,
@@ -45,27 +45,50 @@ export const SyncAndBackupSection = React.memo(
 
     const [showTimePickerAndroid, setShowTimePickerAndroid] = useState(false);
 
+    // 🌟 追加：一時的に画面の表示だけを変えるための仮ステート
+    const [tempTime, setTempTime] = useState<Date>(notificationTime);
+    // 🌟 修正：タイマーの型を、動いている環境に自動で合わせる最強の型指定！
+    const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
     // 🌟 通知ON/OFF
     const handleToggleSwitch = useCallback(
       async (value: boolean) => {
         if (value) {
-          await scheduleDailyNotification(notificationTime);
+          // 秒とミリ秒を強制的に「0」にリセットする
+          const exactTime = new Date(tempTime);
+          exactTime.setSeconds(0, 0);
+          await scheduleDailyNotification(exactTime);
         } else {
           await cancelNotification();
         }
       },
-      [scheduleDailyNotification, cancelNotification, notificationTime],
+      [scheduleDailyNotification, cancelNotification, tempTime],
     );
 
-    // 🌟 通知時間の変更
+    // 🌟 通知時間の変更（最強の誤爆防止システム）
     const handleTimeChange = useCallback(
       async (event: { type: string }, selectedDate?: Date) => {
         if (Platform.OS === "android") setShowTimePickerAndroid(false);
         if (selectedDate) {
-          await scheduleDailyNotification(selectedDate);
+          // 1. 画面の見た目（tempTime）は一瞬で切り替える
+          const exactTime = new Date(selectedDate);
+          exactTime.setSeconds(0, 0);
+          setTempTime(exactTime);
+
+          // 2. 指を動かしている最中の連続保存をキャンセルする
+          if (saveTimerRef.current) {
+            clearTimeout(saveTimerRef.current);
+          }
+
+          // 3. 指を止めてから 1秒後 に初めて通知を保存・セットする（これで過去時間による誤爆を完全に防ぐ！）
+          saveTimerRef.current = setTimeout(async () => {
+            if (isNotificationEnabled) {
+              await scheduleDailyNotification(exactTime);
+            }
+          }, 1000);
         }
       },
-      [scheduleDailyNotification],
+      [scheduleDailyNotification, isNotificationEnabled],
     );
 
     // 🌟 カレンダー同期ON/OFF
@@ -121,11 +144,9 @@ export const SyncAndBackupSection = React.memo(
           });
         });
 
-        // 🌟 修正ポイント：元のコードにあった「型エラー回避用」の記述に戻しました！
         const SafeFS = FileSystem as unknown as {
           documentDirectory: string | null;
           EncodingType: { UTF8: string };
-          // 🌟 any を「ファイルパスと中身を受け取って保存する関数」の型に書き換え
           writeAsStringAsync: (fileUri: string, contents: string, options?: { encoding?: string }) => Promise<void>;
         };
         const fileUri = SafeFS.documentDirectory + "UniCal_Data.csv";
@@ -177,7 +198,7 @@ export const SyncAndBackupSection = React.memo(
 
               {Platform.OS === "ios" ? (
                 <DateTimePicker
-                  value={notificationTime}
+                  value={tempTime} // 🌟 表示する時間を tempTime に変更
                   mode="time"
                   display="default"
                   onChange={handleTimeChange}
@@ -195,7 +216,7 @@ export const SyncAndBackupSection = React.memo(
                         fontWeight: "bold",
                       }}
                     >
-                      {notificationTime.toLocaleTimeString([], {
+                      {tempTime.toLocaleTimeString([], { // 🌟 表示する時間を tempTime に変更
                         hour: "2-digit",
                         minute: "2-digit",
                       })}
@@ -203,7 +224,7 @@ export const SyncAndBackupSection = React.memo(
                   </TouchableOpacity>
                   {showTimePickerAndroid && (
                     <DateTimePicker
-                      value={notificationTime}
+                      value={tempTime} // 🌟 表示する時間を tempTime に変更
                       mode="time"
                       display="default"
                       onChange={handleTimeChange}
