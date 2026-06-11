@@ -760,26 +760,10 @@ export default function BudgetDashboard({
     }
 
     // =========================================================
-    // 🌟 追加3: 新しい共有先へ保存/更新（究極のデバッグ版）
+    // 🌟 追加3: 新しい共有先へ保存/更新
     // =========================================================
-    if (newWishIsShared && !savedItem.sharedRoomId) {
-      // 🚨 落とし穴1：スイッチはONなのに共有先が空っぽだった場合
-      Alert.alert(
-        "送信失敗",
-        "共有先のレイヤー（例：家計簿など）が選択されていません！",
-      );
-      return; // 処理をストップ
-    } else if (savedItem.sharedRoomId) {
-      // 🚨 落とし穴2：大元からの関数が届いていない場合
-      if (typeof safeDebouncedSyncWish !== "function") {
-        Alert.alert(
-          "通信エラー",
-          "大元の index.tsx から safeDebouncedSyncWish 関数が渡されていません！\nindex.tsx の <MoneyDashboard> に渡し忘れがないか確認してください。",
-        );
-      } else {
-        // 🚀 全て完璧な場合、ついに発射！
-        safeDebouncedSyncWish(savedItem, savedItem.sharedRoomId);
-      }
+    if (savedItem.sharedRoomId && typeof safeDebouncedSyncWish === "function") {
+      safeDebouncedSyncWish(savedItem, savedItem.sharedRoomId);
     }
 
     resetWishForm();

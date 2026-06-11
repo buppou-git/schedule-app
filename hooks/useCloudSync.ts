@@ -1,7 +1,7 @@
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, doc, onSnapshot, setDoc } from "firebase/firestore";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, AppState } from "react-native";
+import { AppState } from "react-native";
 import { auth, db } from "../firebaseConfig";
 import { ScheduleItem } from "../types";
 
@@ -225,24 +225,13 @@ export function useCloudSync(sharedRooms: { [layerName: string]: string }) {
 
   // 共有目標の送信ロジック
   const handleSaveWish = async (wish: SharedWishItem, roomId: string) => {
-    try {
-      const wishesRef = collection(db, "rooms", roomId, "wishes");
-      const docRef = doc(wishesRef, String(wish.id));
-      await setDoc(
-        docRef,
-        { ...wish, updatedAt: new Date().toISOString() },
-        { merge: true },
-      );
-      // 🌟 追加：本当にFirebaseに保存できたらアラートを出す
-      Alert.alert("送信成功🚀", "Firebaseに夢リストが保存されました！");
-    } catch (e: any) {
-      console.error("共有目標保存エラー:", e);
-      // 🚨 追加：Firebase側で弾かれた場合、その理由を画面に出す
-      Alert.alert(
-        "Firebaseエラー🔥",
-        "保存に失敗しました。\n詳細: " + e.message,
-      );
-    }
+    const wishesRef = collection(db, "rooms", roomId, "wishes");
+    const docRef = doc(wishesRef, String(wish.id));
+    await setDoc(
+      docRef,
+      { ...wish, updatedAt: new Date().toISOString() },
+      { merge: true },
+    );
   };
 
   const safeDebouncedSyncWish = useCallback(
