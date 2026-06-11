@@ -1,7 +1,7 @@
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, doc, onSnapshot, setDoc } from "firebase/firestore";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AppState } from "react-native";
+import { Alert, AppState } from "react-native";
 import { auth, db } from "../firebaseConfig";
 import { ScheduleItem } from "../types";
 
@@ -37,14 +37,12 @@ export function useCloudSync(sharedRooms: { [layerName: string]: string }) {
 
   const [isAuthReady, setIsAuthReady] = useState(false);
 
-
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setIsAuthReady(!!user);
     });
     return () => unsubscribe();
   }, []);
-
 
   const syncQueue = useRef<{
     [id: string]: {
@@ -70,11 +68,13 @@ export function useCloudSync(sharedRooms: { [layerName: string]: string }) {
     if (!isAuthReady) return;
 
     // 🌟 roomId を正規化（空除外・重複除外）
-    const roomIds = [...new Set(
-      Object.values(sharedRooms || {}).filter(
-        (id): id is string => typeof id === "string" && id.trim().length > 0,
+    const roomIds = [
+      ...new Set(
+        Object.values(sharedRooms || {}).filter(
+          (id): id is string => typeof id === "string" && id.trim().length > 0,
+        ),
       ),
-    )];
+    ];
 
     if (roomIds.length === 0) {
       setRoomSchedules({});
@@ -140,7 +140,8 @@ export function useCloudSync(sharedRooms: { [layerName: string]: string }) {
       const unsubTags = onSnapshot(
         collection(db, "rooms", roomId, "tags"),
         (snapshot) => {
-          const tags: { [tagName: string]: { layer: string; color: string } } = {};
+          const tags: { [tagName: string]: { layer: string; color: string } } =
+            {};
 
           snapshot.forEach((docSnap) => {
             tags[docSnap.id] = docSnap.data() as {
@@ -163,8 +164,6 @@ export function useCloudSync(sharedRooms: { [layerName: string]: string }) {
       unsubscribes.forEach((unsub) => unsub());
     };
   }, [sharedRooms, isAuthReady]);
-
-
 
   // ==========================================
   // 2. 送信ロジック（予定 ＆ 目標 ＆ 属性）
@@ -234,26 +233,33 @@ export function useCloudSync(sharedRooms: { [layerName: string]: string }) {
         { ...wish, updatedAt: new Date().toISOString() },
         { merge: true },
       );
-    } catch (e) {
+      // 🌟 追加：本当にFirebaseに保存できたらアラートを出す
+      Alert.alert("送信成功🚀", "Firebaseに夢リストが保存されました！");
+    } catch (e: any) {
       console.error("共有目標保存エラー:", e);
+      // 🚨 追加：Firebase側で弾かれた場合、その理由を画面に出す
+      Alert.alert(
+        "Firebaseエラー🔥",
+        "保存に失敗しました。\n詳細: " + e.message,
+      );
     }
   };
 
   const safeDebouncedSyncWish = useCallback(
     (wish: SharedWishItem, roomId: string) => {
       if (!roomId) return;
-  
+
       const key = `${roomId}:${wish.id}`;
-  
+
       if (wishSyncQueue.current[key]) {
         clearTimeout(wishSyncQueue.current[key].timer);
       }
-  
+
       const timer = setTimeout(() => {
         handleSaveWish(wish, roomId);
         delete wishSyncQueue.current[key];
       }, 1000);
-  
+
       wishSyncQueue.current[key] = { wish, roomId, timer };
     },
     [],
