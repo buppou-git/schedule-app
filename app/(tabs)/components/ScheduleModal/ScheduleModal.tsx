@@ -64,7 +64,11 @@ interface ScheduleModalProps {
   setHasUnsavedChanges: (val: boolean) => void;
   sharedRooms?: { [layerName: string]: string };
   safeDebouncedSync?: (item: ScheduleItem, date: string) => void;
-  safeDebouncedSyncTag?: (tagName: string, tagData: any, roomId: string) => void;
+  safeDebouncedSyncTag?: (
+    tagName: string,
+    tagData: any,
+    roomId: string,
+  ) => void;
   setDebugMessage?: (msg: string) => void;
 }
 
@@ -616,7 +620,7 @@ const ScheduleModal = ({
         // 👇 🌟 追加：送信用のデータを切り出す
         const newTagData = {
           layer: selectedLayer,
-          color: existingTag ? existingTag.color : (newTagColor || uiThemeColor)
+          color: existingTag ? existingTag.color : newTagColor || uiThemeColor,
         };
 
         if (existingTag) {
@@ -731,7 +735,7 @@ const ScheduleModal = ({
           if (customTime > new Date()) {
             const id = await scheduleItemNotification(
               notifTitle, // 1行目
-              `カスタム ${timeString}`, // 2行目（例：カスタム設定 14:00〜）
+              `カスタム通知 ${timeString}`, // 2行目（例：カスタム設定 14:00〜）
               customTime,
             );
             if (id) finalNotificationIds.push(id);
@@ -844,21 +848,21 @@ const ScheduleModal = ({
       const startForExport = formData.isAllDay
         ? formData.startDate
         : new Date(
-          formData.startDate.getFullYear(),
-          formData.startDate.getMonth(),
-          formData.startDate.getDate(),
-          formData.startTime.getHours(),
-          formData.startTime.getMinutes(),
-        );
+            formData.startDate.getFullYear(),
+            formData.startDate.getMonth(),
+            formData.startDate.getDate(),
+            formData.startTime.getHours(),
+            formData.startTime.getMinutes(),
+          );
       const endForExport = formData.isAllDay
         ? formData.endDate
         : new Date(
-          formData.endDate.getFullYear(),
-          formData.endDate.getMonth(),
-          formData.endDate.getDate(),
-          formData.endTime.getHours(),
-          formData.endTime.getMinutes(),
-        );
+            formData.endDate.getFullYear(),
+            formData.endDate.getMonth(),
+            formData.endDate.getDate(),
+            formData.endTime.getHours(),
+            formData.endTime.getMinutes(),
+          );
 
       const targetRoomId = sharedRooms[selectedLayer];
       const isShared = !!targetRoomId;
@@ -882,8 +886,8 @@ const ScheduleModal = ({
 
       const wasShared = selectedItem
         ? (selectedItem.tags || [selectedItem.tag || ""]).some((tag) =>
-          Object.keys(sharedRooms).includes(tag),
-        )
+            Object.keys(sharedRooms).includes(tag),
+          )
         : false;
 
       let hasCloudAction = false;
@@ -955,12 +959,12 @@ const ScheduleModal = ({
                 nextData[d] = nextData[d].map((i) =>
                   i.id === selectedItem.id
                     ? {
-                      ...i,
-                      exceptionDates: [
-                        ...(i.exceptionDates || []),
-                        selectedDate,
-                      ],
-                    }
+                        ...i,
+                        exceptionDates: [
+                          ...(i.exceptionDates || []),
+                          selectedDate,
+                        ],
+                      }
                     : i,
                 );
               }
@@ -1048,7 +1052,7 @@ const ScheduleModal = ({
       if (selectedItem.externalEventId) {
         try {
           await Calendar.deleteEventAsync(selectedItem.externalEventId);
-        } catch (e) { }
+        } catch (e) {}
       }
 
       const wasShared =
@@ -1324,19 +1328,19 @@ const ScheduleModal = ({
 
           {(formData.isAllDay
             ? [
-              { label: "当日の朝(7:00)", value: "morning" },
-              { label: "前日", value: "dayBefore" },
-              { label: "2日前", value: "2daysBefore" },
-              { label: "カスタム", value: "custom" },
-            ]
+                { label: "当日の朝(7:00)", value: "morning" },
+                { label: "前日", value: "dayBefore" },
+                { label: "2日前", value: "2daysBefore" },
+                { label: "カスタム", value: "custom" },
+              ]
             : [
-              { label: "ちょうど", value: "exact" },
-              { label: "10分前", value: "10min" },
-              { label: "30分前", value: "30min" },
-              { label: "1時間前", value: "1hour" },
-              { label: "当日の朝", value: "morning" },
-              { label: "カスタム", value: "custom" },
-            ]
+                { label: "ちょうど", value: "exact" },
+                { label: "10分前", value: "10min" },
+                { label: "30分前", value: "30min" },
+                { label: "1時間前", value: "1hour" },
+                { label: "当日の朝", value: "morning" },
+                { label: "カスタム", value: "custom" },
+              ]
           ).map((opt) => {
             const isSelected = selectedReminders.includes(opt.value);
             return (

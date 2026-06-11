@@ -73,7 +73,11 @@ export const useNotificationManager = () => {
   };
 
   // 毎日決まった時間に通知をセットする関数
-  const scheduleDailyNotification = async (time: Date) => {
+  // 🌟 追加：引数に scheduleCount を追加
+  const scheduleDailyNotification = async (
+    time: Date,
+    scheduleCount: number = 0,
+  ) => {
     const hasPermission = await requestPermissionsAsync();
     if (!hasPermission) return false;
 
@@ -81,16 +85,22 @@ export const useNotificationManager = () => {
 
     // 🌟 型定義を修正：type: 'daily' を明示
     const trigger: Notifications.DailyTriggerInput = {
-      type: Notifications.SchedulableTriggerInputTypes.DAILY, // ここがポイント！
+      type: Notifications.SchedulableTriggerInputTypes.DAILY,
       hour: time.getHours(),
       minute: time.getMinutes(),
       channelId: "default",
     };
 
+    // 🌟 追加：件数に応じてメッセージを動的に変える
+    const messageBody =
+      scheduleCount > 0
+        ? `本日は ${scheduleCount} 件の予定があります。アプリで詳細を確認しましょう！`
+        : "本日は特に予定がありません。良い一日を！";
+
     await Notifications.scheduleNotificationAsync({
       content: {
         title: "今日の予定を確認しよう！",
-        body: "アプリを開いて、今日のタスクとお金をチェックしましょう!",
+        body: messageBody, // 🌟 動的メッセージをセット
         sound: true,
       },
       trigger,

@@ -1276,6 +1276,43 @@ function IndexContent() {
     tagMaster,
   );
 
+  const { isNotificationEnabled, notificationTime, scheduleDailyNotification } =
+    useNotificationManager();
+
+  // 🌟 魔法の追加処理：データが変わるたびに「明日の通知内容」を自動アップデートする！
+  useEffect(() => {
+    if (!isNotificationEnabled) return;
+
+    const updateNotification = async () => {
+      // 1. 「今日の朝」か「明日の朝」に鳴らすために、直近の通知日を計算
+      const now = new Date();
+      const targetDate = new Date();
+      targetDate.setHours(
+        notificationTime.getHours(),
+        notificationTime.getMinutes(),
+        0,
+        0,
+      );
+
+      // すでに今日の通知時間が過ぎていれば「明日」の分を計算する
+      if (now > targetDate) {
+        targetDate.setDate(targetDate.getDate() + 1);
+      }
+
+      // 2. その日（ターゲット日）の文字列（YYYY-MM-DD）を作る
+      const targetDateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, "0")}-${String(targetDate.getDate()).padStart(2, "0")}`;
+
+      // 3. その日の「予定（isEvent = true）」の件数を数える
+      const targetDayItems = expandedScheduleData[targetDateStr] || [];
+      const eventCount = targetDayItems.filter((item) => item.isEvent).length;
+
+      // 4. 最新の件数を持たせて通知をセットし直す（裏側で静かに上書きされる）
+      await scheduleDailyNotification(notificationTime, eventCount);
+    };
+
+    updateNotification();
+  }, [scheduleData, isNotificationEnabled, notificationTime]); // 予定データや通知設定が変わるたびに走る
+
   // 🌟 追加：他のデータプロセッサーのフィルターをすり抜けて、予定欄の先頭に祝日を強制結合する
   const finalDayEvents = useMemo(() => {
     if (currentHoliday) {
