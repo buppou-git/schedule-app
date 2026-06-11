@@ -4,7 +4,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Calendar from "expo-calendar";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
-import React, { useCallback, useRef, useState } from "react"; // 🌟 useRef を追加！
+import React, { useCallback, useEffect, useRef, useState } from "react"; // 🌟 useRef を追加！
 import {
   Alert,
   Platform,
@@ -47,8 +47,13 @@ export const SyncAndBackupSection = React.memo(
 
     // 🌟 追加：一時的に画面の表示だけを変えるための仮ステート
     const [tempTime, setTempTime] = useState<Date>(notificationTime);
-    // 🌟 修正：タイマーの型を、動いている環境に自動で合わせる最強の型指定！
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // 🌟 修正1：本体(notificationTime)がロード/変更されたら、画面表示(tempTime)も同期させる！
+    // これにより、タスクキル後に古い初期値（朝7時など）に戻ってしまうのを防ぎます。
+    useEffect(() => {
+      setTempTime(notificationTime);
+    }, [notificationTime]);
 
     // 🌟 通知ON/OFF
     const handleToggleSwitch = useCallback(
@@ -80,7 +85,7 @@ export const SyncAndBackupSection = React.memo(
             clearTimeout(saveTimerRef.current);
           }
 
-          // 3. 指を止めてから 1秒後 に初めて通知を保存・セットする（これで過去時間による誤爆を完全に防ぐ！）
+          // 3. 指を止めてから 1秒後 に初めて通知を保存・セットする
           saveTimerRef.current = setTimeout(async () => {
             if (isNotificationEnabled) {
               await scheduleDailyNotification(exactTime);
@@ -88,9 +93,10 @@ export const SyncAndBackupSection = React.memo(
           }, 1000);
         }
       },
-      [scheduleDailyNotification, isNotificationEnabled],
+      [scheduleDailyNotification, isNotificationEnabled], // 🌟 依存配列に isNotificationEnabled を明記
     );
 
+    // ... (これ以降のカレンダー同期、CSVエクスポート等の関数はそのまま) ...
     // 🌟 カレンダー同期ON/OFF
     const handleCalendarSyncToggle = useCallback(
       async (value: boolean) => {
