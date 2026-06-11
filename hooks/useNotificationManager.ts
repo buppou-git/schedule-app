@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import { useEffect, useState } from "react";
-import { Alert, Platform } from "react-native"; // 🌟 Platform を追加！
+import { Alert, Platform } from "react-native";
 
 // アプリを開いている最中（フォアグラウンド）に通知が来た時の振る舞い
 Notifications.setNotificationHandler({
@@ -44,8 +44,6 @@ export const useNotificationManager = () => {
       return false;
     }
 
-    // 🌟 追加：Android向け「通知の通り道（チャンネル）」の作成
-    // これがないとAndroidは通知をブロックしてしまいます！
     if (Platform.OS === "android") {
       await Notifications.setNotificationChannelAsync("default", {
         name: "default",
@@ -79,26 +77,25 @@ export const useNotificationManager = () => {
     const hasPermission = await requestPermissionsAsync();
     if (!hasPermission) return false;
 
-    // バグ（通知が何個も鳴る）を防ぐため、一旦古い通知予約を全部キャンセルする
     await Notifications.cancelAllScheduledNotificationsAsync();
 
-    // 新しい通知をセット
+    // 🌟 型定義を修正：type: 'daily' を明示
+    const trigger: Notifications.DailyTriggerInput = {
+      type: Notifications.SchedulableTriggerInputTypes.DAILY, // ここがポイント！
+      hour: time.getHours(),
+      minute: time.getMinutes(),
+      channelId: "default",
+    };
+
     await Notifications.scheduleNotificationAsync({
       content: {
         title: "今日の予定を確認しよう！",
         body: "アプリを開いて、今日のタスクとお金をチェックしましょう!",
         sound: true,
       },
-      // 🌟 追加：通知の「通り道（channelId）」を指定してあげる
-      trigger: {
-        channelId: "default",
-        hour: time.getHours(),
-        minute: time.getMinutes(),
-        repeats: true,
-      } as Notifications.NotificationTriggerInput,
+      trigger,
     });
 
-    // 設定を保存
     setIsNotificationEnabled(true);
     setNotificationTime(time);
     await AsyncStorage.setItem("isNotificationEnabled", "true");
@@ -107,32 +104,38 @@ export const useNotificationManager = () => {
     return true;
   };
 
-  // 🌟 修正：引数に body（2行目のメッセージ）を追加！
-  const scheduleItemNotification = async (title: string, body: string, triggerDate: Date) => {
+  // 個別の予定の通知をセットする関数
+  const scheduleItemNotification = async (
+    title: string,
+    body: string,
+    triggerDate: Date,
+  ) => {
     const hasPermission = await requestPermissionsAsync();
     if (!hasPermission) return null;
 
-    // 1分前ズレ解消ロジック
     const exactTriggerDate = new Date(triggerDate);
     exactTriggerDate.setSeconds(0, 0);
-
     if (exactTriggerDate.getTime() <= Date.now()) return null;
+
+    // 🌟 型定義を修正：type: 'date' を明示
+    const trigger: Notifications.DateTriggerInput = {
+      type: Notifications.SchedulableTriggerInputTypes.DATE, // ここがポイント！
+      date: exactTriggerDate,
+      channelId: "default",
+    };
 
     const id = await Notifications.scheduleNotificationAsync({
       content: {
-        title: title, // 🌟 1行目：予定のタイトル（⏰ ゼミ など）
-        body: body,   // 🌟 2行目：状況＋時間（30分前 14:00〜 など）
+        title: title,
+        body: body,
         sound: true,
       },
-      trigger: {
-        date: exactTriggerDate,
-        channelId: "default",
-      } as Notifications.NotificationTriggerInput,
+      trigger,
     });
     return id;
   };
 
-  // 🌟 ここから追加！：個別の予定の通知をキャンセルする関数
+  // 個別の予定の通知をキャンセルする関数
   const cancelItemNotification = async (notificationId: string) => {
     if (notificationId) {
       await Notifications.cancelScheduledNotificationAsync(notificationId);
