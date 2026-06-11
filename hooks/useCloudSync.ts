@@ -163,7 +163,7 @@ export function useCloudSync(sharedRooms: { [layerName: string]: string }) {
     return () => {
       unsubscribes.forEach((unsub) => unsub());
     };
-  }, [sharedRooms, isAuthReady]);
+  }, [JSON.stringify(sharedRooms), isAuthReady]);
 
   // ==========================================
   // 2. 送信ロジック（予定 ＆ 目標 ＆ 属性）

@@ -352,12 +352,17 @@ export default function BudgetDashboard({
         const prevSurplus = prevBaseIncome - prevExpense;
 
         if (prevSurplus > 0) {
+          currentUnallocated += prevSurplus; // 黒字なら貯金に追加
+        } else if (prevSurplus < 0) {
+          // 🌟 魔法の追加①：先月が赤字だった場合、自動的に一般貯金から引いて補填（清算）する！
           currentUnallocated += prevSurplus;
-          await AsyncStorage.setItem(
-            "unallocatedSavingsData",
-            currentUnallocated.toString(),
-          );
+          if (currentUnallocated < 0) currentUnallocated = 0; // 貯金が0未満にはならないようにガード
         }
+
+        await AsyncStorage.setItem(
+          "unallocatedSavingsData",
+          currentUnallocated.toString(),
+        );
 
         let hasAutoDeposits = false;
         let autoDepositTotal = 0;
@@ -507,15 +512,30 @@ export default function BudgetDashboard({
 
   const baseIncome =
     cycleStats.tIncome > 0 ? cycleStats.tIncome : monthlyBudget;
-  const isGlobalDeficit = cycleStats.tExpense > baseIncome;
-  const currentUsable = baseIncome - cycleStats.tExpense;
+  const currentUsableRaw = baseIncome - cycleStats.tExpense;
+
+  // 🌟 魔法の追加②：今月のお金が足りない(赤字)なら、自動的に一般貯金から補填する！
+  let displayUsable = currentUsableRaw;
+  let displayUnallocated = unallocatedSavings;
+
+  if (currentUsableRaw < 0) {
+    const deficit = Math.abs(currentUsableRaw);
+    if (unallocatedSavings >= deficit) {
+      displayUnallocated = unallocatedSavings - deficit;
+      displayUsable = 0; // 貯金で全額カバー完了！
+    } else {
+      displayUsable = currentUsableRaw + unallocatedSavings; // カバーしきれない分の赤字
+      displayUnallocated = 0; // 貯金はゼロに
+    }
+  }
+
+  const isGlobalDeficit = displayUsable < 0; // 補填しても足りない場合のみ赤字扱い
 
   const totalSweeperAllocation = Object.values(sweeperAllocations).reduce(
     (a, b) => a + b,
     0,
   );
-  const remainingToAllocate = unallocatedSavings - totalSweeperAllocation;
-
+  const remainingToAllocate = displayUnallocated - totalSweeperAllocation; // 🌟 補填後の貯金から分配可能にする
   // 🌟 修正：すでに上の useEffect 側でデータを綺麗に結合しているので、ここでの「二重上書き」をやめる！
   // これにより、入金した瞬間にクラウドの古いデータが被さって反映されないバグが完全に直ります。
   const combinedWishlist = useMemo(() => {
@@ -523,28 +543,25 @@ export default function BudgetDashboard({
   }, [wishlist]);
 
   const augmentedWishlist = useMemo(() => {
-    const isSingleLayerMode = activeTags.length === 1;
-
     return combinedWishlist.map((wish) => {
-      // 🌟 修正①：日別詳細でのキャンセルを反映させるため、基礎値を0にし、カレンダーの履歴を100%正とする
       let dynamicSaved = 0;
 
-      Object.values(displayData).forEach((items) => {
+      // 🌟 魔法の修正①：見えているデータ(displayData)ではなく、全データ(scheduleData)から集計！
+      // これで「過去の月の入金」が無視されるバグが直り、日別詳細でキャンセルした瞬間に確実に減るようになります。
+      Object.values(scheduleData).forEach((items) => {
         items.forEach((item) => {
-          const { parent: itemLayer = "" } = resolveTags(item);
-          const isShared = Object.keys(sharedRooms || {}).includes(itemLayer);
+          const isRelated =
+            item.category === wish.name ||
+            item.tag === wish.name ||
+            item.tags?.includes(wish.name);
 
-          if (isShared && !isSingleLayerMode) return;
-
-          // 🌟 修正①：手動チャージ（貯金）も含めて、関連する支出を「すべて」合算する！
-          // これにより、日別詳細から履歴を消した瞬間に、夢リストの金額も自動で減るようになります。
-          if (item.isExpense) {
-            if (
-              item.category === wish.name ||
-              item.tag === wish.name ||
-              item.tags?.includes(wish.name)
-            ) {
+          if (isRelated) {
+            if (item.isExpense) {
+              // チャージした分を足す
               dynamicSaved += getItemTotalExpense(item);
+            } else if (item.isIncome && item.category === "貯金") {
+              // 戻入（カレンダー上でマイナス処理）した分は引く
+              dynamicSaved -= getItemTotalIncome(item);
             }
           }
         });
@@ -552,7 +569,7 @@ export default function BudgetDashboard({
 
       return { ...wish, dynamicSavedAmount: dynamicSaved };
     });
-  }, [combinedWishlist, displayData, activeTags, sharedRooms]);
+  }, [combinedWishlist, scheduleData]); // 🌟 依存配列も displayData から scheduleData に変更
 
   const activeWishes = augmentedWishlist.filter(
     (w) => w.dynamicSavedAmount < w.targetAmount,
@@ -773,14 +790,43 @@ export default function BudgetDashboard({
   };
 
   const confirmDeleteWish = () => {
-    const msg = "この目標を削除しますか？\n(入金済みの金額は残高に戻ります)";
+    const msg = "この目標を削除しますか？\n(今までチャージした金額は「今月の使えるお金」に戻ります)";
     const deleteLogic = async () => {
-      // 🌟 消す対象の目標を確保しておく
-      const wishToDelete = combinedWishlist.find((w) => w.id === editingWishId);
+      // 🌟 消す対象の目標を確保しておく（augmentedWishlistから探して正確な金額を取得）
+      const wishToDelete = augmentedWishlist.find((w) => w.id === editingWishId);
 
       const newList = wishlist.filter((w) => w.id !== editingWishId);
       setWishlist(newList);
       await AsyncStorage.setItem("wishlistData", JSON.stringify(newList));
+
+      // 🌟 魔法の追加③：夢をキャンセルした時、貯めていたお金を「今月の収入」として戻入する！
+      let scheduleUpdated = false;
+      const newScheduleData = { ...scheduleData };
+      if (wishToDelete && wishToDelete.dynamicSavedAmount > 0) {
+        const targetLayer = currentActiveLayer || "共通";
+        const refundItem: ScheduleItem = {
+          id: Date.now().toString() + Math.random().toString(),
+          category: "収入",
+          tag: "目標からの戻入",
+          layer: targetLayer,
+          tags: [targetLayer, "目標からの戻入"],
+          title: `「${wishToDelete.name}」のキャンセル戻入`,
+          amount: wishToDelete.dynamicSavedAmount,
+          color: "#34C759", // 収入カラー（緑）
+          isDone: true,
+          isEvent: false,
+          isTodo: false,
+          isExpense: false,
+          isIncome: true,
+        };
+        newScheduleData[todayStr] = [...(newScheduleData[todayStr] || []), refundItem];
+        scheduleUpdated = true;
+      }
+
+      if (scheduleUpdated) {
+        setScheduleData(newScheduleData);
+        await AsyncStorage.setItem("scheduleData", JSON.stringify(newScheduleData));
+      }
       setTimeout(() => setHasUnsavedChanges(true), 100);
 
       if (wishToDelete?.sharedRoomId) {
@@ -843,7 +889,7 @@ export default function BudgetDashboard({
       return;
     }
 
-    if (amount > currentUsable && amount > 0) {
+    if (amount > displayUsable && amount > 0) {
       if (Platform.OS === "web") {
         if (window.confirm("今使える金額を超えていますが、入金しますか？")) {
           processDeposit(amount);
@@ -862,10 +908,9 @@ export default function BudgetDashboard({
   const processDeposit = async (amount: number) => {
     if (!selectedWish) return;
 
-    // 🌟 修正②：目標金額をオーバーしないように入金額をキャップ（制限）する
     const remainingAmount = selectedWish.targetAmount - selectedWish.dynamicSavedAmount;
 
-    // プラスの入金の場合、残り必要額を上限とする（あふれた分は使えるお金にそのまま残る）
+    // プラス入金時、残り必要額でカット（あふれた分は引かれない＝お財布に残る）
     const actualDeposit = amount > 0 ? Math.min(amount, remainingAmount) : amount;
 
     if (actualDeposit === 0 && amount > 0) {
@@ -874,15 +919,15 @@ export default function BudgetDashboard({
       return;
     }
 
-    // 🌟 追加：余剰分が発生した場合にアラートで優しくお知らせする！
+    // 🌟 修正②：余剰分の確認アラート（ご希望のシンプルなメッセージ）
     if (amount > remainingAmount && amount > 0) {
       const excess = amount - remainingAmount;
-      const msg = `目標金額を ¥${excess.toLocaleString()} オーバーしたため、余剰分はお財布（使えるお金）に戻しました！\n\n残りぴったりの ¥${actualDeposit.toLocaleString()} をチャージします。`;
+      const msg = `¥${excess.toLocaleString()} 余剰だったので、お財布（使えるお金）に戻しました！\n\n残り必要な ¥${actualDeposit.toLocaleString()} のみをチャージします。`;
 
       if (Platform.OS === "web") {
         window.alert(msg);
       } else {
-        Alert.alert("金額の自動補正 💰", msg);
+        Alert.alert("入金額の調整", msg);
       }
     }
 
@@ -1416,11 +1461,11 @@ export default function BudgetDashboard({
                   style={[
                     styles.savingsAmount,
                     {
-                      color: currentUsable >= 0 ? "#1C1C1E" : "#FF3B30",
+                      color: displayUsable >= 0 ? "#1C1C1E" : "#FF3B30",
                       fontSize:
                         (isSavingsHidden
                           ? 4
-                          : currentUsable.toLocaleString().length) > 9
+                          : displayUsable.toLocaleString().length) > 9 // 🌟 displayUsable に修正！
                           ? 18
                           : 26,
                     },
@@ -1428,7 +1473,7 @@ export default function BudgetDashboard({
                   numberOfLines={1}
                   adjustsFontSizeToFit={true}
                 >
-                  ¥{isSavingsHidden ? "****" : currentUsable.toLocaleString()}
+                  ¥{isSavingsHidden ? "****" : displayUsable.toLocaleString()}
                 </Text>
                 <TouchableOpacity
                   onPress={toggleSavingsVisibility}
@@ -1495,7 +1540,7 @@ export default function BudgetDashboard({
                 <Text style={styles.addWishText}>目標を追加</Text>
               </TouchableOpacity>
 
-              {unallocatedSavings > 0 && (
+              {displayUnallocated > 0 && (
                 <TouchableOpacity
                   style={styles.sweeperPod}
                   onPress={() => {
@@ -1883,7 +1928,7 @@ export default function BudgetDashboard({
                           color="#FF3B30"
                         />
                         <Text style={styles.warningText}>
-                          赤字: ¥{Math.abs(currentUsable).toLocaleString()}
+                          赤字: ¥{Math.abs(displayUsable).toLocaleString()}
                         </Text>
                       </View>
                     ) : (
@@ -1894,7 +1939,7 @@ export default function BudgetDashboard({
                           fontWeight: "bold",
                         }}
                       >
-                        残り枠: ¥{currentUsable.toLocaleString()}
+                        残り枠: ¥{displayUsable.toLocaleString()}
                       </Text>
                     )}
                   </View>
