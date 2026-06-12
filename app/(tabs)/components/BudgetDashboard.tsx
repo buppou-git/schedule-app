@@ -831,7 +831,15 @@ export default function BudgetDashboard({
       let scheduleUpdated = false;
       const newScheduleData = { ...scheduleData };
       if (wishToDelete && wishToDelete.dynamicSavedAmount > 0) {
-        const targetLayer = currentActiveLayer || "共通";
+        // 🌟 魔法の修正①：共有の夢リストのキャンセルなら、返金データも「共有レイヤー」に所属させる！
+        let targetLayer = currentActiveLayer || "共通";
+        if (wishToDelete.sharedRoomId && sharedRooms) {
+          const roomName = Object.keys(sharedRooms).find(
+            (key) => sharedRooms[key] === wishToDelete.sharedRoomId,
+          );
+          if (roomName) targetLayer = roomName;
+        }
+
         const refundItem: ScheduleItem = {
           id: Date.now().toString() + Math.random().toString(),
           category: "収入",
@@ -986,8 +994,15 @@ export default function BudgetDashboard({
     setWishlist(updatedWishlist);
     await AsyncStorage.setItem("wishlistData", JSON.stringify(updatedWishlist));
 
-    // 🌟 追加：現在開いているレイヤー（家計簿など）を取得
-    const targetLayer = currentActiveLayer || "共通";
+    // 🌟 魔法の修正②：共有の夢リストへの入金なら、確実にお金の移動データも「共有レイヤー」に書き込む！
+    // こうすることでindex.tsxの自動監視が反応し、相手に即座に送信されます。
+    let targetLayer = currentActiveLayer || "共通";
+    if (selectedWish.sharedRoomId && sharedRooms) {
+      const roomName = Object.keys(sharedRooms).find(
+        (key) => sharedRooms[key] === selectedWish.sharedRoomId,
+      );
+      if (roomName) targetLayer = roomName;
+    }
 
     const newItem: ScheduleItem = {
       id: Date.now().toString(),
@@ -1026,8 +1041,14 @@ export default function BudgetDashboard({
   const executeCompleteWish = async () => {
     if (!selectedWish) return;
 
-    // 🌟 追加：現在開いているレイヤーを取得
-    const targetLayer = currentActiveLayer || "共通";
+    // 🌟 魔法の修正③：達成時のToDoデータも「共有レイヤー」に所属させる
+    let targetLayer = currentActiveLayer || "共通";
+    if (selectedWish.sharedRoomId && sharedRooms) {
+      const roomName = Object.keys(sharedRooms).find(
+        (key) => sharedRooms[key] === selectedWish.sharedRoomId,
+      );
+      if (roomName) targetLayer = roomName;
+    }
 
     const newItem: ScheduleItem = {
       id: Date.now().toString(),
@@ -1124,9 +1145,14 @@ export default function BudgetDashboard({
             return w;
           });
 
-          // 🌟 修正①：スウィーパーのチャージもカレンダー履歴に残す！
-          // これで日別詳細から分配をキャンセルできるようになります
-          const targetLayer = currentActiveLayer || "共通"; // 🌟 追加
+          // 🌟 魔法の修正④：残金分配のデータも「共有レイヤー」に所属させる！
+          let targetLayer = currentActiveLayer || "共通";
+          if (currentWish?.sharedRoomId && sharedRooms) {
+            const roomName = Object.keys(sharedRooms).find(
+              (key) => sharedRooms[key] === currentWish.sharedRoomId,
+            );
+            if (roomName) targetLayer = roomName;
+          }
 
           const newItem: ScheduleItem = {
             id: Date.now().toString() + Math.random().toString(),
