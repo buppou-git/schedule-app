@@ -6,6 +6,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Dimensions,
+  Keyboard,
   Modal,
   Platform,
   ScrollView,
@@ -838,7 +839,8 @@ export default function BudgetDashboard({
       let scheduleUpdated = false;
       const newScheduleData = { ...scheduleData };
       if (wishToDelete && wishToDelete.dynamicSavedAmount > 0) {
-        const targetLayer = currentActiveLayer || "共通";
+        // 🌟 修正①：キャンセルの返金は必ず「個人の財布」に戻す
+        const targetLayer = "共通";
 
         const refundItem: ScheduleItem = {
           id: Date.now().toString() + Math.random().toString(),
@@ -994,7 +996,8 @@ export default function BudgetDashboard({
     setWishlist(updatedWishlist);
     await AsyncStorage.setItem("wishlistData", JSON.stringify(updatedWishlist));
 
-    const targetLayer = currentActiveLayer || "共通";
+    // 🌟 修正②：チャージは必ず「個人の財布」から引く（相手に履歴を送らないため削除も防げる）
+    const targetLayer = "共通";
 
     const newItem: ScheduleItem = {
       id: Date.now().toString(),
@@ -1130,7 +1133,8 @@ export default function BudgetDashboard({
             return w;
           });
 
-          const targetLayer = currentActiveLayer || "共通";
+          // 🌟 修正③：残金分配も必ず「個人の財布」から移動する
+          const targetLayer = "共通";
 
           const newItem: ScheduleItem = {
             id: Date.now().toString() + Math.random().toString(),
@@ -2517,9 +2521,10 @@ export default function BudgetDashboard({
         <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
-          onPress={() => setAddSubTagModalVisible(false)}
+          onPress={() => setIsAddWishModalVisible(false)}
         >
-          <TouchableWithoutFeedback>
+          {/* 🌟 修正④：枠外タップでキーボードを閉じる */}
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <View style={styles.editCardModal}>
               <Text style={styles.editTitle}>
                 [{targetLayerForSubTag}] に追加
