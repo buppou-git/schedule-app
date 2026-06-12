@@ -441,7 +441,9 @@ export default function DailyExpense({
                 const { parent, sub } = resolveTags(i);
 
                 // 🌟 追加：特定のレイヤーを指定している時以外（全体表示）は、レイヤー（メインカテゴリ）の色を使用する
-                const displayColor = isSingleLayerMode ? (tagMaster[sub]?.color || i.color) : (layerMaster[parent] || i.color);
+                const displayColor = isSingleLayerMode
+                  ? tagMaster[sub]?.color || i.color
+                  : layerMaster[parent] || i.color;
                 const textColor = isSingleLayerMode ? themeColor : displayColor;
 
                 // 🌟 修正①：表示する文字をモードによって綺麗に切り替える！
@@ -451,22 +453,47 @@ export default function DailyExpense({
                   <TouchableOpacity
                     key={i.id}
                     // 🌟 対象外の時は行全体を少し薄くする
-                    style={[styles.dailyItemRow, isCrossedOut && { opacity: 0.5 }]}
+                    style={[
+                      styles.dailyItemRow,
+                      isCrossedOut && { opacity: 0.5 },
+                    ]}
                     onPress={() => handleOpenEdit(i, selectedDate)}
                   >
                     <View style={styles.dailyItemInfo}>
                       {/* 🌟 i.color ではなく displayColor を適用 */}
-                      <View style={[styles.dailyItemDot, { backgroundColor: isIncome ? "#8E8E93" : (i.externalEventId ? "#FF2D55" : displayColor) }]} />
+                      <View
+                        style={[
+                          styles.dailyItemDot,
+                          {
+                            backgroundColor: isIncome
+                              ? "#8E8E93"
+                              : i.externalEventId
+                                ? "#FF2D55"
+                                : displayColor,
+                          },
+                        ]}
+                      />
                       <View style={{ flex: 1 }}>
                         {/* 🌟 修正②：paddingRight を入れて右の金額との距離を確保する */}
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingRight: 8 }}>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 6,
+                            paddingRight: 8,
+                          }}
+                        >
                           {/* 🌟 修正②：flexShrink: 1 を入れてバッジのはみ出しを完全ブロック！ */}
                           <Text
                             style={{
                               fontWeight: "bold",
                               fontSize: 11,
-                              color: isIncome ? "#8E8E93" : (i.externalEventId ? "#FF2D55" : textColor),
-                              flexShrink: 1
+                              color: isIncome
+                                ? "#8E8E93"
+                                : i.externalEventId
+                                  ? "#FF2D55"
+                                  : textColor,
+                              flexShrink: 1,
                             }}
                             numberOfLines={1}
                           >
@@ -546,11 +573,11 @@ export default function DailyExpense({
                 quickMainTags[l] || quickMainTags["ALL_LAYERS"] || [];
               const sTags = isAll
                 ? Object.keys(tagMaster).filter(
-                  (t) => tagMaster[t].layer === "共通",
-                )
+                    (t) => tagMaster[t].layer === "共通",
+                  )
                 : Object.keys(tagMaster).filter(
-                  (t) => tagMaster[t].layer === l,
-                );
+                    (t) => tagMaster[t].layer === l,
+                  );
 
               return (
                 <View
@@ -809,7 +836,72 @@ export default function DailyExpense({
                     setHasUnsavedChanges(true);
                     setEditModalVisible(false);
 
-                    // 🌟 追加：Firebase(クラウド)からの完全削除ロジック
+                    // ========================================================
+                    // 🌟 魔法の割り込み処理：夢リストへのチャージを消したら、メーターも巻き戻す！
+                    // ========================================================
+                    if (itemToDelete.category === "貯金") {
+                      const wishName = itemToDelete.tag;
+                      const amountToRefund = itemToDelete.amount;
+
+                      // 1. ローカルの夢リストの貯金額(savedAmount)を減らす
+                      const wData = await AsyncStorage.getItem("wishlistData");
+                      let currentWishlist = wData ? JSON.parse(wData) : [];
+
+                      currentWishlist = currentWishlist.map((wish: any) => {
+                        if (wish.name === wishName) {
+                          return {
+                            ...wish,
+                            savedAmount: Math.max(
+                              0,
+                              wish.savedAmount - amountToRefund,
+                            ),
+                          };
+                        }
+                        return wish;
+                      });
+
+                      // 2. Zustand(ストア)が無い画面なので、とりあえずStorageに直接保存
+                      // ※次にBudgetDashboardが開いた時にuseEffectで自動的に読み込まれます
+                      await AsyncStorage.setItem(
+                        "wishlistData",
+                        JSON.stringify(currentWishlist),
+                      );
+
+                      // 3. 共有の目標なら、Firebase側にも「減算後の最新のwish」を同期させる
+                      const targetWish = currentWishlist.find(
+                        (wish: any) => wish.name === wishName,
+                      );
+                      // 💡 DailyExpenseには safeDebouncedSyncWish が渡ってきていないので、直接Firestoreを叩いて更新します
+                      if (
+                        targetWish &&
+                        targetWish.sharedRoomId &&
+                        sharedRooms
+                      ) {
+                        try {
+                          const { setDoc, doc } =
+                            await import("firebase/firestore");
+                          const { db } =
+                            await import("../../../firebaseConfig");
+                          await setDoc(
+                            doc(
+                              db,
+                              "rooms",
+                              targetWish.sharedRoomId,
+                              "wishes",
+                              targetWish.id,
+                            ),
+                            targetWish,
+                            { merge: true }, // 🌟 差分だけを安全に更新
+                          );
+                        } catch (e) {
+                          console.error("Firebaseの夢リスト巻き戻しエラー:", e);
+                        }
+                      }
+                    }
+
+                    // ========================================================
+                    // 🌟 追加：Firebase(クラウド)からの完全削除ロジック (既存)
+                    // ========================================================
                     if (sharedRooms) {
                       const itemTags =
                         itemToDelete.tags ||
