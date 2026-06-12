@@ -60,21 +60,19 @@ export default function HistoryAnalytics({
     const loadData = async () => {
       // 貯金額の読み込み
       const u = await AsyncStorage.getItem("unallocatedSavingsData");
-      const w = await AsyncStorage.getItem("wishlistData");
       const unallocated = u ? parseInt(u) : 0;
-      const wishlist: WishItem[] = w ? JSON.parse(w) : [];
-      const wishReserved = wishlist.reduce(
-        (sum, item) => sum + (item.savedAmount || 0),
-        0,
-      );
-      setTotalSavings(unallocated + wishReserved);
+
+      // 🌟 魔法の修正：夢リストに入金した金額（wishReserved）を資産に含めない！
+      // これにより、夢リストにチャージした瞬間は資産が変動せず、
+      // 月末に「全額貯金」で未配分プール（unallocated）に入った時にだけ資産が増えるようになります。
+      setTotalSavings(unallocated);
 
       // 支出カテゴリ（クイックタグ）の読み込み
       const q = await AsyncStorage.getItem("quickMainTagsData");
       if (q) setQuickMainTags(JSON.parse(q));
     };
     loadData();
-  }, []);
+  }, []); // 🌟 カレンダーの履歴変更には影響されないため空配列でOK
 
   const periodLabel = useMemo(() => {
     const y = referenceDate.getFullYear();
