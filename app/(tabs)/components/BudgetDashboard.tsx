@@ -790,10 +790,13 @@ export default function BudgetDashboard({
   };
 
   const confirmDeleteWish = () => {
-    const msg = "この目標を削除しますか？\n(今までチャージした金額は「今月の使えるお金」に戻ります)";
+    const msg =
+      "この目標を削除しますか？\n(今までチャージした金額は「今月の使えるお金」に戻ります)";
     const deleteLogic = async () => {
       // 🌟 消す対象の目標を確保しておく（augmentedWishlistから探して正確な金額を取得）
-      const wishToDelete = augmentedWishlist.find((w) => w.id === editingWishId);
+      const wishToDelete = augmentedWishlist.find(
+        (w) => w.id === editingWishId,
+      );
 
       const newList = wishlist.filter((w) => w.id !== editingWishId);
       setWishlist(newList);
@@ -819,13 +822,19 @@ export default function BudgetDashboard({
           isExpense: false,
           isIncome: true,
         };
-        newScheduleData[todayStr] = [...(newScheduleData[todayStr] || []), refundItem];
+        newScheduleData[todayStr] = [
+          ...(newScheduleData[todayStr] || []),
+          refundItem,
+        ];
         scheduleUpdated = true;
       }
 
       if (scheduleUpdated) {
         setScheduleData(newScheduleData);
-        await AsyncStorage.setItem("scheduleData", JSON.stringify(newScheduleData));
+        await AsyncStorage.setItem(
+          "scheduleData",
+          JSON.stringify(newScheduleData),
+        );
       }
       setTimeout(() => setHasUnsavedChanges(true), 100);
 
@@ -908,10 +917,12 @@ export default function BudgetDashboard({
   const processDeposit = async (amount: number) => {
     if (!selectedWish) return;
 
-    const remainingAmount = selectedWish.targetAmount - selectedWish.dynamicSavedAmount;
+    const remainingAmount =
+      selectedWish.targetAmount - selectedWish.dynamicSavedAmount;
 
     // プラス入金時、残り必要額でカット（あふれた分は引かれない＝お財布に残る）
-    const actualDeposit = amount > 0 ? Math.min(amount, remainingAmount) : amount;
+    const actualDeposit =
+      amount > 0 ? Math.min(amount, remainingAmount) : amount;
 
     if (actualDeposit === 0 && amount > 0) {
       Alert.alert("確認", "この目標はすでに達成されています🎉");
@@ -961,8 +972,8 @@ export default function BudgetDashboard({
       tags: [targetLayer, selectedWish.name], // 🌟 修正：階層構造を正しく設定
       title:
         actualDeposit >= 0
-          // ...(略)
-          ? `${selectedWish.name}へチャージ`
+          ? // ...(略)
+            `${selectedWish.name}へチャージ`
           : `${selectedWish.name}から戻入`,
       amount: Math.abs(actualDeposit), // 🌟 補正したぴったり金額を支出として記録
       color: selectedWish.color,
@@ -972,7 +983,6 @@ export default function BudgetDashboard({
       isExpense: actualDeposit >= 0,
       isIncome: actualDeposit < 0,
     };
-
 
     const newScheduleData = {
       ...scheduleData,
@@ -1062,7 +1072,10 @@ export default function BudgetDashboard({
         // 🌟 修正②：オーバー分をカットする
         const currentWish = augmentedWishlist.find((w) => w.id === id);
         const dynamicSaved = currentWish ? currentWish.dynamicSavedAmount : 0;
-        const remaining = Math.max(0, (currentWish?.targetAmount || 0) - dynamicSaved);
+        const remaining = Math.max(
+          0,
+          (currentWish?.targetAmount || 0) - dynamicSaved,
+        );
 
         const allowedAmount = Math.min(amount, remaining);
 
@@ -1117,11 +1130,17 @@ export default function BudgetDashboard({
 
     if (hasUpdates) {
       setWishlist(updatedWishlist);
-      await AsyncStorage.setItem("wishlistData", JSON.stringify(updatedWishlist));
+      await AsyncStorage.setItem(
+        "wishlistData",
+        JSON.stringify(updatedWishlist),
+      );
 
       if (scheduleUpdated) {
         setScheduleData(newScheduleData);
-        await AsyncStorage.setItem("scheduleData", JSON.stringify(newScheduleData));
+        await AsyncStorage.setItem(
+          "scheduleData",
+          JSON.stringify(newScheduleData),
+        );
       }
 
       // 🌟 オーバーしてカットされた分は引かずに未配分プールに残す
@@ -1797,9 +1816,9 @@ export default function BudgetDashboard({
                               : key === "外部予定" // 🌟 ここを追加！
                                 ? "#FF2D55"
                                 : layerMaster[key] ||
-                                CHART_PALETTE[index % CHART_PALETTE.length]
+                                  CHART_PALETTE[index % CHART_PALETTE.length]
                             : tagMaster[key]?.color ||
-                            CHART_PALETTE[index % CHART_PALETTE.length],
+                              CHART_PALETTE[index % CHART_PALETTE.length],
                       legendFontColor: "#666",
                       legendFontSize: 11,
                     }))}
@@ -2032,7 +2051,7 @@ export default function BudgetDashboard({
                           style={{ height: 40 }}
                           minimumValue={0}
                           maximumValue={baseIncome}
-                          step={1000}
+                          step={500}
                           value={b}
                           thumbTintColor={color}
                           minimumTrackTintColor="transparent"
