@@ -654,43 +654,8 @@ export default function BudgetDashboard({
   }, [todayStr, payday]);
 
   const executeSalaryRecord = async () => {
+    Keyboard.dismiss(); // 🌟 追加：ボタンを押した瞬間にキーボードを隠す！
     const amount = parseInt(salaryInputAmount);
-    if (isNaN(amount) || amount <= 0)
-      return Alert.alert("エラー", "正しい金額を入力してください");
-
-    const today = new Date();
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-
-    const newItem: ScheduleItem = {
-      id: Date.now().toString(),
-      category: "収入",
-      tag: "給料",
-      tags: ["給料"],
-      title: "給料",
-      amount: amount,
-      isDone: true,
-      color: "#34C759",
-      isEvent: false,
-      isTodo: false,
-      isExpense: false,
-      isIncome: true,
-      startDate: todayStr, // 日別詳細でフィルタリングするキー
-    };
-
-    const newData = {
-      ...scheduleData,
-      [todayStr]: [...(scheduleData[todayStr] || []), newItem],
-    };
-
-    // 🌟 ZustandのStateを更新
-    setScheduleData(newData);
-
-    // 🌟 AsyncStorageに保存（キーを統一）
-    await AsyncStorage.setItem("scheduleData", JSON.stringify(newData));
-
-    setHasUnsavedChanges(true);
-    setIsSalaryModalVisible(false);
-    setSalaryInputAmount("");
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
@@ -716,6 +681,7 @@ export default function BudgetDashboard({
   };
 
   const executeAddWish = async () => {
+    Keyboard.dismiss(); // 🌟 追加：ボタンを押した瞬間にキーボードを隠す！
     const cleanAmountStr = newWishTarget.replace(/[^0-9]/g, "");
     const targetAmount = parseInt(cleanAmountStr, 10);
 
@@ -924,6 +890,7 @@ export default function BudgetDashboard({
 
   // 🌟 追加：目標への入金・戻入の実行処理
   const executeDeposit = async () => {
+    Keyboard.dismiss(); // 🌟 追加：ボタンを押した瞬間にキーボードを隠す！
     const cleanAmountStr = depositAmount.replace(/[^0-9\-]/g, "");
     const amount = parseInt(cleanAmountStr, 10);
 
@@ -1087,6 +1054,7 @@ export default function BudgetDashboard({
   };
 
   const executeSweeper = async () => {
+    Keyboard.dismiss(); // 🌟 追加：ボタンを押した瞬間にキーボードを隠す！
     if (remainingToAllocate < 0) {
       if (Platform.OS === "web")
         window.alert("振り分け金額が未配分プールを超えています");
