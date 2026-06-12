@@ -324,11 +324,14 @@ export default function DailyExpense({
   };
 
   const handleUpdate = async () => {
-    // 🌟 async を追加
     if (!editingItem) return;
     const newAmount = parseInt(editAmount);
     if (isNaN(newAmount) || newAmount <= 0)
       return Alert.alert("エラー", "金額を正しく入力してください");
+
+    // 🌟 追加：変更「前」の金額と、変更「後」の金額の差額を計算する
+    const oldAmount = editingItem.item.amount;
+    const amountDifference = newAmount - oldAmount;
 
     const newData = { ...scheduleData };
     newData[editingItem.date] = newData[editingItem.date].map((i) =>
@@ -339,12 +342,55 @@ export default function DailyExpense({
 
     setEditModalVisible(false);
 
-    // 🌟 Stateを更新し、同時にストレージにも確実に保存する！
+    // Stateを更新し、同時にストレージにも確実に保存する！
     setScheduleData(newData);
     await AsyncStorage.setItem("scheduleData", JSON.stringify(newData));
     setHasUnsavedChanges(true);
 
-    // 🌟 追加：クラウドへの上書き同期
+    // ========================================================
+    // 🌟 魔法の割り込み処理２：夢リストのチャージ金額が「変更」されたら、差額分だけメーターも連動させる！
+    // ========================================================
+    if (editingItem.item.category === "貯金" && amountDifference !== 0) {
+      const wishName = editingItem.item.tag;
+
+      const wData = await AsyncStorage.getItem("wishlistData");
+      let currentWishlist = wData ? JSON.parse(wData) : [];
+
+      currentWishlist = currentWishlist.map((wish: any) => {
+        if (wish.name === wishName) {
+          return {
+            ...wish,
+            // 差額分を足す（もし金額を減らした場合はamountDifferenceがマイナスなので結果的に引かれる）
+            savedAmount: Math.max(0, wish.savedAmount + amountDifference),
+          };
+        }
+        return wish;
+      });
+
+      // Storageに保存（次にBudgetDashboardが開いた時に読み込まれます）
+      await AsyncStorage.setItem(
+        "wishlistData",
+        JSON.stringify(currentWishlist),
+      );
+
+      // 共有の目標なら、Firebase側にも「差額調整後の最新のwish」を同期させる
+      const targetWish = currentWishlist.find((w: any) => w.name === wishName);
+      if (targetWish && targetWish.sharedRoomId && sharedRooms) {
+        try {
+          const { setDoc, doc } = await import("firebase/firestore");
+          const { db } = await import("../../../firebaseConfig");
+          await setDoc(
+            doc(db, "rooms", targetWish.sharedRoomId, "wishes", targetWish.id),
+            targetWish,
+            { merge: true }, // 差分だけを安全に更新
+          );
+        } catch (e) {
+          console.error("Firebaseの夢リスト金額変更エラー:", e);
+        }
+      }
+    }
+
+    // 🌟 追加：クラウドへの上書き同期 (既存)
     const updatedItem = newData[editingItem.date].find(
       (i) => i.id === editingItem.item.id,
     );
