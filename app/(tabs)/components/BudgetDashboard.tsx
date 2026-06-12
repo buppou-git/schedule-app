@@ -335,6 +335,7 @@ export default function BudgetDashboard({
 
         let prevIncome = 0;
         let prevExpense = 0;
+        let prevRefund = 0; // 🌟 追加：戻入金用の専用箱
         const prevDates = getDatesInRange(
           prevCycleRange.start,
           prevCycleRange.end,
@@ -343,13 +344,24 @@ export default function BudgetDashboard({
           (currentSchedule[d] || []).forEach((item) => {
             const e = getItemTotalExpense(item);
             const i = getItemTotalIncome(item);
-            if (i > 0) prevIncome += i;
+            if (i > 0) {
+              // 🌟 修正：戻入と通常の給料（収入）を完全に分ける
+              if (
+                item.category === "目標からの戻入" ||
+                (item.title && item.title.includes("戻入"))
+              ) {
+                prevRefund += i;
+              } else {
+                prevIncome += i;
+              }
+            }
             if (e > 0) prevExpense += e;
           });
         });
         const prevBaseIncome =
           prevIncome > 0 ? prevIncome : loadedMonthlyBudget;
-        const prevSurplus = prevBaseIncome - prevExpense;
+        // 🌟 修正：先月の余りを計算する際は、戻入分(prevRefund)も足して清算する
+        const prevSurplus = prevBaseIncome - prevExpense + prevRefund;
 
         if (prevSurplus > 0) {
           currentUnallocated += prevSurplus; // 黒字なら貯金に追加
@@ -473,6 +485,7 @@ export default function BudgetDashboard({
       const cItems: ScheduleItem[] = [];
       let tIncome = 0;
       let tExpense = 0;
+      let tRefund = 0; // 🌟 追加：戻入金用の専用箱
       const cycleDates = getDatesInRange(cycleRange.start, cycleRange.end);
 
       cycleDates.forEach((date) => {
@@ -490,7 +503,17 @@ export default function BudgetDashboard({
 
           if (isShared && !isSingleLayerMode) return;
 
-          if (iTotal > 0) tIncome += iTotal;
+          if (iTotal > 0) {
+            // 🌟 修正：戻入の場合はベース収入(tIncome)から除外する！
+            if (
+              item.category === "目標からの戻入" ||
+              (item.title && item.title.includes("戻入"))
+            ) {
+              tRefund += iTotal;
+            } else {
+              tIncome += iTotal;
+            }
+          }
           if (eTotal > 0) {
             const { parent: itemLayer = "", sub: itemTag = "" } =
               resolveTags(item);
@@ -505,14 +528,16 @@ export default function BudgetDashboard({
       return {
         layerActuals: lActuals,
         subTagActuals: sActuals,
-        cycleStats: { tIncome, tExpense },
+        cycleStats: { tIncome, tExpense, tRefund }, // 🌟 修正：tRefundを追加
         cycleItems: cItems,
       };
     }, [displayData, cycleRange, activeTags, sharedRooms, tagMaster]);
 
   const baseIncome =
     cycleStats.tIncome > 0 ? cycleStats.tIncome : monthlyBudget;
-  const currentUsableRaw = baseIncome - cycleStats.tExpense;
+  // 🌟 魔法の修正：ベース収入（予想貯金）には影響を与えず、純粋に「現在の使えるお金」だけを回復させる
+  const currentUsableRaw =
+    baseIncome - cycleStats.tExpense + (cycleStats.tRefund || 0);
 
   // 🌟 魔法の追加②：今月のお金が足りない(赤字)なら、自動的に一般貯金から補填する！
   let displayUsable = currentUsableRaw;
