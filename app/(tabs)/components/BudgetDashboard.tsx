@@ -569,12 +569,40 @@ export default function BudgetDashboard({
   }, [wishlist]);
 
   const augmentedWishlist = useMemo(() => {
+    const isSingleLayerMode = activeTags.length === 1;
+
     return combinedWishlist.map((wish) => {
-      // 🌟 魔法の修正：複雑な履歴計算を全廃し、クラウドで共有されている最新の「貯金額(savedAmount)」をそのまま使う！
-      // これにより、入金した瞬間に確実にお互いの画面でメーターが同じ額だけ伸びます。
-      return { ...wish, dynamicSavedAmount: wish.savedAmount || 0 };
+      // 🌟 魔法の修正：まずは「クラウドで同期されている目標の金額」をベースにする！
+      // これでチャージした瞬間、AさんにもBさんにも即座にメーターが反映されます。
+      let dynamicSaved = wish.savedAmount;
+
+      // 🌟 その上で、目標に関連する「普通のお買い物（チャージ以外の支出）」だけを合算する
+      Object.values(displayData).forEach((items) => {
+        items.forEach((item) => {
+          const { parent: itemLayer = "" } = resolveTags(item);
+          const isShared = Object.keys(sharedRooms || {}).includes(itemLayer);
+
+          if (isShared && !isSingleLayerMode) return;
+
+          if (
+            item.isExpense &&
+            item.category !== "貯金" &&
+            item.category !== "目標からの戻入"
+          ) {
+            if (
+              item.category === wish.name ||
+              item.tag === wish.name ||
+              item.tags?.includes(wish.name)
+            ) {
+              dynamicSaved += getItemTotalExpense(item);
+            }
+          }
+        });
+      });
+
+      return { ...wish, dynamicSavedAmount: dynamicSaved };
     });
-  }, [combinedWishlist]);
+  }, [combinedWishlist, displayData, activeTags, sharedRooms]);
 
   const activeWishes = augmentedWishlist.filter(
     (w) => w.dynamicSavedAmount < w.targetAmount,
