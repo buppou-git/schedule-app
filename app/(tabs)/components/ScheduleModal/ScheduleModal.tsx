@@ -823,13 +823,14 @@ const ScheduleModal = ({
         category: formData.isExpense ? formData.category : undefined,
 
         repeatType:
-          formData.repeatType !== "none" ? formData.repeatType : undefined,
-        repeatDays:
-          formData.repeatType === "custom" ? formData.repeatDays : undefined,
-        repeatInterval:
-          formData.repeatType === "custom"
-            ? formData.repeatInterval
-            : undefined,
+        formData.repeatType !== "none" ? formData.repeatType : undefined,
+      // 🌟 修正：「カスタム」以外の「毎日」「毎週」などでも繰り返しデータを保持する！
+      repeatDays:
+        formData.repeatType !== "none" ? formData.repeatDays : undefined,
+      repeatInterval:
+        formData.repeatType !== "none"
+          ? formData.repeatInterval
+          : undefined,
 
         repeatEndDate:
           formData.repeatType !== "none" && formData.repeatEndDate
@@ -1161,7 +1162,8 @@ const ScheduleModal = ({
               if (nextData[d].some((i) => i.id === selectedItem.id)) {
                 nextData[d] = nextData[d].map((i: ScheduleItem) => {
                   if (i.id === selectedItem.id) {
-                    return { ...i, endDate: newEndDate };
+                    // 🌟 修正：通常の終了日(endDate)ではなく、繰り返しの終了日(repeatEndDate)を打ち切る！
+                    return { ...i, repeatEndDate: newEndDate };
                   }
                   return i;
                 });

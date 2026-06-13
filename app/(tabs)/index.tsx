@@ -2006,7 +2006,8 @@ function IndexContent() {
           Object.keys(nextData).forEach((d) => {
             if (nextData[d].some((i) => i.id === item.id)) {
               nextData[d] = nextData[d].map((i) =>
-                i.id === item.id ? { ...i, endDate: newEndDate } : i,
+                // 🌟 修正：こちらも通常の終了日ではなく、繰り返しの終了日を打ち切る！
+                i.id === item.id ? { ...i, repeatEndDate: newEndDate } : i,
               );
             }
           });
