@@ -2689,14 +2689,13 @@ function IndexContent() {
                     );
                   })}
 
-                  {tempActiveTags.length > 0 && (
-                    <TouchableOpacity
-                      style={styles.addPresetBtn}
-                      onPress={handleOpenPresetModal}
-                    >
-                      <Ionicons name="add" size={16} color="#AEAEB2" />
-                    </TouchableOpacity>
-                  )}
+                  {/* 🌟 修正：「＋」ボタンを条件なしで常に表示するように変更 */}
+                  <TouchableOpacity
+                    style={styles.addPresetBtn}
+                    onPress={handleOpenPresetModal}
+                  >
+                    <Ionicons name="add" size={16} color="#AEAEB2" />
+                  </TouchableOpacity>
                 </View>
 
                 <Text style={[styles.modalSectionLabel, { marginTop: 20 }]}>
