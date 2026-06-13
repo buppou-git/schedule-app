@@ -3679,4 +3679,3 @@ const styles = StyleSheet.create({
   },
   noHistoryText: { color: "#999", textAlign: "center", marginVertical: 20 },
 });
-//
