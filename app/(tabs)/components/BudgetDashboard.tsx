@@ -625,9 +625,52 @@ export default function BudgetDashboard({
   }, [todayStr, payday]);
 
   const executeSalaryRecord = async () => {
-    Keyboard.dismiss(); // 🌟 追加：ボタンを押した瞬間にキーボードを隠す！
+    Keyboard.dismiss(); 
     const amount = parseInt(salaryInputAmount);
+    
+    if (isNaN(amount) || amount <= 0) {
+      if (Platform.OS === "web") window.alert("正しい金額を入力してください");
+      else Alert.alert("エラー", "正しい金額を入力してください");
+      return;
+    }
+
+    // 🌟 1. 入力された収入データを「今日の収入」として作成する
+    const targetLayer = currentActiveLayer || "共通";
+    const newItem: ScheduleItem = {
+      id: Date.now().toString(),
+      category: "収入",
+      tag: "給与・臨時収入",
+      layer: targetLayer,
+      tags: [targetLayer, "給与・臨時収入"],
+      title: "収入を記録",
+      amount: amount,
+      color: "#34C759", // 収入は緑色に
+      isDone: true,
+      isEvent: false,
+      isTodo: false,
+      isExpense: false,
+      isIncome: true, // 🌟 必須：収入フラグをON！
+    };
+
+    // 🌟 2. カレンダーのデータに合体させる
+    const newScheduleData = { ...scheduleData };
+    newScheduleData[todayStr] = [
+      ...(newScheduleData[todayStr] || []),
+      newItem,
+    ];
+
+    // 🌟 3. アプリ全体とスマホのストレージに保存する
+    setScheduleData(newScheduleData);
+    await AsyncStorage.setItem("scheduleData", JSON.stringify(newScheduleData));
+    setTimeout(() => setHasUnsavedChanges(true), 100);
+
+    // 🌟 4. 完了処理（モーダルを閉じて通知）
+    setIsSalaryModalVisible(false);
+    setSalaryInputAmount("");
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    
+    if (Platform.OS === "web") window.alert("収入を記録しました！");
+    else Alert.alert("記録完了", "収入を記録しました！");
   };
 
   const executeAddSubTag = () => {
