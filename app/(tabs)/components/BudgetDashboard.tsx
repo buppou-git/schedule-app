@@ -102,6 +102,7 @@ export default function BudgetDashboard({
 
   const [isSalaryModalVisible, setIsSalaryModalVisible] = useState(false);
   const [salaryInputAmount, setSalaryInputAmount] = useState("");
+  const [sliderWarning, setSliderWarning] = useState<string | null>(null);
 
   const [addSubTagModalVisible, setAddSubTagModalVisible] = useState(false);
   const [targetLayerForSubTag, setTargetLayerForSubTag] = useState("");
@@ -1757,7 +1758,7 @@ export default function BudgetDashboard({
                   <Text style={styles.progressLabel}>
                     {currentActiveLayer
                       ? `${currentActiveLayer}の進捗`
-                      : "全体の進捗"}
+                      : "予算使用率"}
                   </Text>
                   <Text
                     style={
@@ -1989,13 +1990,17 @@ export default function BudgetDashboard({
 
                     const b = layerBudgets[l] || 0;
                     const a = layerActuals[l] || 0;
-                    // 🌟 修正：外部予定ならテーマカラーを赤にする
                     const color = l === "外部予定" ? "#FF2D55" : layerMaster[l];
                     const limit =
                       b + Math.max(0, globalBudgetCalc.unallocatedBuffer);
                     const layerSubTags = Object.keys(tagMaster).filter(
                       (t) => tagMaster[t].layer === l,
                     );
+                    
+                    // 🌟 追加：上限の計算と、警告時の色の決定
+                    const maxAllowedLayer = b + Math.max(0, globalBudgetCalc.unallocatedBuffer);
+                    const isLayerWarning = sliderWarning === `layer-${l}`;
+                    const layerThumbColor = isLayerWarning ? "#FF3B30" : color;
 
                     return (
                       <View key={l} style={styles.sliderCard}>
@@ -2068,11 +2073,25 @@ export default function BudgetDashboard({
                           maximumValue={baseIncome}
                           step={500}
                           value={b}
-                          thumbTintColor={color}
+                          thumbTintColor={layerThumbColor} // 🌟 変更
                           minimumTrackTintColor="transparent"
                           maximumTrackTintColor="transparent"
+                          onSlidingComplete={() => setSliderWarning(null)} // 🌟 指を離したら色を戻す
                           onValueChange={(val) => {
-                            const n = { ...layerBudgets, [l]: val };
+                            let newVal = val;
+                            
+                            // 🌟 上限を超えようとしたらブロックしてブルッとさせる！
+                            if (val > maxAllowedLayer) {
+                              newVal = maxAllowedLayer;
+                              if (sliderWarning !== `layer-${l}`) {
+                                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                                setSliderWarning(`layer-${l}`);
+                              }
+                            } else {
+                              if (sliderWarning === `layer-${l}`) setSliderWarning(null);
+                            }
+
+                            const n = { ...layerBudgets, [l]: newVal };
                             setLayerBudgets(n);
                             AsyncStorage.setItem(
                               "layerBudgetsData",
@@ -2094,9 +2113,13 @@ export default function BudgetDashboard({
                                   (s, t) => s + (subTagBudgets[t] || 0),
                                   0,
                                 );
-                              const slimit = sb + Math.max(0, layerUnallocated);
-
-                              return (
+                                const slimit = sb + Math.max(0, layerUnallocated);
+                          
+                                // 🌟 追加：警告時の色の決定
+                                const isSubWarning = sliderWarning === `sub-${l}-${sub}`;
+                                const subThumbColor = isSubWarning ? "#FF3B30" : sc;
+      
+                                return (
                                 <View key={sub} style={styles.subTagAdjustRow}>
                                   <View style={styles.subTagHeader}>
                                     <Text
@@ -2159,12 +2182,23 @@ export default function BudgetDashboard({
                                     value={sb}
                                     minimumTrackTintColor="transparent"
                                     maximumTrackTintColor="transparent"
-                                    thumbTintColor={sc}
+                                    thumbTintColor={subThumbColor} // 🌟 変更
+                                    onSlidingComplete={() => setSliderWarning(null)} // 🌟 追加
                                     onValueChange={(val) => {
-                                      const n = {
-                                        ...subTagBudgets,
-                                        [sub]: val,
-                                      };
+                                      let newVal = val;
+                                      
+                                      // 🌟 上限を超えようとしたらブロックしてブルッとさせる！
+                                      if (val > slimit) {
+                                        newVal = slimit;
+                                        if (sliderWarning !== `sub-${l}-${sub}`) {
+                                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                                          setSliderWarning(`sub-${l}-${sub}`);
+                                        }
+                                      } else {
+                                        if (sliderWarning === `sub-${l}-${sub}`) setSliderWarning(null);
+                                      }
+
+                                      const n = { ...subTagBudgets, [sub]: newVal };
                                       setSubTagBudgets(n);
                                       AsyncStorage.setItem(
                                         "subTagBudgetsData",
@@ -2395,9 +2429,13 @@ export default function BudgetDashboard({
                               0,
                               singleLayerBudgetCalc.unallocatedBuffer,
                             );
-                          const isOver = sa > sb;
-
-                          return (
+                            const isOver = sa > sb;
+                          
+                            // 🌟 追加：警告時の色の決定
+                            const isSubWarning = sliderWarning === `sub-${currentActiveLayer}-${sub}`;
+                            const subThumbColor = isSubWarning ? "#FF3B30" : sc;
+  
+                            return (
                             <View key={sub} style={styles.sliderCard}>
                               <View style={styles.sliderHeader}>
                                 <Text
@@ -2457,9 +2495,23 @@ export default function BudgetDashboard({
                                 value={sb}
                                 minimumTrackTintColor="transparent"
                                 maximumTrackTintColor="transparent"
-                                thumbTintColor={sc}
+                                thumbTintColor={subThumbColor} // 🌟 変更
+                                onSlidingComplete={() => setSliderWarning(null)} // 🌟 追加
                                 onValueChange={(val) => {
-                                  const n = { ...subTagBudgets, [sub]: val };
+                                  let newVal = val;
+                                  
+                                  // 🌟 上限を超えようとしたらブロックしてブルッとさせる！
+                                  if (val > slimit) {
+                                    newVal = slimit;
+                                    if (sliderWarning !== `sub-${currentActiveLayer}-${sub}`) {
+                                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                                      setSliderWarning(`sub-${currentActiveLayer}-${sub}`);
+                                    }
+                                  } else {
+                                    if (sliderWarning === `sub-${currentActiveLayer}-${sub}`) setSliderWarning(null);
+                                  }
+
+                                  const n = { ...subTagBudgets, [sub]: newVal };
                                   setSubTagBudgets(n);
                                   AsyncStorage.setItem(
                                     "subTagBudgetsData",
