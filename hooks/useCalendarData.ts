@@ -45,9 +45,12 @@ export function useCalendarData(
 
       scheduleData[dateStr].forEach((item) => {
         if (item.repeatType) {
-          let currentDate = new Date(dateStr);
+          // 🌟 修正①：タイムゾーンのズレを防ぐため、文字列を分解してローカル時間でセットする
+          const [y, m, d] = dateStr.split("-").map(Number);
+          let currentDate = new Date(y, m - 1, d);
 
           while (true) {
+            // 1. まず日付を進める
             if (item.repeatType === "daily")
               currentDate.setDate(currentDate.getDate() + 1);
             else if (item.repeatType === "weekly")
@@ -56,31 +59,46 @@ export function useCalendarData(
               currentDate.setMonth(currentDate.getMonth() + 1);
             else if (item.repeatType === "custom") {
               currentDate.setDate(currentDate.getDate() + 1);
-              const dayOfWeek = currentDate.getDay();
-              const startDateTime = new Date(dateStr).getTime();
-              const currentDateTime = currentDate.getTime();
-              const diffWeeks = Math.floor(
-                (currentDateTime - startDateTime) / (7 * 24 * 60 * 60 * 1000),
-              );
-              const isMatchDay = item.repeatDays?.includes(dayOfWeek);
-              const isMatchInterval =
-                diffWeeks % (item.repeatInterval || 1) === 0;
-              if (!(isMatchDay && isMatchInterval)) continue;
             } else {
-              // 🌟 追加：想定外の repeatType が来たら無限ループを防ぐために強制終了！
               break;
             }
 
+            // 🌟 修正②：無限ループの元凶！必ず「カスタム判定」より前に限界チェックを行う！
             if (currentDate > limitEndDate) break;
             if (currentDate < limitStartDate) continue;
 
-            const nextDateStr = currentDate.toISOString().split("T")[0];
+            // 2. カスタム設定の場合、曜日と間隔をチェック
+            if (item.repeatType === "custom") {
+              const dayOfWeek = currentDate.getDay();
+              const startDateTime = new Date(y, m - 1, d).getTime();
+              const currentDateTime = currentDate.getTime();
+              // ミリ秒のズレを吸収するためにMath.roundを使用
+              const diffDays = Math.round(
+                (currentDateTime - startDateTime) / (24 * 60 * 60 * 1000)
+              );
+              const diffWeeks = Math.floor(diffDays / 7);
+
+              const isMatchDay = item.repeatDays?.includes(dayOfWeek);
+              const isMatchInterval = diffWeeks % (item.repeatInterval || 1) === 0;
+
+              // 条件に合わなければ次の日へ（ここでcontinueしても、上に戻ってちゃんと限界チェックされる）
+              if (!(isMatchDay && isMatchInterval)) continue;
+            }
+
+            // 🌟 修正③：toISOString()は日本時間をUTCにしてしまい1日ズレる原因になるため、自力で文字列を作る
+            const ny = currentDate.getFullYear();
+            const nm = String(currentDate.getMonth() + 1).padStart(2, "0");
+            const nd = String(currentDate.getDate()).padStart(2, "0");
+            const nextDateStr = `${ny}-${nm}-${nd}`;
+
             if (item.repeatEndDate && nextDateStr > item.repeatEndDate) break;
             if (item.exceptionDates?.includes(nextDateStr)) continue;
+
             if (!expanded[nextDateStr]) expanded[nextDateStr] = [];
             const exists = expanded[nextDateStr].some(
               (i) => i.id === item.id || i.linkedMasterId === item.id,
             );
+
             if (!exists) {
               const isSpecificDone =
                 item.completedDates?.includes(nextDateStr) || false;
