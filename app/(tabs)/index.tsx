@@ -592,6 +592,12 @@ function IndexContent() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
+  // 🌟 追加：カテゴリ(レイヤー)編集用のState
+  const [editLayerModalVisible, setEditLayerModalVisible] = useState(false);
+  const [editingLayerOriginalName, setEditingLayerOriginalName] = useState("");
+  const [editingLayerName, setEditingLayerName] = useState("");
+  const [editingLayerColor, setEditingLayerColor] = useState("");
+
   const deletePreset = async (name: string) => {
     const newPresets = { ...presets };
     delete newPresets[name];
@@ -600,19 +606,24 @@ function IndexContent() {
 
     setHasUnsavedChanges(true);
     setEditPresetModalVisible(false);
+    // 🌟 修正：削除後に元の画面に戻してあげる
+    setTimeout(() => setFilterModalVisible(true), 350);
   };
 
   const handleLongPressPreset = (name: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setEditingPresetOriginalName(name);
     setEditingPresetName(name);
-    setEditPresetModalVisible(true);
+    // 🌟 魔法の修正：多重モーダルによるフリーズを防ぐため、一度親モーダルを閉じる！
+    setFilterModalVisible(false);
+    setTimeout(() => setEditPresetModalVisible(true), 350);
   };
 
   const saveEditedPreset = async () => {
     const trimmed = editingPresetName.trim();
     if (!trimmed || trimmed === editingPresetOriginalName) {
       setEditPresetModalVisible(false);
+      setTimeout(() => setFilterModalVisible(true), 350); // 元に戻す
       return;
     }
     const newPresets = { ...presets };
@@ -627,6 +638,97 @@ function IndexContent() {
     await AsyncStorage.setItem("filterPresets", JSON.stringify(newPresets));
     setHasUnsavedChanges(true);
     setEditPresetModalVisible(false);
+    setTimeout(() => setFilterModalVisible(true), 350); // 元に戻す
+  };
+
+  // ==========================================
+  // 🌟 追加：カテゴリ（レイヤー）の長押し編集機能
+  // ==========================================
+  const handleLongPressLayer = (layer: string) => {
+    // 共有カレンダーや外部予定は、ここからは編集させない
+    const isShared = Object.keys(sharedRooms || {}).includes(layer);
+    if (isShared) {
+      Alert.alert("お知らせ", "共有カレンダーの設定は「構成の管理」から行ってください。");
+      return;
+    }
+    if (layer === "外部予定") return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setEditingLayerOriginalName(layer);
+    setEditingLayerName(layer);
+    setEditingLayerColor(layerMaster[layer] || "#007AFF");
+
+    // フリーズ回避のため親モーダルを一時的に閉じる
+    setFilterModalVisible(false);
+    setTimeout(() => {
+      setEditLayerModalVisible(true);
+    }, 350);
+  };
+
+  const saveEditedLayer = async () => {
+    const trimmed = editingLayerName.trim();
+    if (!trimmed) return;
+
+    const newLayerMaster = { ...layerMaster };
+
+    if (trimmed !== editingLayerOriginalName) {
+      if (newLayerMaster[trimmed]) {
+        return Alert.alert("エラー", "既に同じ名前のカテゴリが存在します");
+      }
+
+      // 1. 新しい名前と色をセットし、古い名前を削除
+      newLayerMaster[trimmed] = editingLayerColor;
+      delete newLayerMaster[editingLayerOriginalName];
+
+      // 2. カレンダーの全予定データのレイヤー名も書き換える
+      setScheduleData((prevData: Record<string, ScheduleItem[]>) => {
+        const nextData: Record<string, ScheduleItem[]> = {};
+        Object.keys(prevData).forEach(date => {
+          nextData[date] = prevData[date].map(item => {
+            if (item.layer === editingLayerOriginalName) {
+              const newTags = item.tags ? item.tags.map(t => t === editingLayerOriginalName ? trimmed : t) : [trimmed];
+              return { ...item, layer: trimmed, tags: newTags };
+            }
+            return item;
+          });
+        });
+        AsyncStorage.setItem("scheduleData", JSON.stringify(nextData)).catch(console.error);
+        return nextData;
+      });
+
+      // 3. 紐づいている属性（サブカテゴリ）の親指定も書き換える
+      const newTagMaster = { ...tagMaster };
+      let hasTagChanges = false;
+      Object.keys(newTagMaster).forEach(tag => {
+        if (newTagMaster[tag].layer === editingLayerOriginalName) {
+          newTagMaster[tag].layer = trimmed;
+          hasTagChanges = true;
+        }
+      });
+      if (hasTagChanges) {
+        setTagMaster(newTagMaster);
+        AsyncStorage.setItem("tagMasterData", JSON.stringify(newTagMaster)).catch(console.error);
+      }
+
+      // 4. 今選択中のフィルター(表示)状態も書き換える
+      if (activeTags.includes(editingLayerOriginalName)) {
+        setActiveTags(prev => prev.map(t => t === editingLayerOriginalName ? trimmed : t));
+      }
+      if (tempActiveTags.includes(editingLayerOriginalName)) {
+        setTempActiveTags(prev => prev.map(t => t === editingLayerOriginalName ? trimmed : t));
+      }
+    } else {
+      // 名前が同じままなら、色だけ更新
+      newLayerMaster[trimmed] = editingLayerColor;
+    }
+
+    setLayerMaster(newLayerMaster);
+    await AsyncStorage.setItem("layerMasterData", JSON.stringify(newLayerMaster));
+    setHasUnsavedChanges(true);
+    setEditLayerModalVisible(false);
+
+    // 🌟 保存完了後に元のフィルター画面に自動で戻る！
+    setTimeout(() => setFilterModalVisible(true), 350);
   };
 
   const isSharedItem = (item: ScheduleItem) => {
@@ -883,9 +985,21 @@ function IndexContent() {
                   "filterPresets",
                   "activeTags",
                   "sharedRoomsData",
-                  "hasCompletedOnboarding", // 🌟 追加：初回フラグも消去する！
-                  "useBiometricLock", // 🌟 追加：生体認証の設定をリセット
-                  "usePinLock", // 🌟 追加：暗証番号の設定をリセット
+                  "hasCompletedOnboarding",
+                  "useBiometricLock",
+                  "usePinLock",
+                  // 🌟 追加：夢リストやお金関連のデータも一掃する！
+                  "wishlistData",
+                  "myMonthlyBudget",
+                  "myPayday",
+                  "layerBudgetsData",
+                  "subTagBudgetsData",
+                  "unallocatedSavingsData",
+                  "lastAutoDepositCycle",
+                  "hiddenExternalIds",
+                  "isSavingsHidden",
+                  "isNotificationEnabled",
+                  "notificationTime"
                 ]);
                 await SecureStore.deleteItemAsync("app_pin_code");
 
@@ -2699,6 +2813,7 @@ function IndexContent() {
                             ],
                         ]}
                         onPress={() => toggleTempTag(layer)}
+                        onLongPress={() => handleLongPressLayer(layer)} // 🌟 追加：長押しイベント
                       >
                         <View
                           style={{
@@ -2828,7 +2943,10 @@ function IndexContent() {
                     <View style={{ flexDirection: "row", gap: 10 }}>
                       <TouchableOpacity
                         style={styles.namingCancelBtn}
-                        onPress={() => setEditPresetModalVisible(false)}
+                        onPress={() => {
+                          setEditPresetModalVisible(false);
+                          setTimeout(() => setFilterModalVisible(true), 350); // 🌟 追加：キャンセルでも元の画面に戻す
+                        }}
                       >
                         <Text style={styles.namingCancelText}>キャンセル</Text>
                       </TouchableOpacity>
@@ -2847,6 +2965,94 @@ function IndexContent() {
           </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* ==============================================
+          🌟 追加：カテゴリ（レイヤー）編集用のモーダル
+      ============================================== */}
+      <Modal
+        visible={editLayerModalVisible}
+        transparent={true}
+        animationType="fade"
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1 }}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.namingOverlay}>
+              <TouchableWithoutFeedback>
+                <View style={styles.namingContent}>
+                  <Text style={styles.namingLabel}>EDIT_CATEGORY</Text>
+                  <Text style={styles.namingTitle}>カテゴリの編集</Text>
+
+                  <TextInput
+                    style={styles.namingInput}
+                    value={editingLayerName}
+                    onChangeText={setEditingLayerName}
+                    autoFocus={true}
+                  />
+
+                  <Text style={{ fontSize: 12, fontWeight: "bold", color: "#8E8E93", marginBottom: 10 }}>カラーを変更</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={{ marginBottom: 20, maxHeight: 40 }}
+                  >
+                    {[
+                      "#FF3B30", "#FF9500", "#FFCC00", "#34C759", "#007AFF", "#5856D6", "#AF52DE", "#FF2D55", "#1C1C1E"
+                    ].map((color) => (
+                      <TouchableOpacity
+                        key={color}
+                        onPress={() => setEditingLayerColor(color)}
+                        style={[
+                          {
+                            width: 30,
+                            height: 30,
+                            borderRadius: 15,
+                            backgroundColor: color,
+                            marginRight: 10,
+                          },
+                          editingLayerColor === color && {
+                            borderWidth: 3,
+                            borderColor: "#1C1C1E",
+                            transform: [{ scale: 1.1 }]
+                          },
+                        ]}
+                      />
+                    ))}
+                  </ScrollView>
+
+                  <View
+                    style={[
+                      styles.namingActionRow,
+                      { justifyContent: "space-between" },
+                    ]}
+                  >
+                    <TouchableOpacity
+                      style={styles.namingCancelBtn}
+                      onPress={() => {
+                        setEditLayerModalVisible(false);
+                        // キャンセルした時もフィルター画面に戻してあげる
+                        setTimeout(() => setFilterModalVisible(true), 350);
+                      }}
+                    >
+                      <Text style={styles.namingCancelText}>キャンセル</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.namingConfirmBtn, { backgroundColor: editingLayerColor || currentSolidColor }]}
+                      onPress={saveEditedLayer}
+                    >
+                      <Text style={styles.namingConfirmText}>保存</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
+      </Modal>
+
       {modalVisible && (
         <ScheduleModal
           visible={modalVisible}

@@ -6,13 +6,16 @@ import {
   Alert,
   Dimensions,
   Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  TouchableWithoutFeedback,
+  View
 } from "react-native";
 import { useAppStore } from "../../../store/useAppStore";
 import { ScheduleItem } from "../../../types";
@@ -825,177 +828,316 @@ export default function DailyExpense({
         </View>
 
         <Modal visible={editModalVisible} transparent animationType="fade">
-          <TouchableOpacity
-            style={styles.modalOverlay}
-            activeOpacity={1}
-            onPress={() => setEditModalVisible(false)}
-          >
-            <View style={styles.editCardModal}>
-              <Text style={styles.editTitle}>データの編集</Text>
-              <Text style={styles.settingLabel}>詳細メモ</Text>
-              <TextInput
-                style={styles.editInputText}
-                value={editTitle}
-                onChangeText={setEditTitle}
-              />
-              <Text style={styles.settingLabel}>金額</Text>
-              <TextInput
-                style={styles.editInputAmount}
-                keyboardType="numeric"
-                value={editAmount}
-                onChangeText={setEditAmount}
-              />
-              <View style={{ marginTop: 10 }}>
-                {/* 保存（上段） */}
-                <TouchableOpacity
-                  style={[
-                    styles.saveBtn,
-                    {
-                      backgroundColor: themeColor,
-                      width: "100%",
-                      alignItems: "center",
-                    },
-                  ]}
-                  onPress={handleUpdate}
-                >
-                  <Text style={styles.saveText}>保存</Text>
-                </TouchableOpacity>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+            <TouchableOpacity
+              style={styles.modalOverlay}
+              activeOpacity={1}
+              onPress={() => setEditModalVisible(false)}
+            >
+              <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                <View style={styles.editCardModal}>
+                  <Text style={styles.editTitle}>データの編集</Text>
+                  <Text style={styles.settingLabel}>詳細メモ</Text>
+                  <TextInput
+                    style={styles.editInputText}
+                    value={editTitle}
+                    onChangeText={setEditTitle}
+                  />
+                  <Text style={styles.settingLabel}>金額</Text>
+                  <TextInput
+                    style={styles.editInputAmount}
+                    keyboardType="numeric"
+                    value={editAmount}
+                    onChangeText={setEditAmount}
+                  />
+                  <View style={{ marginTop: 10 }}>
+                    {/* 保存（上段） */}
+                    <TouchableOpacity
+                      style={[
+                        styles.saveBtn,
+                        {
+                          backgroundColor: themeColor,
+                          width: "100%",
+                          alignItems: "center",
+                        },
+                      ]}
+                      onPress={handleUpdate}
+                    >
+                      <Text style={styles.saveText}>保存</Text>
+                    </TouchableOpacity>
 
-                {/* 削除（下段：大きく） */}
-                <TouchableOpacity
-                  onPress={async () => {
-                    if (!editingItem) return;
+                    {/* 削除（下段：大きく） */}
+                    <TouchableOpacity
+                      onPress={async () => {
+                        if (!editingItem) return;
 
-                    const targetDate = editingItem.date;
-                    const itemToDelete = editingItem.item; // 🌟 消すアイテムを確保
+                        const targetDate = editingItem.date;
+                        const itemToDelete = editingItem.item;
 
-                    const newData = { ...scheduleData };
-                    newData[targetDate] = newData[targetDate].filter(
-                      (i) => i.id !== itemToDelete.id,
-                    );
+                        const newData = { ...scheduleData };
+                        newData[targetDate] = newData[targetDate].filter(
+                          (i) => i.id !== itemToDelete.id,
+                        );
 
-                    setScheduleData(newData);
-                    await AsyncStorage.setItem(
-                      "scheduleData",
-                      JSON.stringify(newData),
-                    );
-                    setHasUnsavedChanges(true);
-                    setEditModalVisible(false);
+                        setScheduleData(newData);
+                        await AsyncStorage.setItem(
+                          "scheduleData",
+                          JSON.stringify(newData),
+                        );
+                        setHasUnsavedChanges(true);
+                        setEditModalVisible(false);
 
-                    // ========================================================
-                    // 🌟 魔法の割り込み処理：夢リストへのチャージを消したら、メーターも巻き戻す！
-                    // ========================================================
-                    if (itemToDelete.category === "貯金") {
-                      const wishName = itemToDelete.tag;
-                      const amountToRefund = itemToDelete.amount;
+                        // 🌟 Firebase(クラウド)からの完全削除ロジック
+                        if (sharedRooms) {
+                          const itemTags =
+                            itemToDelete.tags ||
+                            (itemToDelete.tag ? [itemToDelete.tag] : []);
+                          const sharedLayerName =
+                            itemTags.find((tag) =>
+                              Object.keys(sharedRooms).includes(tag),
+                            ) || itemToDelete.layer;
 
-                      // 1. ローカルの夢リストの貯金額(savedAmount)を減らす
-                      const wData = await AsyncStorage.getItem("wishlistData");
-                      let currentWishlist = wData ? JSON.parse(wData) : [];
-
-                      currentWishlist = currentWishlist.map((wish: any) => {
-                        if (wish.name === wishName) {
-                          return {
-                            ...wish,
-                            savedAmount: Math.max(
-                              0,
-                              wish.savedAmount - amountToRefund,
-                            ),
-                          };
+                          if (sharedLayerName && sharedRooms[sharedLayerName]) {
+                            try {
+                              const roomId = sharedRooms[sharedLayerName];
+                              const { deleteDoc, doc } =
+                                await import("firebase/firestore");
+                              const { db } =
+                                await import("../../../firebaseConfig");
+                              await deleteDoc(
+                                doc(
+                                  db,
+                                  "rooms",
+                                  roomId,
+                                  "schedules",
+                                  itemToDelete.id,
+                                ),
+                              );
+                            } catch (e) {
+                              console.error("Firebase削除エラー:", e);
+                            }
+                          }
                         }
-                        return wish;
-                      });
+                      }}
+                      style={{
+                        marginTop: 16,
+                        backgroundColor: "#FF3B30",
+                        paddingVertical: 14,
+                        borderRadius: 12,
+                        alignItems: "center",
+                      }}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <Text style={{ color: "#FFF", fontWeight: "bold" }}>
+                        削除
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </TouchableWithoutFeedback>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </Modal>
 
-                      // 2. Zustand(ストア)が無い画面なので、とりあえずStorageに直接保存
-                      // ※次にBudgetDashboardが開いた時にuseEffectで自動的に読み込まれます
-                      await AsyncStorage.setItem(
-                        "wishlistData",
-                        JSON.stringify(currentWishlist),
-                      );
+        <Modal visible={editQuickTagModal} transparent animationType="fade">
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+            <TouchableOpacity
+              style={styles.modalOverlay}
+              activeOpacity={1}
+              onPress={() => setEditQuickTagModal(false)}
+            >
+              <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                <View style={styles.editCardModal}>
+                  <Text style={styles.editTitle}>{editingLayer}の項目を編集</Text>
+                  <TextInput
+                    style={styles.editInputText}
+                    value={tempQuickTagText}
+                    onChangeText={setTempQuickTagText}
+                    autoFocus
+                  />
+                  <View
+                    style={[
+                      styles.editActionRow,
+                      { justifyContent: "center", marginTop: 10 },
+                    ]}
+                  >
+                    <TouchableOpacity
+                      style={[
+                        styles.saveBtn,
+                        {
+                          backgroundColor: themeColor,
+                          width: "100%",
+                          alignItems: "center",
+                        },
+                      ]}
+                      onPress={saveQuickTag}
+                    >
+                      <Text style={styles.saveText}>保存する</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </TouchableWithoutFeedback>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </Modal>
 
-                      // 3. 共有の目標なら、Firebase側にも「減算後の最新のwish」を同期させる
-                      const targetWish = currentWishlist.find(
-                        (wish: any) => wish.name === wishName,
-                      );
-                      // 💡 DailyExpenseには safeDebouncedSyncWish が渡ってきていないので、直接Firestoreを叩いて更新します
-                      if (
-                        targetWish &&
-                        targetWish.sharedRoomId &&
-                        sharedRooms
-                      ) {
-                        try {
-                          const { setDoc, doc } =
-                            await import("firebase/firestore");
-                          const { db } =
-                            await import("../../../firebaseConfig");
-                          await setDoc(
-                            doc(
-                              db,
-                              "rooms",
-                              targetWish.sharedRoomId,
-                              "wishes",
-                              targetWish.id,
-                            ),
-                            targetWish,
-                            { merge: true }, // 🌟 差分だけを安全に更新
-                          );
-                        } catch (e) {
-                          console.error("Firebaseの夢リスト巻き戻しエラー:", e);
-                        }
-                      }
-                    }
-
-                    // ========================================================
-                    // 🌟 追加：Firebase(クラウド)からの完全削除ロジック (既存)
-                    // ========================================================
-                    if (sharedRooms) {
-                      const itemTags =
-                        itemToDelete.tags ||
-                        (itemToDelete.tag ? [itemToDelete.tag] : []);
-                      const sharedLayerName =
-                        itemTags.find((tag) =>
-                          Object.keys(sharedRooms).includes(tag),
-                        ) || itemToDelete.layer;
-
-                      if (sharedLayerName && sharedRooms[sharedLayerName]) {
-                        try {
-                          const roomId = sharedRooms[sharedLayerName];
-                          const { deleteDoc, doc } =
-                            await import("firebase/firestore");
-                          const { db } =
-                            await import("../../../firebaseConfig");
-                          await deleteDoc(
-                            doc(
-                              db,
-                              "rooms",
-                              roomId,
-                              "schedules",
-                              itemToDelete.id,
-                            ),
-                          );
-                        } catch (e) {
-                          console.error("Firebase削除エラー:", e);
-                        }
-                      }
-                    }
-                  }}
-                  style={{
-                    marginTop: 16,
-                    backgroundColor: "#FF3B30",
-                    paddingVertical: 14,
-                    borderRadius: 12,
-                    alignItems: "center",
-                  }}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <Text style={{ color: "#FFF", fontWeight: "bold" }}>
-                    削除
+        <Modal visible={addSubTagModalVisible} transparent animationType="fade">
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+            <TouchableOpacity
+              style={styles.modalOverlay}
+              activeOpacity={1}
+              onPress={() => setAddSubTagModalVisible(false)}
+            >
+              <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                <View style={styles.editCardModal}>
+                  <Text style={styles.editTitle}>
+                    [{targetLayerForSubTag}] に追加
                   </Text>
-                </TouchableOpacity>
-              </View>
-              ``
-            </View>
-          </TouchableOpacity>
+                  <Text style={styles.settingLabel}>サブカテゴリ名</Text>
+                  <TextInput
+                    style={styles.editInputAmount}
+                    value={newSubTagName}
+                    onChangeText={setNewSubTagName}
+                    autoFocus
+                  />
+
+                  <Text style={styles.settingLabel}>カラーを選択（任意）</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={{ marginBottom: 20 }}
+                  >
+                    {PRESET_COLORS.map((color) => (
+                      <TouchableOpacity
+                        key={color}
+                        style={[
+                          {
+                            width: 30,
+                            height: 30,
+                            borderRadius: 15,
+                            backgroundColor: color,
+                            marginRight: 10,
+                          },
+                          newSubTagColor === color && {
+                            borderWidth: 3,
+                            borderColor: "#1C1C1E",
+                          },
+                        ]}
+                        onPress={() => setNewSubTagColor(color)}
+                      />
+                    ))}
+                  </ScrollView>
+
+                  <View
+                    style={[
+                      styles.editActionRow,
+                      { justifyContent: "space-between" },
+                    ]}
+                  >
+                    <TouchableOpacity
+                      onPress={() => setAddSubTagModalVisible(false)}
+                      style={{ padding: 10 }}
+                    >
+                      <Text style={{ color: "#8E8E93", fontWeight: "bold" }}>
+                        キャンセル
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.saveBtn,
+                        {
+                          backgroundColor:
+                            layerMaster[targetLayerForSubTag] || themeColor,
+                        },
+                      ]}
+                      onPress={executeAddSubTag}
+                    >
+                      <Text style={styles.saveText}>追加</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </TouchableWithoutFeedback>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </Modal>
+
+        <Modal
+          visible={editSubTagModalVisible}
+          transparent
+          animationType="fade"
+        >
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+            <TouchableOpacity
+              style={styles.modalOverlay}
+              activeOpacity={1}
+              onPress={() => setEditSubTagModalVisible(false)}
+            >
+              <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                <View style={styles.editCardModal}>
+                  <Text style={styles.editTitle}>属性の編集</Text>
+
+                  <Text style={styles.settingLabel}>属性名</Text>
+                  <TextInput
+                    style={styles.editInputAmount}
+                    value={editingSubTagName}
+                    onChangeText={setEditingSubTagName}
+                  />
+
+                  <Text style={styles.settingLabel}>カラーを変更</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={{ marginBottom: 20 }}
+                  >
+                    {PRESET_COLORS.map((color) => (
+                      <TouchableOpacity
+                        key={color}
+                        style={[
+                          {
+                            width: 30,
+                            height: 30,
+                            borderRadius: 15,
+                            backgroundColor: color,
+                            marginRight: 10,
+                          },
+                          editingSubTagColor === color && {
+                            borderWidth: 3,
+                            borderColor: "#1C1C1E",
+                          },
+                        ]}
+                        onPress={() => setEditingSubTagColor(color)}
+                      />
+                    ))}
+                  </ScrollView>
+
+                  <View
+                    style={[
+                      styles.editActionRow,
+                      { justifyContent: "space-between" },
+                    ]}
+                  >
+                    <TouchableOpacity
+                      onPress={deleteSubTag}
+                      style={{ padding: 10 }}
+                    >
+                      <Text style={{ color: "#FF3B30", fontWeight: "bold" }}>
+                        削除
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.saveBtn,
+                        { backgroundColor: editingSubTagColor || themeColor },
+                      ]}
+                      onPress={saveEditedSubTag}
+                    >
+                      <Text style={styles.saveText}>保存</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </TouchableWithoutFeedback>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
         </Modal>
 
         <Modal visible={editQuickTagModal} transparent animationType="fade">
