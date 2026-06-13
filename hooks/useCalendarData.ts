@@ -102,7 +102,28 @@ export function useCalendarData(
             if (!exists) {
               const isSpecificDone =
                 item.completedDates?.includes(nextDateStr) || false;
-              expanded[nextDateStr].push({ ...item, isDone: isSpecificDone });
+
+              // 🌟🌟🌟 これが予定一覧に出ない原因を解決する究極の修正！ 🌟🌟🌟
+              // コピーされた予定の「内部的な日付」もその日に書き換えないと、
+              // 予定一覧リストが「別日の予定だ」と勘違いして弾いてしまいます！
+              let newStartDate = item.startDate;
+              let newEndDate = item.endDate;
+
+              if (item.startDate) {
+                // 例: "2024-01-01" -> "2024-01-15" のように日付部分だけ最新にすり替える
+                newStartDate = item.startDate.replace(/^\d{4}-\d{2}-\d{2}/, nextDateStr);
+              }
+              if (item.endDate) {
+                newEndDate = item.endDate.replace(/^\d{4}-\d{2}-\d{2}/, nextDateStr);
+              }
+
+              expanded[nextDateStr].push({
+                ...item,
+                date: nextDateStr,           // 🌟 内部の所属日を書き換え
+                startDate: newStartDate,     // 🌟 開始日時を書き換え
+                endDate: newEndDate,         // 🌟 終了日時を書き換え
+                isDone: isSpecificDone,
+              });
             }
           }
         }
