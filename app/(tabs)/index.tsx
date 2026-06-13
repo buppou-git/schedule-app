@@ -1446,14 +1446,40 @@ function IndexContent() {
   }, [displayData]); // 🌟 依存配列も displayData（予定の変動）だけに絞ることで暴走を防ぐ
   // 👆👆👆 ここまで追加・修正 👆👆👆
 
-  // 🌟 追加：他のデータプロセッサーのフィルターをすり抜けて、予定欄の先頭に祝日を強制結合する
-  const finalDayEvents = useMemo(() => {
-    if (currentHoliday) {
-      const exists = dayEvents.some((i) => i.id === currentHoliday.id);
-      if (!exists) return [currentHoliday, ...dayEvents];
-    }
-    return dayEvents;
-  }, [dayEvents, currentHoliday]);
+// 🌟🌟🌟 限界突破：リスト側に繰り返し予定が出ないバグを強制的にバイパスする最強のリスト生成機能！ 🌟🌟🌟
+const finalDayEvents = useMemo(() => {
+  // 1. 繰り返し予定も完璧に含まれている「expandedScheduleData」から今日の予定を直接ゲット！
+  const todayItems = expandedScheduleData[selectedDate] || [];
+
+  // 2. 「予定 (isEvent)」だけを抽出
+  let events = todayItems.filter((item) => item.isEvent);
+
+  // 3. フィルター機能（カテゴリ絞り込み）がONなら適用する
+  if (activeTags.length > 0) {
+    events = events.filter((item) => {
+      if (item.tag === "祝日" || item.category === "祝日" || item.layer === "祝日") return true;
+      
+      const { parent } = resolveTags(item) || {};
+      return activeTags.includes(parent) || activeTags.includes(item.layer || "");
+    });
+  }
+
+  // 4. 予定を時間順に綺麗に並べ替える（終日は一番上）
+  events.sort((a, b) => {
+    if (a.isAllDay && !b.isAllDay) return -1;
+    if (!a.isAllDay && b.isAllDay) return 1;
+    if (a.startTime && b.startTime) return a.startTime.localeCompare(b.startTime);
+    return 0;
+  });
+
+  // 5. 祝日があれば一番上に追加する
+  if (currentHoliday) {
+    const exists = events.some((i) => i.id === currentHoliday.id);
+    if (!exists) events = [currentHoliday, ...events];
+  }
+
+  return events;
+}, [expandedScheduleData, selectedDate, activeTags, currentHoliday]);
 
   const currentSolidColor = useMemo(() => {
     if (activeTags.length === 1) {
