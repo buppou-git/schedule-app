@@ -1446,40 +1446,118 @@ function IndexContent() {
   }, [displayData]); // 🌟 依存配列も displayData（予定の変動）だけに絞ることで暴走を防ぐ
   // 👆👆👆 ここまで追加・修正 👆👆👆
 
-// 🌟🌟🌟 限界突破：リスト側に繰り返し予定が出ないバグを強制的にバイパスする最強のリスト生成機能！ 🌟🌟🌟
-const finalDayEvents = useMemo(() => {
-  // 1. 繰り返し予定も完璧に含まれている「expandedScheduleData」から今日の予定を直接ゲット！
-  const todayItems = expandedScheduleData[selectedDate] || [];
+  // 🌟🌟🌟 限界突破：リスト側に繰り返し予定が出ないバグを強制的にバイパスする最強のリスト生成機能！ 🌟🌟🌟
+  const finalDayEvents = useMemo(() => {
+    // 1. 繰り返し予定も完璧に含まれている「expandedScheduleData」から今日の予定を直接ゲット！
+    const todayItems = expandedScheduleData[selectedDate] || [];
 
-  // 2. 「予定 (isEvent)」だけを抽出
-  let events = todayItems.filter((item) => item.isEvent);
+    // 2. 「予定 (isEvent)」だけを抽出
+    let events = todayItems.filter((item) => item.isEvent);
 
-  // 3. フィルター機能（カテゴリ絞り込み）がONなら適用する
-  if (activeTags.length > 0) {
-    events = events.filter((item) => {
-      if (item.tag === "祝日" || item.category === "祝日" || item.layer === "祝日") return true;
-      
-      const { parent } = resolveTags(item) || {};
-      return activeTags.includes(parent) || activeTags.includes(item.layer || "");
+    // 3. フィルター機能（カテゴリ絞り込み）がONなら適用する
+    if (activeTags.length > 0) {
+      events = events.filter((item) => {
+        if (item.tag === "祝日" || item.category === "祝日" || item.layer === "祝日") return true;
+
+        const { parent } = resolveTags(item) || {};
+        return activeTags.includes(parent) || activeTags.includes(item.layer || "");
+      });
+    }
+
+    // 4. 予定を時間順に綺麗に並べ替える（終日は一番上）
+    events.sort((a, b) => {
+      if (a.isAllDay && !b.isAllDay) return -1;
+      if (!a.isAllDay && b.isAllDay) return 1;
+      if (a.startTime && b.startTime) return a.startTime.localeCompare(b.startTime);
+      return 0;
     });
-  }
 
-  // 4. 予定を時間順に綺麗に並べ替える（終日は一番上）
-  events.sort((a, b) => {
-    if (a.isAllDay && !b.isAllDay) return -1;
-    if (!a.isAllDay && b.isAllDay) return 1;
-    if (a.startTime && b.startTime) return a.startTime.localeCompare(b.startTime);
-    return 0;
-  });
+    // 5. 祝日があれば一番上に追加する
+    if (currentHoliday) {
+      const exists = events.some((i) => i.id === currentHoliday.id);
+      if (!exists) events = [currentHoliday, ...events];
+    }
 
-  // 5. 祝日があれば一番上に追加する
-  if (currentHoliday) {
-    const exists = events.some((i) => i.id === currentHoliday.id);
-    if (!exists) events = [currentHoliday, ...events];
-  }
+    return events;
+  }, [expandedScheduleData, selectedDate, activeTags, currentHoliday]);
 
-  return events;
-}, [expandedScheduleData, selectedDate, activeTags, currentHoliday]);
+  // 🌟🌟🌟 ToDoリスト側に繰り返し予定が出ないバグを強制バイパスするリスト生成機能！ 🌟🌟🌟
+  const finalDayTasks = useMemo(() => {
+    // 1. 繰り返し予定も完璧に含まれているデータから直接ゲット！
+    const todayItems = expandedScheduleData[selectedDate] || [];
+    let tasks = todayItems.filter((item) => item.isTodo);
+
+    // 2. フィルターがONなら適用
+    if (activeTags.length > 0) {
+      tasks = tasks.filter((item) => {
+        const { parent } = resolveTags(item) || {};
+        return activeTags.includes(parent) || activeTags.includes(item.layer || "");
+      });
+    }
+
+    // 3. 並べ替え（未完了を上、完了済みを下、時間順）
+    tasks.sort((a, b) => {
+      if (a.isDone && !b.isDone) return 1;
+      if (!a.isDone && b.isDone) return -1;
+      if (a.isAllDay && !b.isAllDay) return -1;
+      if (!a.isAllDay && b.isAllDay) return 1;
+      if (a.startTime && b.startTime) return a.startTime.localeCompare(b.startTime);
+      return 0;
+    });
+
+    return tasks;
+  }, [expandedScheduleData, selectedDate, activeTags]);
+
+  const finalUpcomingTasks = useMemo(() => {
+    let upcoming: ScheduleItem[] = [];
+    const [y, m, d] = selectedDate.split("-").map(Number);
+    const currentDate = new Date(y, m - 1, d);
+
+    // 今日から7日後までのデータを取得
+    for (let i = 1; i <= 7; i++) {
+      const nextDate = new Date(currentDate);
+      nextDate.setDate(nextDate.getDate() + i);
+      const nextDateStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, "0")}-${String(nextDate.getDate()).padStart(2, "0")}`;
+
+      const items = expandedScheduleData[nextDateStr] || [];
+      // ToDoかつ未完了のものを抽出
+      const tasks = items.filter((item) => item.isTodo && !item.isDone);
+
+      // 🌟 リストが過去の予定と勘違いして弾かないように、所属日を書き換えてコピー
+      const processedTasks = tasks.map(t => ({ ...t, date: nextDateStr }));
+      upcoming.push(...processedTasks);
+    }
+
+    if (activeTags.length > 0) {
+      upcoming = upcoming.filter((item) => {
+        const { parent } = resolveTags(item) || {};
+        return activeTags.includes(parent) || activeTags.includes(item.layer || "");
+      });
+    }
+
+    // 同じ予定（繰り返しの同一ID）は、一番近い日の1件だけにする
+    const uniqueUpcomingMap = new Map();
+    upcoming.forEach(item => {
+      if (!uniqueUpcomingMap.has(item.id)) {
+        uniqueUpcomingMap.set(item.id, item);
+      }
+    });
+
+    const uniqueUpcoming = Array.from(uniqueUpcomingMap.values()) as ScheduleItem[];
+
+    // 日付順、時間順に並べ替え
+    uniqueUpcoming.sort((a, b) => {
+      const dateA = a.date || "";
+      const dateB = b.date || "";
+      if (dateA !== dateB) return dateA.localeCompare(dateB);
+      if (a.isAllDay && !b.isAllDay) return -1;
+      if (!a.isAllDay && b.isAllDay) return 1;
+      if (a.startTime && b.startTime) return a.startTime.localeCompare(b.startTime);
+      return 0;
+    });
+
+    return uniqueUpcoming.slice(0, 10);
+  }, [expandedScheduleData, selectedDate, activeTags]);
 
   const currentSolidColor = useMemo(() => {
     if (activeTags.length === 1) {
@@ -2588,8 +2666,8 @@ const finalDayEvents = useMemo(() => {
           {activeMode === "todo" && (
             <View style={{ flex: 1 }}>
               <TodoDashboard
-                dayTasks={dayTasks}
-                upcomingTasks={upcomingTasks}
+                dayTasks={finalDayTasks} // 🌟 変更：バイパスした最強リストを渡す！
+                upcomingTasks={finalUpcomingTasks} // 🌟 変更：バイパスした最強リストを渡す！
                 selectedDate={selectedDate}
                 currentSolidColor={currentSolidColor}
                 activeTags={activeTags}
