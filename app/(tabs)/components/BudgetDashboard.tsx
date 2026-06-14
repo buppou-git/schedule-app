@@ -149,7 +149,10 @@ export default function BudgetDashboard({
       : layerMaster[currentActiveLayer]
     : "#1C1C1E";
 
-  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }, []);
 
   const presetIcons = [
     "musical-notes",
@@ -626,9 +629,9 @@ export default function BudgetDashboard({
   }, [todayStr, payday]);
 
   const executeSalaryRecord = async () => {
-    Keyboard.dismiss(); 
+    Keyboard.dismiss();
     const amount = parseInt(salaryInputAmount);
-    
+
     if (isNaN(amount) || amount <= 0) {
       if (Platform.OS === "web") window.alert("正しい金額を入力してください");
       else Alert.alert("エラー", "正しい金額を入力してください");
@@ -669,7 +672,7 @@ export default function BudgetDashboard({
     setIsSalaryModalVisible(false);
     setSalaryInputAmount("");
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    
+
     if (Platform.OS === "web") window.alert("収入を記録しました！");
     else Alert.alert("記録完了", "収入を記録しました！");
   };
@@ -821,7 +824,7 @@ export default function BudgetDashboard({
       const newScheduleData = { ...scheduleData };
       if (wishToDelete && wishToDelete.dynamicSavedAmount > 0) {
         // 🌟 修正①：キャンセルの返金は必ず「個人の財布」に戻す
-        const targetLayer = "共通";
+        const targetLayer = "貯金";
 
         const refundItem: ScheduleItem = {
           id: Date.now().toString() + Math.random().toString(),
@@ -979,7 +982,7 @@ export default function BudgetDashboard({
     await AsyncStorage.setItem("wishlistData", JSON.stringify(updatedWishlist));
 
     // 🌟 修正②：チャージは必ず「個人の財布」から引く（相手に履歴を送らないため削除も防げる）
-    const targetLayer = "共通";
+    const targetLayer = "貯金";
 
     const newItem: ScheduleItem = {
       id: Date.now().toString(),
@@ -990,7 +993,7 @@ export default function BudgetDashboard({
       title:
         actualDeposit >= 0
           ? // ...(略)
-            `${selectedWish.name}へチャージ`
+          `${selectedWish.name}へチャージ`
           : `${selectedWish.name}から戻入`,
       amount: Math.abs(actualDeposit), // 🌟 補正したぴったり金額を支出として記録
       color: selectedWish.color,
@@ -1117,7 +1120,7 @@ export default function BudgetDashboard({
           });
 
           // 🌟 修正③：残金分配も必ず「個人の財布」から移動する
-          const targetLayer = "共通";
+          const targetLayer = "貯金";
 
           const newItem: ScheduleItem = {
             id: Date.now().toString() + Math.random().toString(),
@@ -1241,7 +1244,9 @@ export default function BudgetDashboard({
   );
 
   const globalBudgetCalc = useMemo(() => {
-    const totalAllocated = Object.keys(layerMaster).reduce((sum, l) => {
+    // 🌟 修正：「貯金」や「外部予定」も予算計算の対象に含める！
+    const layers = Array.from(new Set([...Object.keys(layerMaster), "共通", "貯金", "外部予定"]));
+    const totalAllocated = layers.reduce((sum, l) => {
       if (layerBudgetEnabled[l] === false) return sum;
       return sum + (layerBudgets[l] || 0);
     }, 0);
@@ -1272,27 +1277,45 @@ export default function BudgetDashboard({
     let otherActual = 0;
     let otherBudget = 0;
 
+    // 🌟 修正：「貯金」を独立レイヤーとして配列に追加
     const layers = Array.from(
-      new Set([...Object.keys(layerMaster), "共通", "外部予定"]),
+      new Set([...Object.keys(layerMaster), "共通", "貯金", "外部予定"]),
     );
     layers.forEach((l) => {
       if (layerBudgetEnabled[l] === false) return;
       const actual = layerActuals[l] || 0;
-      const budget = l === "共通" ? 0 : layerBudgets[l] || 0;
+      const budget = layerBudgets[l] || 0;
       const isMatched = activeTags.length === 0 || activeTags.includes(l);
 
       if (isMatched) {
-        segments.push({
-          // 🌟 修正：外部予定なら赤色にする！
-          color:
-            l === "外部予定"
-              ? "#FF2D55"
-              : l === "共通"
-                ? "#8E8E93"
-                : layerMaster[l],
-          actual,
-          budget,
-        });
+        if (l === "貯金") {
+          // 🌟 追加：夢リストは「夢ごとの色」でバーをカラフルに分割する！
+          let allocatedActual = 0;
+          let allocatedBudget = 0; // 🌟 宣言を追加！
+
+          // 🌟 抜け落ちていたループを追加！ここで個別の夢の金額と色を計算します
+          augmentedWishlist.forEach((wish) => {
+            const wActual = subTagActuals[wish.name] || 0;
+            const wBudget = subTagBudgets[wish.name] || 0;
+            if (wActual > 0 || wBudget > 0) {
+              segments.push({ color: wish.color, actual: wActual, budget: wBudget });
+              allocatedActual += wActual;
+              allocatedBudget += wBudget;
+            }
+          });
+
+          const remainActual = actual - allocatedActual;
+          const remainBudget = budget - allocatedBudget;
+          if (remainActual > 0 || remainBudget > 0) {
+            segments.push({ color: "#FF9500", actual: Math.max(0, remainActual), budget: Math.max(0, remainBudget) });
+          }
+        } else {
+          segments.push({
+            color: l === "外部予定" ? "#FF2D55" : l === "共通" ? "#8E8E93" : layerMaster[l] || "#C7C7CC",
+            actual,
+            budget,
+          });
+        }
       } else if (activeTags.length > 1) {
         otherActual += actual;
         otherBudget += budget;
@@ -1820,24 +1843,21 @@ export default function BudgetDashboard({
               <View style={styles.chartArea}>
                 {Object.keys(stats.totals).length > 0 ? (
                   <PieChart
-                    data={Object.keys(stats.totals).map((key, index) => ({
-                      name: key,
-                      population: stats.totals[key],
-                      color:
-                        key === "その他"
-                          ? "#C7C7CC"
-                          : !currentActiveLayer && chartGroupBy === "layer"
-                            ? key === "共通"
-                              ? "#8E8E93"
-                              : key === "外部予定" // 🌟 ここを追加！
-                                ? "#FF2D55"
-                                : layerMaster[key] ||
-                                  CHART_PALETTE[index % CHART_PALETTE.length]
-                            : tagMaster[key]?.color ||
-                              CHART_PALETTE[index % CHART_PALETTE.length],
-                      legendFontColor: "#666",
-                      legendFontSize: 11,
-                    }))}
+                    data={Object.keys(stats.totals).map((key, index) => {
+                      const matchedWish = augmentedWishlist.find((w) => w.name === key);
+                      return {
+                        name: key,
+                        population: stats.totals[key],
+                        color:
+                          key === "その他" ? "#C7C7CC"
+                            : matchedWish ? matchedWish.color // 🌟 夢の名前なら個別の色を適用！
+                              : !currentActiveLayer && chartGroupBy === "layer"
+                                ? (key === "外部予定" ? "#FF2D55" : key === "貯金" ? "#FF9500" : key === "共通" ? "#8E8E93" : layerMaster[key] || CHART_PALETTE[index % CHART_PALETTE.length])
+                                : tagMaster[key]?.color || CHART_PALETTE[index % CHART_PALETTE.length],
+                        legendFontColor: "#666",
+                        legendFontSize: 11,
+                      };
+                    })}
                     width={screenWidth * 0.8}
                     height={160}
                     chartConfig={{ color: () => `black` }}
@@ -1913,42 +1933,31 @@ export default function BudgetDashboard({
                   </View>
 
                   <View style={styles.masterStackContainer}>
-                    <View style={[styles.masterStackLayer, { opacity: 0.2 }]}>
-                      {barSegments.map((seg, idx) => (
-                        <View
-                          key={`bg-${idx}`}
-                          style={{
-                            width: `${(seg.budget / baseIncome) * 100}%`,
-                            height: "100%",
-                            backgroundColor: seg.color,
-                          }}
-                        />
-                      ))}
-                    </View>
-                    <View style={styles.masterStackLayer}>
-                      {isGlobalDeficit ? (
-                        <View
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            backgroundColor: "#FF3B30",
-                          }}
-                        />
-                      ) : (
-                        barSegments.map((seg, idx) => (
-                          <View
-                            key={`fg-${idx}`}
-                            style={{
-                              width: `${(seg.actual / baseIncome) * 100}%`,
-                              height: "100%",
-                              backgroundColor: seg.color,
-                              borderRightWidth: 1,
-                              borderColor: "#FFF",
-                            }}
-                          />
-                        ))
-                      )}
-                    </View>
+                    {/* 🌟 究極のはみ出し防止：予算または実績がオーバーした際、全体を自動縮小して画面内に収める */}
+                    {(() => {
+                      const masterActualTotal = barSegments.reduce((sum, s) => sum + s.actual, 0);
+                      const masterBudgetTotal = barSegments.reduce((sum, s) => sum + s.budget, 0);
+                      const masterMax = Math.max(baseIncome, masterActualTotal, masterBudgetTotal) || 1;
+
+                      return (
+                        <>
+                          <View style={[styles.masterStackLayer, { opacity: 0.2 }]}>
+                            {barSegments.map((seg, idx) => (
+                              <View key={`bg-${idx}`} style={{ width: `${(seg.budget / masterMax) * 100}%`, height: "100%", backgroundColor: seg.color }} />
+                            ))}
+                          </View>
+                          <View style={styles.masterStackLayer}>
+                            {isGlobalDeficit ? (
+                              <View style={{ width: "100%", height: "100%", backgroundColor: "#FF3B30" }} />
+                            ) : (
+                              barSegments.map((seg, idx) => (
+                                <View key={`fg-${idx}`} style={{ width: `${(seg.actual / masterMax) * 100}%`, height: "100%", backgroundColor: seg.color, borderRightWidth: 1, borderColor: "#FFF" }} />
+                              ))
+                            )}
+                          </View>
+                        </>
+                      );
+                    })()}
                   </View>
 
                   <View style={styles.masterProgressLabelRow}>
@@ -1982,21 +1991,25 @@ export default function BudgetDashboard({
 
                   {/* 🌟 修正：ループの対象に "外部予定" を含める */}
                   {Array.from(
-                    new Set([...Object.keys(layerMaster), "外部予定"]),
+                    new Set([...Object.keys(layerMaster), "共通", "貯金", "外部予定"]), // 🌟 追加
                   ).map((l) => {
                     if (layerBudgetEnabled[l] === false) return null;
-                    if (activeTags.length > 0 && !activeTags.includes(l))
-                      return null;
+                    if (activeTags.length > 0 && !activeTags.includes(l)) return null;
 
                     const b = layerBudgets[l] || 0;
                     const a = layerActuals[l] || 0;
-                    const color = l === "外部予定" ? "#FF2D55" : layerMaster[l];
-                    const limit =
-                      b + Math.max(0, globalBudgetCalc.unallocatedBuffer);
-                    const layerSubTags = Object.keys(tagMaster).filter(
-                      (t) => tagMaster[t].layer === l,
+                    // 🌟 修正：レイヤーごとのベースカラーを設定
+                    const color = l === "外部予定" ? "#FF2D55" : l === "貯金" ? "#FF9500" : l === "共通" ? "#8E8E93" : layerMaster[l] || themeColor;
+                    const limit = b + Math.max(0, globalBudgetCalc.unallocatedBuffer);
+
+                    // 🌟 修正：「貯金」レイヤーの場合は、夢リストの名前を展開する！
+                    const layerSubTags = Array.from(
+                      new Set([
+                        ...Object.keys(tagMaster).filter((t) => tagMaster[t].layer === l),
+                        ...(l === "貯金" ? augmentedWishlist.map((w) => w.name) : []),
+                      ])
                     );
-                    
+
                     // 🌟 追加：上限の計算と、警告時の色の決定
                     const maxAllowedLayer = b + Math.max(0, globalBudgetCalc.unallocatedBuffer);
                     const isLayerWarning = sliderWarning === `layer-${l}`;
@@ -2079,7 +2092,7 @@ export default function BudgetDashboard({
                           onSlidingComplete={() => setSliderWarning(null)} // 🌟 指を離したら色を戻す
                           onValueChange={(val) => {
                             let newVal = val;
-                            
+
                             // 🌟 上限を超えようとしたらブロックしてブルッとさせる！
                             if (val > maxAllowedLayer) {
                               newVal = maxAllowedLayer;
@@ -2113,13 +2126,13 @@ export default function BudgetDashboard({
                                   (s, t) => s + (subTagBudgets[t] || 0),
                                   0,
                                 );
-                                const slimit = sb + Math.max(0, layerUnallocated);
-                          
-                                // 🌟 追加：警告時の色の決定
-                                const isSubWarning = sliderWarning === `sub-${l}-${sub}`;
-                                const subThumbColor = isSubWarning ? "#FF3B30" : sc;
-      
-                                return (
+                              const slimit = sb + Math.max(0, layerUnallocated);
+
+                              // 🌟 追加：警告時の色の決定
+                              const isSubWarning = sliderWarning === `sub-${l}-${sub}`;
+                              const subThumbColor = isSubWarning ? "#FF3B30" : sc;
+
+                              return (
                                 <View key={sub} style={styles.subTagAdjustRow}>
                                   <View style={styles.subTagHeader}>
                                     <Text
@@ -2186,7 +2199,7 @@ export default function BudgetDashboard({
                                     onSlidingComplete={() => setSliderWarning(null)} // 🌟 追加
                                     onValueChange={(val) => {
                                       let newVal = val;
-                                      
+
                                       // 🌟 上限を超えようとしたらブロックしてブルッとさせる！
                                       if (val > slimit) {
                                         newVal = slimit;
@@ -2422,20 +2435,22 @@ export default function BudgetDashboard({
                         {layerSubTags.map((sub) => {
                           const sb = subTagBudgets[sub] || 0;
                           const sa = subTagActuals[sub] || 0;
-                          const sc = tagMaster[sub]?.color || themeColor;
+                          // 🌟 追加：夢の名前なら個別の設定色を拾う！
+                          const matchedWish = augmentedWishlist.find((w) => w.name === sub);
+                          const sc = tagMaster[sub]?.color || matchedWish?.color || themeColor; // 🌟 変更
                           const slimit =
                             sb +
                             Math.max(
                               0,
                               singleLayerBudgetCalc.unallocatedBuffer,
                             );
-                            const isOver = sa > sb;
-                          
-                            // 🌟 追加：警告時の色の決定
-                            const isSubWarning = sliderWarning === `sub-${currentActiveLayer}-${sub}`;
-                            const subThumbColor = isSubWarning ? "#FF3B30" : sc;
-  
-                            return (
+                          const isOver = sa > sb;
+
+                          // 🌟 追加：警告時の色の決定
+                          const isSubWarning = sliderWarning === `sub-${currentActiveLayer}-${sub}`;
+                          const subThumbColor = isSubWarning ? "#FF3B30" : sc;
+
+                          return (
                             <View key={sub} style={styles.sliderCard}>
                               <View style={styles.sliderHeader}>
                                 <Text
@@ -2499,7 +2514,7 @@ export default function BudgetDashboard({
                                 onSlidingComplete={() => setSliderWarning(null)} // 🌟 追加
                                 onValueChange={(val) => {
                                   let newVal = val;
-                                  
+
                                   // 🌟 上限を超えようとしたらブロックしてブルッとさせる！
                                   if (val > slimit) {
                                     newVal = slimit;
