@@ -1520,9 +1520,9 @@ function IndexContent() {
       const nextDateStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, "0")}-${String(nextDate.getDate()).padStart(2, "0")}`;
 
       const items = expandedScheduleData[nextDateStr] || [];
-      // ToDoかつ未完了のものを抽出
-      const tasks = items.filter((item) => item.isTodo && !item.isDone);
-
+      // 🌟 修正：ToDoかつ未完了で、さらに「繰り返し予定ではない（単発のタスク）」だけを抽出！
+      const tasks = items.filter((item) => item.isTodo && !item.isDone && !item.repeatType);
+      
       // 🌟 リストが過去の予定と勘違いして弾かないように、所属日を書き換えてコピー
       const processedTasks = tasks.map(t => ({ ...t, date: nextDateStr }));
       upcoming.push(...processedTasks);
