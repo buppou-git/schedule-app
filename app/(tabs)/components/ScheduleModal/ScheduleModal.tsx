@@ -113,6 +113,9 @@ const ScheduleModal = ({
     endTime: new Date(),
   });
 
+  // ==========================================
+  // 🌟 追加：キーボードの高さを検知するシステム
+  // ==========================================
   const [keyboardPadding, setKeyboardPadding] = useState(0);
 
   useEffect(() => {
@@ -132,6 +135,7 @@ const ScheduleModal = ({
       hideSub.remove();
     };
   }, []);
+  // ==========================================
 
   // 🌟 関数自体をメモ化して、子コンポーネントの無駄な再描画を防ぐ
   const updateForm = useCallback((updates: Partial<typeof formData>) => {
@@ -2033,12 +2037,13 @@ const ScheduleModal = ({
               <ScrollView
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
-                // 🌟 修正：キーボードの高さ分だけ下に余白（クッション）を作る！
+                // 🌟 修正：+20くらいにおさえておく
                 contentContainerStyle={{
                   flexGrow: 1,
-                  paddingBottom: keyboardPadding,
+                  paddingBottom:
+                    keyboardPadding > 0 ? keyboardPadding + 20 : 40,
                 }}
-                automaticallyAdjustKeyboardInsets={true} // iOS用の神プロパティ
+                automaticallyAdjustKeyboardInsets={true}
               >
                 <View style={styles.simpleMainWrapper}>
                   <View style={styles.simpleDragBar} />
@@ -2103,9 +2108,10 @@ const ScheduleModal = ({
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
                     keyboardDismissMode="on-drag"
-                    // 🌟 修正：ここにもキーボードの高さ分の余白を追加！
+                    // 🌟 修正：こちらも+20くらいにおさえておく
                     contentContainerStyle={{
-                      paddingBottom: keyboardPadding + 20,
+                      paddingBottom:
+                        keyboardPadding > 0 ? keyboardPadding + 20 : 40,
                     }}
                     automaticallyAdjustKeyboardInsets={true}
                   >

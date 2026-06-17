@@ -898,6 +898,17 @@ function IndexContent() {
                   "hasCompletedOnboarding", // 🌟 追加：初回フラグも消去する！
                   "useBiometricLock", // 🌟 追加：生体認証の設定をリセット
                   "usePinLock", // 🌟 追加：暗証番号の設定をリセット
+                  "wishlistData",
+                  "myMonthlyBudget",
+                  "myPayday",
+                  "layerBudgetsData",
+                  "subTagBudgetsData",
+                  "unallocatedSavingsData",
+                  "lastAutoDepositCycle",
+                  "hiddenExternalIds",
+                  "isSavingsHidden",
+                  "isNotificationEnabled",
+                  "notificationTime",
                 ]);
                 await SecureStore.deleteItemAsync("app_pin_code");
 
@@ -1032,7 +1043,18 @@ function IndexContent() {
 
           setLayerMaster(initialLayers);
           if (pre) setPresets(JSON.parse(pre));
-          if (tags) setTagMaster(JSON.parse(tags));
+
+          // 🌟 魔法の自己修復：「休日」や「祝日」が誤ってサブカテゴリに登録されていたら自動削除してクリーンアップ！
+          let initialTags = tags ? JSON.parse(tags) : {};
+          if (initialTags["祝日"] || initialTags["休日"]) {
+            delete initialTags["祝日"];
+            delete initialTags["休日"];
+            await AsyncStorage.setItem(
+              "tagMasterData",
+              JSON.stringify(initialTags),
+            );
+          }
+          setTagMaster(initialTags);
 
           // 🌟 追加：共有ルームの記憶をStateにセット
           if (sharedRoomsStr) {
@@ -1357,7 +1379,10 @@ function IndexContent() {
         if (
           item.tag === "祝日" ||
           item.category === "祝日" ||
-          item.layer === "祝日"
+          item.layer === "祝日" ||
+          item.tag === "休日" ||
+          item.category === "休日" ||
+          item.layer === "休日"
         )
           return true;
 
@@ -1381,14 +1406,14 @@ function IndexContent() {
     if (currentHoliday) {
       const exists = events.some((i) => i.id === currentHoliday.id);
       if (!exists) {
-        // 🌟 修正：祝日が「未分類」などのデフォルト扱いにならないよう、強制的に祝日の属性を付与する！
+        // 🌟 修正：祝日が「未分類」などのデフォルト扱いにならないよう、強制的に「休日」という独立した属性を付与する！
         events = [
           {
             ...currentHoliday,
-            category: "祝日",
-            layer: "祝日",
-            tag: "祝日",
-            tags: ["祝日"],
+            category: "休日",
+            layer: "休日",
+            tag: "休日",
+            tags: ["休日"],
           },
           ...events,
         ];
@@ -1526,7 +1551,13 @@ function IndexContent() {
   };
 
   const openEditModal = (item: ScheduleItem) => {
-    if (item.tag === "祝日" || item.category === "祝日") {
+    // 🌟 修正：「休日」でも開かないようにガードする
+    if (
+      item.tag === "祝日" ||
+      item.category === "祝日" ||
+      item.tag === "休日" ||
+      item.category === "休日"
+    ) {
       return;
     }
 
@@ -2180,10 +2211,15 @@ function IndexContent() {
   const stableOpenEditModal = useStableCallback(openEditModal);
   const stableFormatEventTime = useStableCallback(formatEventTime);
   const stableLongPress = useStableCallback((item: ScheduleItem) => {
-    if (item.tag === "祝日" || item.category === "祝日") {
+    // 🌟 修正：「休日」でも開かないようにガードする
+    if (
+      item.tag === "祝日" ||
+      item.category === "祝日" ||
+      item.tag === "休日" ||
+      item.category === "休日"
+    ) {
       return;
     }
-
     if (item.id && String(item.id).startsWith("ext_")) {
       setSelectedExternalItem(item);
       setExternalModalVisible(true);
