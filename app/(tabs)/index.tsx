@@ -1380,7 +1380,19 @@ function IndexContent() {
     // 5. 祝日があれば一番上に追加する
     if (currentHoliday) {
       const exists = events.some((i) => i.id === currentHoliday.id);
-      if (!exists) events = [currentHoliday, ...events];
+      if (!exists) {
+        // 🌟 修正：祝日が「未分類」などのデフォルト扱いにならないよう、強制的に祝日の属性を付与する！
+        events = [
+          {
+            ...currentHoliday,
+            category: "祝日",
+            layer: "祝日",
+            tag: "祝日",
+            tags: ["祝日"],
+          },
+          ...events,
+        ];
+      }
     }
 
     return events;
@@ -1392,13 +1404,21 @@ function IndexContent() {
     const todayItems = expandedScheduleData[selectedDate] || [];
     let tasks = todayItems.filter((item) => item.isTodo);
 
+    // 🌟 修正：繰り返しタスクの場合、別の日のチェック状態が引き継がれてしまわないよう、「今見ている日が完了日リストに入っているか」で完了状態を上書きする！
+    tasks = tasks.map((task) => {
+      if (task.repeatType) {
+        return {
+          ...task,
+          isDone: task.completedDates?.includes(selectedDate) || false,
+        };
+      }
+      return task;
+    });
+
     // 2. フィルターがONなら適用
     if (activeTags.length > 0) {
       tasks = tasks.filter((item) => {
         const { parent } = resolveTags(item) || {};
-        return (
-          activeTags.includes(parent) || activeTags.includes(item.layer || "")
-        );
       });
     }
 

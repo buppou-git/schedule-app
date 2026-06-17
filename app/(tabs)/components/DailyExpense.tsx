@@ -7,6 +7,7 @@ import {
   Dimensions,
   Keyboard,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -74,6 +75,26 @@ export default function DailyExpense({
   } | null>(null);
   const [editAmount, setEditAmount] = useState("");
   const [editTitle, setEditTitle] = useState("");
+
+  const [keyboardPadding, setKeyboardPadding] = useState(0);
+
+  useEffect(() => {
+    const showEvt =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvt =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSub = Keyboard.addListener(showEvt, (e) => {
+      setKeyboardPadding(e.endCoordinates.height);
+    });
+    const hideSub = Keyboard.addListener(hideEvt, () => {
+      setKeyboardPadding(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const [addSubTagModalVisible, setAddSubTagModalVisible] = useState(false);
   const [targetLayerForSubTag, setTargetLayerForSubTag] = useState("");
@@ -400,7 +421,8 @@ export default function DailyExpense({
   };
 
   return (
-    <>
+    // 🌟 修正：フラグメント(<>)からViewに変更し、キーボード分の余白を当てる
+    <View style={{ paddingBottom: keyboardPadding, flex: 1 }}>
       {/* 🌟 1. 全体の上にアシストメッセージを配置 */}
       <View
         style={{
@@ -619,6 +641,7 @@ export default function DailyExpense({
             decelerationRate="fast"
             contentContainerStyle={{ paddingRight: 10 }}
             keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets={true}
           >
             {displayLayers.map((l) => {
               const c =
@@ -1200,7 +1223,7 @@ export default function DailyExpense({
           </TouchableOpacity>
         </Modal>
       </View>
-    </>
+    </View>
   );
 }
 

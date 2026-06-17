@@ -113,6 +113,26 @@ const ScheduleModal = ({
     endTime: new Date(),
   });
 
+  const [keyboardPadding, setKeyboardPadding] = useState(0);
+
+  useEffect(() => {
+    const showEvt =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvt =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSub = Keyboard.addListener(showEvt, (e) => {
+      setKeyboardPadding(e.endCoordinates.height);
+    });
+    const hideSub = Keyboard.addListener(hideEvt, () => {
+      setKeyboardPadding(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
   // 🌟 関数自体をメモ化して、子コンポーネントの無駄な再描画を防ぐ
   const updateForm = useCallback((updates: Partial<typeof formData>) => {
     setFormData((prev) => {
@@ -1976,7 +1996,8 @@ const ScheduleModal = ({
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        // 🌟 修正：AndroidでもiOSでも余白調整が競合しないようにbehaviorを外す
+        behavior={Platform.OS === "ios" ? undefined : undefined}
         style={{ flex: 1 }}
       >
         {/* ======================= */}
@@ -2012,7 +2033,12 @@ const ScheduleModal = ({
               <ScrollView
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
-                contentContainerStyle={{ flexGrow: 1 }}
+                // 🌟 修正：キーボードの高さ分だけ下に余白（クッション）を作る！
+                contentContainerStyle={{
+                  flexGrow: 1,
+                  paddingBottom: keyboardPadding,
+                }}
+                automaticallyAdjustKeyboardInsets={true} // iOS用の神プロパティ
               >
                 <View style={styles.simpleMainWrapper}>
                   <View style={styles.simpleDragBar} />
@@ -2077,6 +2103,11 @@ const ScheduleModal = ({
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
                     keyboardDismissMode="on-drag"
+                    // 🌟 修正：ここにもキーボードの高さ分の余白を追加！
+                    contentContainerStyle={{
+                      paddingBottom: keyboardPadding + 20,
+                    }}
+                    automaticallyAdjustKeyboardInsets={true}
                   >
                     <View style={{ marginBottom: 20 }}>
                       <View
