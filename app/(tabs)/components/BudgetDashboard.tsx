@@ -103,6 +103,8 @@ export default function BudgetDashboard({
   const [isSalaryModalVisible, setIsSalaryModalVisible] = useState(false);
   const [salaryInputAmount, setSalaryInputAmount] = useState("");
 
+  const [sliderWarning, setSliderWarning] = useState<string | null>(null);
+
   const [addSubTagModalVisible, setAddSubTagModalVisible] = useState(false);
   const [targetLayerForSubTag, setTargetLayerForSubTag] = useState("");
   const [newSubTagName, setNewSubTagName] = useState("");
@@ -148,7 +150,11 @@ export default function BudgetDashboard({
       : layerMaster[currentActiveLayer]
     : "#1C1C1E";
 
-  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
+  // 🌟 修正：世界標準時（UTC）のズレを防ぎ、確実にスマホの現在の日付を取得する！
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }, []);
 
   const presetIcons = [
     "musical-notes",
@@ -505,13 +511,13 @@ export default function BudgetDashboard({
           if (isShared && !isSingleLayerMode) return;
 
           if (iTotal > 0) {
-            // 🌟 修正：戻入の場合はベース収入(tIncome)から除外する！
             if (
               item.category === "目標からの戻入" ||
               (item.title && item.title.includes("戻入"))
             ) {
               tRefund += iTotal;
             } else {
+              // 🌟 修正：ここで追加した収入を、予算管理の全体の「ベース収入(tIncome)」にしっかり足し込む！
               tIncome += iTotal;
             }
           }
@@ -534,8 +540,9 @@ export default function BudgetDashboard({
       };
     }, [displayData, cycleRange, activeTags, sharedRooms, tagMaster]);
 
-  const baseIncome =
-    cycleStats.tIncome > 0 ? cycleStats.tIncome : monthlyBudget;
+  // 🌟 修正：設定した基本の「毎月の予算」に、アプリ内で追加した「その月の収入実績」をすべて足し合わせて、全体のパイ（baseIncome）を作る！
+  const baseIncome = monthlyBudget + cycleStats.tIncome;
+
   // 🌟 魔法の修正：ベース収入（予想貯金）には影響を与えず、純粋に「現在の使えるお金」だけを回復させる
   const currentUsableRaw =
     baseIncome - cycleStats.tExpense + (cycleStats.tRefund || 0);
@@ -625,8 +632,22 @@ export default function BudgetDashboard({
   }, [todayStr, payday]);
 
   const executeSalaryRecord = async () => {
-    Keyboard.dismiss(); // 🌟 追加：ボタンを押した瞬間にキーボードを隠す！
+    Keyboard.dismiss();
     const amount = parseInt(salaryInputAmount);
+
+    if (isNaN(amount) || amount < 0) {
+      if (Platform.OS === "web") window.alert("正しい金額を入力してください");
+      else Alert.alert("エラー", "正しい金額を入力してください");
+      return;
+    }
+
+    // 🌟🌟🌟 これが消えていた本来のロジック！ 🌟🌟🌟
+    // 入力された金額を「今月の基本給（ベース予算）」としてシステムとストレージに保存する
+    setMonthlyBudget(amount);
+    await AsyncStorage.setItem("myMonthlyBudget", amount.toString());
+    setTimeout(() => setHasUnsavedChanges(true), 100);
+
+    setIsSalaryModalVisible(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
@@ -777,7 +798,7 @@ export default function BudgetDashboard({
       const newScheduleData = { ...scheduleData };
       if (wishToDelete && wishToDelete.dynamicSavedAmount > 0) {
         // 🌟 修正①：キャンセルの返金は必ず「個人の財布」に戻す
-        const targetLayer = "共通";
+        const targetLayer = "貯金";
 
         const refundItem: ScheduleItem = {
           id: Date.now().toString() + Math.random().toString(),
@@ -935,7 +956,7 @@ export default function BudgetDashboard({
     await AsyncStorage.setItem("wishlistData", JSON.stringify(updatedWishlist));
 
     // 🌟 修正②：チャージは必ず「個人の財布」から引く（相手に履歴を送らないため削除も防げる）
-    const targetLayer = "共通";
+    const targetLayer = "貯金";
 
     const newItem: ScheduleItem = {
       id: Date.now().toString(),
@@ -1073,7 +1094,7 @@ export default function BudgetDashboard({
           });
 
           // 🌟 修正③：残金分配も必ず「個人の財布」から移動する
-          const targetLayer = "共通";
+          const targetLayer = "貯金";
 
           const newItem: ScheduleItem = {
             id: Date.now().toString() + Math.random().toString(),
@@ -1197,7 +1218,11 @@ export default function BudgetDashboard({
   );
 
   const globalBudgetCalc = useMemo(() => {
-    const totalAllocated = Object.keys(layerMaster).reduce((sum, l) => {
+    // 🌟 修正：「貯金」や「外部予定」も予算計算の対象に含める！
+    const layers = Array.from(
+      new Set([...Object.keys(layerMaster), "共通", "貯金", "外部予定"]),
+    );
+    const totalAllocated = layers.reduce((sum, l) => {
       if (layerBudgetEnabled[l] === false) return sum;
       return sum + (layerBudgets[l] || 0);
     }, 0);
@@ -1228,27 +1253,55 @@ export default function BudgetDashboard({
     let otherActual = 0;
     let otherBudget = 0;
 
+    // 🌟 修正：「貯金」を独立レイヤーとして配列に追加
     const layers = Array.from(
-      new Set([...Object.keys(layerMaster), "共通", "外部予定"]),
+      new Set([...Object.keys(layerMaster), "共通", "貯金", "外部予定"]),
     );
     layers.forEach((l) => {
       if (layerBudgetEnabled[l] === false) return;
       const actual = layerActuals[l] || 0;
-      const budget = l === "共通" ? 0 : layerBudgets[l] || 0;
+      const budget = layerBudgets[l] || 0;
       const isMatched = activeTags.length === 0 || activeTags.includes(l);
 
       if (isMatched) {
-        segments.push({
-          // 🌟 修正：外部予定なら赤色にする！
-          color:
-            l === "外部予定"
-              ? "#FF2D55"
-              : l === "共通"
-                ? "#8E8E93"
-                : layerMaster[l],
-          actual,
-          budget,
-        });
+        if (l === "貯金") {
+          // 🌟 追加：夢リストは「夢ごとの色」でバーをカラフルに分割する！
+          let allocatedActual = 0;
+          let allocatedBudget = 0;
+          augmentedWishlist.forEach((wish) => {
+            const wActual = subTagActuals[wish.name] || 0;
+            const wBudget = subTagBudgets[wish.name] || 0;
+            if (wActual > 0 || wBudget > 0) {
+              segments.push({
+                color: wish.color,
+                actual: wActual,
+                budget: wBudget,
+              });
+              allocatedActual += wActual;
+              allocatedBudget += wBudget;
+            }
+          });
+          const remainActual = actual - allocatedActual;
+          const remainBudget = budget - allocatedBudget;
+          if (remainActual > 0 || remainBudget > 0) {
+            segments.push({
+              color: "#FF9500",
+              actual: Math.max(0, remainActual),
+              budget: Math.max(0, remainBudget),
+            });
+          }
+        } else {
+          segments.push({
+            color:
+              l === "外部予定"
+                ? "#FF2D55"
+                : l === "共通"
+                  ? "#8E8E93"
+                  : layerMaster[l] || "#C7C7CC",
+            actual,
+            budget,
+          });
+        }
       } else if (activeTags.length > 1) {
         otherActual += actual;
         otherBudget += budget;
@@ -1406,7 +1459,10 @@ export default function BudgetDashboard({
             new Set([...Object.keys(layerMaster), "共通", "外部予定"]),
           ).map((l) => (
             <View key={l} style={styles.settingSwitchRow}>
-              <Text style={styles.settingSwitchLabel}>{l}</Text>
+              {/* 🌟 追加：「共通」というシステム名を「貯金・夢リスト」に変換して表示 */}
+              <Text style={styles.settingSwitchLabel}>
+                {l === "共通" ? "貯金・夢リスト" : l}
+              </Text>
               <Switch
                 value={layerBudgetEnabled[l] !== false}
                 onValueChange={(v) => {
@@ -1419,9 +1475,12 @@ export default function BudgetDashboard({
                 }}
                 trackColor={{
                   false: "#E5E5EA",
-                  // 🌟 修正：外部予定のスイッチを赤にする
                   true:
-                    l === "外部予定" ? "#FF2D55" : layerMaster[l] || "#8E8E93",
+                    l === "外部予定"
+                      ? "#FF2D55"
+                      : l === "共通"
+                        ? "#8E8E93"
+                        : layerMaster[l] || "#8E8E93",
                 }}
               />
             </View>
@@ -1776,24 +1835,35 @@ export default function BudgetDashboard({
               <View style={styles.chartArea}>
                 {Object.keys(stats.totals).length > 0 ? (
                   <PieChart
-                    data={Object.keys(stats.totals).map((key, index) => ({
-                      name: key,
-                      population: stats.totals[key],
-                      color:
-                        key === "その他"
-                          ? "#C7C7CC"
-                          : !currentActiveLayer && chartGroupBy === "layer"
-                            ? key === "共通"
-                              ? "#8E8E93"
-                              : key === "外部予定" // 🌟 ここを追加！
-                                ? "#FF2D55"
-                                : layerMaster[key] ||
-                                  CHART_PALETTE[index % CHART_PALETTE.length]
-                            : tagMaster[key]?.color ||
-                              CHART_PALETTE[index % CHART_PALETTE.length],
-                      legendFontColor: "#666",
-                      legendFontSize: 11,
-                    }))}
+                    data={Object.keys(stats.totals).map((key, index) => {
+                      const matchedWish = augmentedWishlist.find(
+                        (w) => w.name === key,
+                      );
+                      return {
+                        name: key,
+                        population: stats.totals[key],
+                        color:
+                          key === "その他"
+                            ? "#C7C7CC"
+                            : matchedWish
+                              ? matchedWish.color // 🌟 夢の名前なら個別の色を適用！
+                              : !currentActiveLayer && chartGroupBy === "layer"
+                                ? key === "外部予定"
+                                  ? "#FF2D55"
+                                  : key === "貯金"
+                                    ? "#FF9500"
+                                    : key === "共通"
+                                      ? "#8E8E93"
+                                      : layerMaster[key] ||
+                                        CHART_PALETTE[
+                                          index % CHART_PALETTE.length
+                                        ]
+                                : tagMaster[key]?.color ||
+                                  CHART_PALETTE[index % CHART_PALETTE.length],
+                        legendFontColor: "#666",
+                        legendFontSize: 11,
+                      };
+                    })}
                     width={screenWidth * 0.8}
                     height={160}
                     chartConfig={{ color: () => `black` }}
@@ -1869,42 +1939,66 @@ export default function BudgetDashboard({
                   </View>
 
                   <View style={styles.masterStackContainer}>
-                    <View style={[styles.masterStackLayer, { opacity: 0.2 }]}>
-                      {barSegments.map((seg, idx) => (
-                        <View
-                          key={`bg-${idx}`}
-                          style={{
-                            width: `${(seg.budget / baseIncome) * 100}%`,
-                            height: "100%",
-                            backgroundColor: seg.color,
-                          }}
-                        />
-                      ))}
-                    </View>
-                    <View style={styles.masterStackLayer}>
-                      {isGlobalDeficit ? (
-                        <View
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            backgroundColor: "#FF3B30",
-                          }}
-                        />
-                      ) : (
-                        barSegments.map((seg, idx) => (
+                    {/* 🌟 究極のはみ出し防止処理：実績が予算を上回ったら、全体を縮小して画面内に収める！ */}
+                    {(() => {
+                      const masterActualTotal = barSegments.reduce(
+                        (sum, s) => sum + s.actual,
+                        0,
+                      );
+                      const masterBudgetTotal = barSegments.reduce(
+                        (sum, s) => sum + s.budget,
+                        0,
+                      );
+                      const masterMax =
+                        Math.max(
+                          baseIncome,
+                          masterActualTotal,
+                          masterBudgetTotal,
+                        ) || 1;
+
+                      return (
+                        <>
                           <View
-                            key={`fg-${idx}`}
-                            style={{
-                              width: `${(seg.actual / baseIncome) * 100}%`,
-                              height: "100%",
-                              backgroundColor: seg.color,
-                              borderRightWidth: 1,
-                              borderColor: "#FFF",
-                            }}
-                          />
-                        ))
-                      )}
-                    </View>
+                            style={[styles.masterStackLayer, { opacity: 0.2 }]}
+                          >
+                            {barSegments.map((seg, idx) => (
+                              <View
+                                key={`bg-${idx}`}
+                                style={{
+                                  width: `${(seg.budget / masterMax) * 100}%`,
+                                  height: "100%",
+                                  backgroundColor: seg.color,
+                                }}
+                              />
+                            ))}
+                          </View>
+                          <View style={styles.masterStackLayer}>
+                            {isGlobalDeficit ? (
+                              <View
+                                style={{
+                                  width: "100%",
+                                  height: "100%",
+                                  backgroundColor: "#FF3B30",
+                                }}
+                              />
+                            ) : (
+                              barSegments.map((seg, idx) => (
+                                <View
+                                  key={`fg-${idx}`}
+                                  style={{
+                                    width: `${(seg.actual / masterMax) * 100}%`,
+                                    height: "100%",
+                                    backgroundColor: seg.color,
+                                    borderRightWidth: 1,
+                                    borderColor: "#FFF",
+                                  }}
+                                />
+                              ))
+                            )}
+                          </View>
+                        </>
+                      );
+                    })()}
                   </View>
 
                   <View style={styles.masterProgressLabelRow}>
@@ -1950,9 +2044,23 @@ export default function BudgetDashboard({
                     const color = l === "外部予定" ? "#FF2D55" : layerMaster[l];
                     const limit =
                       b + Math.max(0, globalBudgetCalc.unallocatedBuffer);
-                    const layerSubTags = Object.keys(tagMaster).filter(
-                      (t) => tagMaster[t].layer === l,
+                    // 🌟 修正：夢リスト（共通）の時は、登録している夢の名前もサブカテゴリとして表示する！
+                    const layerSubTags = Array.from(
+                      new Set([
+                        ...Object.keys(tagMaster).filter(
+                          (t) => tagMaster[t].layer === l,
+                        ),
+                        ...(l === "共通"
+                          ? augmentedWishlist.map((w) => w.name)
+                          : []),
+                      ]),
                     );
+
+                    // 🌟 追加：上限の計算と、警告時の色の決定
+                    const maxAllowedLayer =
+                      b + Math.max(0, globalBudgetCalc.unallocatedBuffer);
+                    const isLayerWarning = sliderWarning === `layer-${l}`;
+                    const layerThumbColor = isLayerWarning ? "#FF3B30" : color;
 
                     return (
                       <View key={l} style={styles.sliderCard}>
@@ -1974,7 +2082,8 @@ export default function BudgetDashboard({
                                 fontSize: 16,
                               }}
                             >
-                              {l}
+                              {l === "共通" ? "貯金・夢リスト" : l}{" "}
+                              {/* 🌟 変更 */}
                             </Text>
                             <Ionicons
                               name={
@@ -2025,11 +2134,28 @@ export default function BudgetDashboard({
                           maximumValue={baseIncome}
                           step={500}
                           value={b}
-                          thumbTintColor={color}
+                          thumbTintColor={layerThumbColor} // 🌟 変更
                           minimumTrackTintColor="transparent"
                           maximumTrackTintColor="transparent"
+                          onSlidingComplete={() => setSliderWarning(null)} // 🌟 指を離したら色を戻す
                           onValueChange={(val) => {
-                            const n = { ...layerBudgets, [l]: val };
+                            let newVal = val;
+
+                            // 🌟 上限を超えようとしたらブロックしてブルッとさせる！
+                            if (val > maxAllowedLayer) {
+                              newVal = maxAllowedLayer;
+                              if (sliderWarning !== `layer-${l}`) {
+                                Haptics.notificationAsync(
+                                  Haptics.NotificationFeedbackType.Warning,
+                                );
+                                setSliderWarning(`layer-${l}`);
+                              }
+                            } else {
+                              if (sliderWarning === `layer-${l}`)
+                                setSliderWarning(null);
+                            }
+
+                            const n = { ...layerBudgets, [l]: newVal };
                             setLayerBudgets(n);
                             AsyncStorage.setItem(
                               "layerBudgetsData",
@@ -2043,7 +2169,13 @@ export default function BudgetDashboard({
                             {layerSubTags.map((sub) => {
                               const sb = subTagBudgets[sub] || 0;
                               const sa = subTagActuals[sub] || 0;
-                              const sc = tagMaster[sub]?.color || color;
+                              const matchedWish = augmentedWishlist.find(
+                                (w) => w.name === sub,
+                              );
+                              const sc =
+                                tagMaster[sub]?.color ||
+                                matchedWish?.color ||
+                                color;
                               const validLayerB = b || 1;
                               const layerUnallocated =
                                 b -
@@ -2052,6 +2184,13 @@ export default function BudgetDashboard({
                                   0,
                                 );
                               const slimit = sb + Math.max(0, layerUnallocated);
+
+                              // 🌟 追加：警告時の色の決定
+                              const isSubWarning =
+                                sliderWarning === `sub-${l}-${sub}`;
+                              const subThumbColor = isSubWarning
+                                ? "#FF3B30"
+                                : sc;
 
                               return (
                                 <View key={sub} style={styles.subTagAdjustRow}>
@@ -2116,11 +2255,33 @@ export default function BudgetDashboard({
                                     value={sb}
                                     minimumTrackTintColor="transparent"
                                     maximumTrackTintColor="transparent"
-                                    thumbTintColor={sc}
+                                    thumbTintColor={subThumbColor} // 🌟 変更
+                                    onSlidingComplete={() =>
+                                      setSliderWarning(null)
+                                    } // 🌟 追加
                                     onValueChange={(val) => {
+                                      let newVal = val;
+
+                                      // 🌟 上限を超えようとしたらブロックしてブルッとさせる！
+                                      if (val > slimit) {
+                                        newVal = slimit;
+                                        if (
+                                          sliderWarning !== `sub-${l}-${sub}`
+                                        ) {
+                                          Haptics.notificationAsync(
+                                            Haptics.NotificationFeedbackType
+                                              .Warning,
+                                          );
+                                          setSliderWarning(`sub-${l}-${sub}`);
+                                        }
+                                      } else {
+                                        if (sliderWarning === `sub-${l}-${sub}`)
+                                          setSliderWarning(null);
+                                      }
+
                                       const n = {
                                         ...subTagBudgets,
-                                        [sub]: val,
+                                        [sub]: newVal,
                                       };
                                       setSubTagBudgets(n);
                                       AsyncStorage.setItem(
@@ -2254,8 +2415,16 @@ export default function BudgetDashboard({
                   </View>
 
                   {(() => {
-                    const layerSubTags = Object.keys(tagMaster).filter(
-                      (t) => tagMaster[t].layer === currentActiveLayer,
+                    // 🌟 修正：夢リスト（共通）の時は、登録している夢の名前もサブカテゴリとして表示する！
+                    const layerSubTags = Array.from(
+                      new Set([
+                        ...Object.keys(tagMaster).filter(
+                          (t) => tagMaster[t].layer === currentActiveLayer,
+                        ),
+                        ...(currentActiveLayer === "共通"
+                          ? augmentedWishlist.map((w) => w.name)
+                          : []),
+                      ]),
                     );
                     const layerBudget = layerBudgets[currentActiveLayer] || 0;
                     const validB = layerBudget || 1;
@@ -2266,46 +2435,67 @@ export default function BudgetDashboard({
                     return (
                       <>
                         <View style={styles.masterStackContainer}>
-                          <View
-                            style={[styles.masterStackLayer, { opacity: 0.2 }]}
-                          >
-                            {layerSubTags.map((sub) => (
-                              <View
-                                key={`bg-${sub}`}
-                                style={{
-                                  width: `${((subTagBudgets[sub] || 0) / validB) * 100}%`,
-                                  height: "100%",
-                                  backgroundColor:
-                                    tagMaster[sub]?.color || themeColor,
-                                }}
-                              />
-                            ))}
-                          </View>
-                          <View style={styles.masterStackLayer}>
-                            {isLayerDeficit ? (
-                              <View
-                                style={{
-                                  width: "100%",
-                                  height: "100%",
-                                  backgroundColor: "#FF3B30",
-                                }}
-                              />
-                            ) : (
-                              layerSubTags.map((sub) => (
+                          {/* 🌟 はみ出し防止処理（単独レイヤー用） */}
+                          {(() => {
+                            const singleActualTotal =
+                              layerActuals[currentActiveLayer] || 0;
+                            const singleBudgetTotal =
+                              layerBudgets[currentActiveLayer] || 0;
+                            const singleMax =
+                              Math.max(
+                                validB,
+                                singleActualTotal,
+                                singleBudgetTotal,
+                              ) || 1;
+
+                            return (
+                              <>
                                 <View
-                                  key={`fg-${sub}`}
-                                  style={{
-                                    width: `${((subTagActuals[sub] || 0) / validB) * 100}%`,
-                                    height: "100%",
-                                    backgroundColor:
-                                      tagMaster[sub]?.color || themeColor,
-                                    borderRightWidth: 1,
-                                    borderColor: "#FFF",
-                                  }}
-                                />
-                              ))
-                            )}
-                          </View>
+                                  style={[
+                                    styles.masterStackLayer,
+                                    { opacity: 0.2 },
+                                  ]}
+                                >
+                                  {layerSubTags.map((sub) => (
+                                    <View
+                                      key={`bg-${sub}`}
+                                      style={{
+                                        width: `${((subTagBudgets[sub] || 0) / singleMax) * 100}%`,
+                                        height: "100%",
+                                        backgroundColor:
+                                          tagMaster[sub]?.color || themeColor,
+                                      }}
+                                    />
+                                  ))}
+                                </View>
+                                <View style={styles.masterStackLayer}>
+                                  {isLayerDeficit ? (
+                                    <View
+                                      style={{
+                                        width: "100%",
+                                        height: "100%",
+                                        backgroundColor: "#FF3B30",
+                                      }}
+                                    />
+                                  ) : (
+                                    layerSubTags.map((sub) => (
+                                      <View
+                                        key={`fg-${sub}`}
+                                        style={{
+                                          width: `${((subTagActuals[sub] || 0) / singleMax) * 100}%`,
+                                          height: "100%",
+                                          backgroundColor:
+                                            tagMaster[sub]?.color || themeColor,
+                                          borderRightWidth: 1,
+                                          borderColor: "#FFF",
+                                        }}
+                                      />
+                                    ))
+                                  )}
+                                </View>
+                              </>
+                            );
+                          })()}
                         </View>
 
                         <View style={styles.masterProgressLabelRow}>
@@ -2345,7 +2535,13 @@ export default function BudgetDashboard({
                         {layerSubTags.map((sub) => {
                           const sb = subTagBudgets[sub] || 0;
                           const sa = subTagActuals[sub] || 0;
-                          const sc = tagMaster[sub]?.color || themeColor;
+                          const matchedWish = augmentedWishlist.find(
+                            (w) => w.name === sub,
+                          );
+                          const sc =
+                            tagMaster[sub]?.color ||
+                            matchedWish?.color ||
+                            themeColor;
                           const slimit =
                             sb +
                             Math.max(
@@ -2353,6 +2549,12 @@ export default function BudgetDashboard({
                               singleLayerBudgetCalc.unallocatedBuffer,
                             );
                           const isOver = sa > sb;
+
+                          // 🌟 追加：警告時の色の決定
+                          const isSubWarning =
+                            sliderWarning ===
+                            `sub-${currentActiveLayer}-${sub}`;
+                          const subThumbColor = isSubWarning ? "#FF3B30" : sc;
 
                           return (
                             <View key={sub} style={styles.sliderCard}>
@@ -2414,9 +2616,35 @@ export default function BudgetDashboard({
                                 value={sb}
                                 minimumTrackTintColor="transparent"
                                 maximumTrackTintColor="transparent"
-                                thumbTintColor={sc}
+                                thumbTintColor={subThumbColor} // 🌟 変更
+                                onSlidingComplete={() => setSliderWarning(null)} // 🌟 追加
                                 onValueChange={(val) => {
-                                  const n = { ...subTagBudgets, [sub]: val };
+                                  let newVal = val;
+
+                                  // 🌟 上限を超えようとしたらブロックしてブルッとさせる！
+                                  if (val > slimit) {
+                                    newVal = slimit;
+                                    if (
+                                      sliderWarning !==
+                                      `sub-${currentActiveLayer}-${sub}`
+                                    ) {
+                                      Haptics.notificationAsync(
+                                        Haptics.NotificationFeedbackType
+                                          .Warning,
+                                      );
+                                      setSliderWarning(
+                                        `sub-${currentActiveLayer}-${sub}`,
+                                      );
+                                    }
+                                  } else {
+                                    if (
+                                      sliderWarning ===
+                                      `sub-${currentActiveLayer}-${sub}`
+                                    )
+                                      setSliderWarning(null);
+                                  }
+
+                                  const n = { ...subTagBudgets, [sub]: newVal };
                                   setSubTagBudgets(n);
                                   AsyncStorage.setItem(
                                     "subTagBudgetsData",

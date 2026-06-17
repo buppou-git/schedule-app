@@ -360,18 +360,24 @@ const ScheduleModal = ({
 
       if (selectedItem) {
         setIsSimpleMode(false);
-        const parsedStartTime = new Date();
+
+        // 🌟 修正①：今日の日付ではなく、予定の元の日付をベースに時間を作成する
+        const parsedStartTime = new Date(
+          selectedItem.startDate || selectedDate,
+        );
         if (selectedItem.startTime) {
           const [h, m] = selectedItem.startTime.split(":").map(Number);
           parsedStartTime.setHours(h, m, 0, 0);
         }
-        const parsedEndTime = new Date();
+
+        const parsedEndTime = new Date(selectedItem.endDate || selectedDate);
         if (selectedItem.endTime) {
           const [h, m] = selectedItem.endTime.split(":").map(Number);
           parsedEndTime.setHours(h, m, 0, 0);
         }
 
-        updateForm({
+        // 🌟 修正②：updateForm は使わず、直接 setFormData で初期化する！(自動補正の暴発を防ぐ)
+        setFormData({
           title: selectedItem.title || "",
           amount: selectedItem.amount > 0 ? selectedItem.amount.toString() : "",
           isEvent: selectedItem.isEvent ?? true,
@@ -380,7 +386,9 @@ const ScheduleModal = ({
           tag: selectedItem.tag || "",
           tagColor: selectedItem.color || "#007AFF",
           category: selectedItem.category || "食費",
-          isAllDay: selectedItem.isAllDay ?? true,
+          // 🌟 修正③：isAllDay が無い場合は時間指定の有無で賢く判定
+          isAllDay:
+            selectedItem.isAllDay ?? (selectedItem.startTime ? false : true),
           repeatType: selectedItem.repeatType || "none",
           repeatDays: selectedItem.repeatDays || [],
           repeatInterval: selectedItem.repeatInterval || 1,
@@ -398,11 +406,13 @@ const ScheduleModal = ({
         const savedLayer =
           tagMaster?.[selectedItem.tag || ""]?.layer ||
           (layerMaster[selectedItem.tag || ""] ? selectedItem.tag : def);
+
         setSelectedLayer(savedLayer || def);
 
         const hasOldNotification =
           selectedItem.notificationIds &&
           selectedItem.notificationIds.length > 0;
+
         setSelectedReminders(
           selectedItem.reminderOptions || (hasOldNotification ? ["exact"] : []),
         );
@@ -414,29 +424,42 @@ const ScheduleModal = ({
         } else {
           setCustomReminderTimes([]);
         }
+
         setNewTagColor("");
 
         const savedSubTasks = selectedItem.subTasks || [];
+
         setSubTasks(savedSubTasks);
+
         setShowSubTasks(savedSubTasks.length > 0);
 
         setInitialSnapshot(
           JSON.stringify({
             title: selectedItem.title || "",
+
             amount: parseInt(selectedItem.amount?.toString() || "0"),
+
             isTodo: selectedItem.isTodo ?? false,
+
             repeatType: selectedItem.repeatType || "none",
+
             repeatDays: selectedItem.repeatDays || [],
+
             repeatInterval: selectedItem.repeatInterval || 1,
+
             repeatEndDate: selectedItem.repeatEndDate || null,
+
             subTasksData: savedSubTasks
+
               .map((t: SubTask) => `${t.title}_${t.isDone}`)
+
               .join(","),
           }),
         );
       } else {
         setIsSimpleMode(true);
-        updateForm({
+        // 🌟 新規作成時も直接 setFormData を使う
+        setFormData({
           title: "",
           amount: "",
           isEvent: activeMode === "calendar",
@@ -818,12 +841,11 @@ const ScheduleModal = ({
 
         repeatType:
           formData.repeatType !== "none" ? formData.repeatType : undefined,
+        // 🌟 修正：「カスタム」以外の「毎日」「毎週」などでも繰り返しデータを保持する！
         repeatDays:
-          formData.repeatType === "custom" ? formData.repeatDays : undefined,
+          formData.repeatType !== "none" ? formData.repeatDays : undefined,
         repeatInterval:
-          formData.repeatType === "custom"
-            ? formData.repeatInterval
-            : undefined,
+          formData.repeatType !== "none" ? formData.repeatInterval : undefined,
 
         repeatEndDate:
           formData.repeatType !== "none" && formData.repeatEndDate
@@ -1155,7 +1177,7 @@ const ScheduleModal = ({
               if (nextData[d].some((i) => i.id === selectedItem.id)) {
                 nextData[d] = nextData[d].map((i: ScheduleItem) => {
                   if (i.id === selectedItem.id) {
-                    return { ...i, endDate: newEndDate };
+                    return { ...i, repeatEndDate: newEndDate }; // 🌟 repeatEndDate に修正！
                   }
                   return i;
                 });

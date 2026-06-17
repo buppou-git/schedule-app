@@ -486,14 +486,27 @@ export default function DailyExpense({
 
                 const { parent, sub } = resolveTags(i);
 
-                // 🌟 追加：特定のレイヤーを指定している時以外（全体表示）は、レイヤー（メインカテゴリ）の色を使用する
-                const displayColor = isSingleLayerMode
-                  ? tagMaster[sub]?.color || i.color
-                  : layerMaster[parent] || i.color;
-                const textColor = isSingleLayerMode ? themeColor : displayColor;
+                // 🌟 修正：カテゴリが「祝日」の場合は、フィルターの所属に関わらず強制的に赤色と祝日テキストを適用する！
+                const displayColor =
+                  i.category === "祝日"
+                    ? "#FF3B30"
+                    : isSingleLayerMode
+                      ? tagMaster[sub]?.color || i.color
+                      : layerMaster[parent] || i.color;
 
-                // 🌟 修正①：表示する文字をモードによって綺麗に切り替える！
-                const displayText = isSingleLayerMode ? sub : parent;
+                const textColor =
+                  i.category === "祝日"
+                    ? "#FF3B30"
+                    : isSingleLayerMode
+                      ? themeColor
+                      : displayColor;
+
+                const displayText =
+                  i.category === "祝日"
+                    ? "祝日"
+                    : isSingleLayerMode
+                      ? sub
+                      : parent;
 
                 return (
                   <TouchableOpacity

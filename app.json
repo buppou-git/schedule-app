@@ -2,7 +2,7 @@
   "expo": {
     "name": "UniCal",
     "slug": "multi-calendar",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": ["com.buppou.multicalendar", "unical"],
@@ -11,18 +11,18 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.buppou.multicalendar",
-      "associatedDomains": [
-        "applinks:multi-calendar-app-1379f.web.app" 
-      ],
+      "associatedDomains": ["applinks:multi-calendar-app-1379f.web.app"],
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
+        "CFBundleDevelopmentRegion": "ja_JP",
+        "CFBundleAllowMixedLocalizations": true,
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
               "com.googleusercontent.apps.633661996714-m1eoribajuqgbe5grrv3gpcco27peqrv",
               "com.buppou.multicalendar", // 🌟 これを追加
-              "unical"                    // 🌟 これを追加
+              "unical" // 🌟 これを追加
             ]
           }
         ]
@@ -74,7 +74,7 @@
         "react-native-google-mobile-ads",
         {
           "androidAppId": "ca-app-pub-3940256099942544~3347511713",
-          "iosAppId": "ca-app-pub-3940256099942544~1458002511",
+          "iosAppId": "ca-app-pub-1562451958384100~5496615660",
           "userTrackingUsageDescription": "あなたの好みに合わせた広告を表示するために使用します。"
         }
       ],

@@ -46,7 +46,11 @@ import PresetSaveModal from "./components/PresetSaveModal";
 
 //広告関係
 import { requestTrackingPermissionsAsync } from "expo-tracking-transparency";
-import { MobileAds } from "react-native-google-mobile-ads";
+import mobileAds, {
+  BannerAd,
+  BannerAdSize,
+  TestIds,
+} from "react-native-google-mobile-ads";
 
 import {
   ActivityIndicator,
@@ -63,6 +67,14 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+
+const adUnitId =
+  Platform.select({
+    ios: "ca-app-pub-1562451958384100/1845145269", // iOS用の広告ユニットID
+    android: "ca-app-pub-3940256099942544~3347511713", // Android用の広告ユニットID
+  }) || "";
+// 開発中は安全なテスト広告、本番で本物が出るようにする魔法
+const bannerId = __DEV__ ? TestIds.BANNER : adUnitId;
 
 import CryptoJS from "crypto-js";
 import * as SecureStore from "expo-secure-store";
@@ -288,7 +300,7 @@ function IndexContent() {
         // 1. iOSのトラッキング許可を求める
         const { status } = await requestTrackingPermissionsAsync();
         // 2. 広告SDKを初期化
-        await MobileAds().initialize();
+        await mobileAds().initialize();
       } catch (e) {
         console.error("Ads initialization error:", e);
       }
@@ -1278,11 +1290,8 @@ function IndexContent() {
   );
 
   // 👇👇👇 ここから追加・修正（毎日の通知の自動更新ロジック） 👇👇👇
-  const {
-    isNotificationEnabled,
-    notificationTime,
-    scheduleDailyNotification,
-  } = useNotificationManager();
+  const { isNotificationEnabled, notificationTime, scheduleDailyNotification } =
+    useNotificationManager();
 
   useEffect(() => {
     // 🌟 修正：古い記憶（ステート）での判定をやめるため、ここでは弾かない
@@ -1290,7 +1299,9 @@ function IndexContent() {
 
     const updateNotification = async () => {
       // 🌟 ① 記憶のすれ違いを防ぐため、ストレージから「今この瞬間の最新設定」を直接引き抜く！
-      const savedEnabledStr = await AsyncStorage.getItem("isNotificationEnabled");
+      const savedEnabledStr = await AsyncStorage.getItem(
+        "isNotificationEnabled",
+      );
       if (savedEnabledStr === "false") return; // OFFならここでストップ
 
       const savedTimeStr = await AsyncStorage.getItem("notificationTime");
@@ -1332,14 +1343,136 @@ function IndexContent() {
   }, [displayData]); // 🌟 依存配列も displayData（予定の変動）だけに絞ることで暴走を防ぐ
   // 👆👆👆 ここまで追加・修正 👆👆👆
 
-  // 🌟 追加：他のデータプロセッサーのフィルターをすり抜けて、予定欄の先頭に祝日を強制結合する
+  // 🌟🌟🌟 限界突破：リスト側に繰り返し予定が出ないバグを強制的にバイパスする最強のリスト生成機能！ 🌟🌟🌟
   const finalDayEvents = useMemo(() => {
-    if (currentHoliday) {
-      const exists = dayEvents.some((i) => i.id === currentHoliday.id);
-      if (!exists) return [currentHoliday, ...dayEvents];
+    // 1. 繰り返し予定も完璧に含まれている「expandedScheduleData」から今日の予定を直接ゲット！
+    const todayItems = expandedScheduleData[selectedDate] || [];
+
+    // 2. 「予定 (isEvent)」だけを抽出
+    let events = todayItems.filter((item) => item.isEvent);
+
+    // 3. フィルター機能（カテゴリ絞り込み）がONなら適用する
+    if (activeTags.length > 0) {
+      events = events.filter((item) => {
+        if (
+          item.tag === "祝日" ||
+          item.category === "祝日" ||
+          item.layer === "祝日"
+        )
+          return true;
+
+        const { parent } = resolveTags(item) || {};
+        return (
+          activeTags.includes(parent) || activeTags.includes(item.layer || "")
+        );
+      });
     }
-    return dayEvents;
-  }, [dayEvents, currentHoliday]);
+
+    // 4. 予定を時間順に綺麗に並べ替える（終日は一番上）
+    events.sort((a, b) => {
+      if (a.isAllDay && !b.isAllDay) return -1;
+      if (!a.isAllDay && b.isAllDay) return 1;
+      if (a.startTime && b.startTime)
+        return a.startTime.localeCompare(b.startTime);
+      return 0;
+    });
+
+    // 5. 祝日があれば一番上に追加する
+    if (currentHoliday) {
+      const exists = events.some((i) => i.id === currentHoliday.id);
+      if (!exists) events = [currentHoliday, ...events];
+    }
+
+    return events;
+  }, [expandedScheduleData, selectedDate, activeTags, currentHoliday]);
+
+  // 🌟🌟🌟 ToDoリスト側に繰り返し予定が出ないバグを強制バイパスするリスト生成機能！ 🌟🌟🌟
+  const finalDayTasks = useMemo(() => {
+    // 1. 繰り返し予定も完璧に含まれているデータから直接ゲット！
+    const todayItems = expandedScheduleData[selectedDate] || [];
+    let tasks = todayItems.filter((item) => item.isTodo);
+
+    // 2. フィルターがONなら適用
+    if (activeTags.length > 0) {
+      tasks = tasks.filter((item) => {
+        const { parent } = resolveTags(item) || {};
+        return (
+          activeTags.includes(parent) || activeTags.includes(item.layer || "")
+        );
+      });
+    }
+
+    // 3. 並べ替え（未完了を上、完了済みを下、時間順）
+    tasks.sort((a, b) => {
+      if (a.isDone && !b.isDone) return 1;
+      if (!a.isDone && b.isDone) return -1;
+      if (a.isAllDay && !b.isAllDay) return -1;
+      if (!a.isAllDay && b.isAllDay) return 1;
+      if (a.startTime && b.startTime)
+        return a.startTime.localeCompare(b.startTime);
+      return 0;
+    });
+
+    return tasks;
+  }, [expandedScheduleData, selectedDate, activeTags]);
+
+  const finalUpcomingTasks = useMemo(() => {
+    let upcoming: ScheduleItem[] = [];
+    const [y, m, d] = selectedDate.split("-").map(Number);
+    const currentDate = new Date(y, m - 1, d);
+
+    // 今日から7日後までのデータを取得
+    for (let i = 1; i <= 7; i++) {
+      const nextDate = new Date(currentDate);
+      nextDate.setDate(nextDate.getDate() + i);
+      const nextDateStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, "0")}-${String(nextDate.getDate()).padStart(2, "0")}`;
+
+      const items = expandedScheduleData[nextDateStr] || [];
+      // 🌟 修正：ToDoかつ未完了で、さらに「繰り返し予定ではない（単発のタスク）」だけを抽出！
+      const tasks = items.filter(
+        (item) => item.isTodo && !item.isDone && !item.repeatType,
+      );
+
+      // 🌟 リストが過去の予定と勘違いして弾かないように、所属日を書き換えてコピー
+      const processedTasks = tasks.map((t) => ({ ...t, date: nextDateStr }));
+      upcoming.push(...processedTasks);
+    }
+
+    if (activeTags.length > 0) {
+      upcoming = upcoming.filter((item) => {
+        const { parent } = resolveTags(item) || {};
+        return (
+          activeTags.includes(parent) || activeTags.includes(item.layer || "")
+        );
+      });
+    }
+
+    // 同じ予定（繰り返しの同一ID）は、一番近い日の1件だけにする
+    const uniqueUpcomingMap = new Map();
+    upcoming.forEach((item) => {
+      if (!uniqueUpcomingMap.has(item.id)) {
+        uniqueUpcomingMap.set(item.id, item);
+      }
+    });
+
+    const uniqueUpcoming = Array.from(
+      uniqueUpcomingMap.values(),
+    ) as ScheduleItem[];
+
+    // 日付順、時間順に並べ替え
+    uniqueUpcoming.sort((a, b) => {
+      const dateA = a.date || "";
+      const dateB = b.date || "";
+      if (dateA !== dateB) return dateA.localeCompare(dateB);
+      if (a.isAllDay && !b.isAllDay) return -1;
+      if (!a.isAllDay && b.isAllDay) return 1;
+      if (a.startTime && b.startTime)
+        return a.startTime.localeCompare(b.startTime);
+      return 0;
+    });
+
+    return uniqueUpcoming.slice(0, 10);
+  }, [expandedScheduleData, selectedDate, activeTags]);
 
   const currentSolidColor = useMemo(() => {
     if (activeTags.length === 1) {
@@ -1564,18 +1697,17 @@ function IndexContent() {
   };
 
   const layerSummary = useMemo(() => {
-    if (activeTags.length !== 1) return null; // 1つのレイヤーに絞り込んでいる時だけ発動
+    if (activeTags.length !== 1) return null;
 
     const targetLayer = activeTags[0];
-
     const [y, m] = selectedDate.split("-");
-    const targetMonthPrefix = `${y}-${m}-`; // 例: "2026-04-"
+    const targetMonthPrefix = `${y}-${m}-`;
 
     let eventCount = 0;
     let totalExpense = 0;
+    let totalIncome = 0; // 🌟 収入用の変数を追加！
 
     Object.keys(displayData).forEach((date) => {
-      // 選択中の「月」のデータだけを集計する
       if (date.startsWith(targetMonthPrefix)) {
         displayData[date].forEach((item) => {
           const { parent } = resolveTags(item);
@@ -1584,15 +1716,19 @@ function IndexContent() {
           if (matchLayer) {
             if (item.isEvent || item.isTodo) eventCount++;
 
-            // 支出の集計（親タスク + 子タスク）
-            if (item.isExpense && item.amount) {
+            // 🌟 親タスクの支出・収入を集計
+            if (item.isExpense && item.amount)
               totalExpense += Number(item.amount);
-            }
+            if (item.isIncome && item.amount)
+              totalIncome += Number(item.amount);
+
+            // 🌟 子タスクの支出・収入を集計
             if (item.subTasks) {
               item.subTasks.forEach((sub) => {
-                if (sub.isExpense && sub.amount) {
+                if (sub.isExpense && sub.amount)
                   totalExpense += Number(sub.amount);
-                }
+                if (sub.isIncome && sub.amount)
+                  totalIncome += Number(sub.amount);
               });
             }
           }
@@ -1600,7 +1736,7 @@ function IndexContent() {
       }
     });
 
-    return { targetLayer, eventCount, totalExpense };
+    return { targetLayer, eventCount, totalExpense, totalIncome };
   }, [activeTags, displayData, selectedDate, tagMaster]);
 
   const handleSubTaskSave = async (updatedSub: SubTask) => {
@@ -1815,7 +1951,7 @@ function IndexContent() {
         try {
           const Calendar = await import("expo-calendar");
           await Calendar.deleteEventAsync(item.externalEventId);
-        } catch (e) { }
+        } catch (e) {}
       }
 
       const wasShared = isSharedItem(item);
@@ -1876,9 +2012,9 @@ function IndexContent() {
               nextData[d] = nextData[d].map((i) =>
                 i.id === item.id
                   ? {
-                    ...i,
-                    exceptionDates: [...(i.exceptionDates || []), targetDate],
-                  }
+                      ...i,
+                      exceptionDates: [...(i.exceptionDates || []), targetDate],
+                    }
                   : i,
               );
             }
@@ -1891,8 +2027,9 @@ function IndexContent() {
 
           Object.keys(nextData).forEach((d) => {
             if (nextData[d].some((i) => i.id === item.id)) {
-              nextData[d] = nextData[d].map((i) =>
-                i.id === item.id ? { ...i, endDate: newEndDate } : i,
+              nextData[d] = nextData[d].map(
+                (i) =>
+                  i.id === item.id ? { ...i, repeatEndDate: newEndDate } : i, // 🌟 repeatEndDate に修正！
               );
             }
           });
@@ -2281,75 +2418,75 @@ function IndexContent() {
 
               {(activeMode === "todo" ||
                 (activeMode === "money" && !isMoneySummaryMode)) && (
-                  <View style={styles.weekCalendarWrapper}>
+                <View style={styles.weekCalendarWrapper}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      paddingRight: 20,
+                    }}
+                  >
+                    <Text style={styles.monthLabel}>
+                      {parseInt(selectedDate.split("-")[1])}月
+                    </Text>
+                    {/* 🌟 変更：「今日に戻る」ボタンと「＋」ボタンを横並びにする */}
                     <View
                       style={{
                         flexDirection: "row",
-                        justifyContent: "space-between",
                         alignItems: "center",
-                        paddingRight: 20,
+                        gap: 12,
                       }}
                     >
-                      <Text style={styles.monthLabel}>
-                        {parseInt(selectedDate.split("-")[1])}月
-                      </Text>
-                      {/* 🌟 変更：「今日に戻る」ボタンと「＋」ボタンを横並びにする */}
-                      <View
+                      <TouchableOpacity
+                        onPress={() => setSelectedDate(getTodayString())}
                         style={{
-                          flexDirection: "row",
+                          width: 32,
+                          height: 32,
+                          borderRadius: 16,
+                          backgroundColor: currentSolidColor + "10", // 月間カレンダーと同じ美しい透け感
                           alignItems: "center",
-                          gap: 12,
+                          justifyContent: "center",
+                          borderWidth: 1,
+                          borderColor: currentSolidColor + "30",
+                          shadowColor: "#000",
+                          shadowOpacity: 0.05,
+                          shadowRadius: 2,
+                          elevation: 1,
                         }}
                       >
-                        <TouchableOpacity
-                          onPress={() => setSelectedDate(getTodayString())}
-                          style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: 16,
-                            backgroundColor: currentSolidColor + "10", // 月間カレンダーと同じ美しい透け感
-                            alignItems: "center",
-                            justifyContent: "center",
-                            borderWidth: 1,
-                            borderColor: currentSolidColor + "30",
-                            shadowColor: "#000",
-                            shadowOpacity: 0.05,
-                            shadowRadius: 2,
-                            elevation: 1,
-                          }}
-                        >
-                          <Ionicons
-                            name="return-down-back-outline" // 同じアイコンを使用
-                            size={18}
-                            color={currentSolidColor}
-                          />
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={handleOpenNewModal}>
-                          <Ionicons
-                            name="add-circle"
-                            size={30}
-                            color={currentSolidColor}
-                          />
-                        </TouchableOpacity>
-                      </View>
+                        <Ionicons
+                          name="return-down-back-outline" // 同じアイコンを使用
+                          size={18}
+                          color={currentSolidColor}
+                        />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={handleOpenNewModal}>
+                        <Ionicons
+                          name="add-circle"
+                          size={30}
+                          color={currentSolidColor}
+                        />
+                      </TouchableOpacity>
                     </View>
-                    <CalendarProvider
-                      date={selectedDate}
-                      onDateChanged={setSelectedDate}
-                    >
-                      <WeekCalendar
-                        firstDay={1}
-                        markedDates={currentMarkedDates}
-                        theme={{
-                          calendarBackground: "transparent",
-                          todayTextColor: "#FFF",
-                          todayBackgroundColor: currentSolidColor + "33",
-                          selectedDayBackgroundColor: currentSolidColor,
-                        }}
-                      />
-                    </CalendarProvider>
                   </View>
-                )}
+                  <CalendarProvider
+                    date={selectedDate}
+                    onDateChanged={setSelectedDate}
+                  >
+                    <WeekCalendar
+                      firstDay={1}
+                      markedDates={currentMarkedDates}
+                      theme={{
+                        calendarBackground: "transparent",
+                        todayTextColor: "#FFF",
+                        todayBackgroundColor: currentSolidColor + "33",
+                        selectedDayBackgroundColor: currentSolidColor,
+                      }}
+                    />
+                  </CalendarProvider>
+                </View>
+              )}
             </>
           )}
 
@@ -2447,8 +2584,8 @@ function IndexContent() {
           {activeMode === "todo" && (
             <View style={{ flex: 1 }}>
               <TodoDashboard
-                dayTasks={dayTasks}
-                upcomingTasks={upcomingTasks}
+                dayTasks={finalDayTasks} // 🌟 変更：バイパスした最強リストを渡す！
+                upcomingTasks={finalUpcomingTasks} // 🌟 変更：バイパスした最強リストを渡す！
                 selectedDate={selectedDate}
                 currentSolidColor={currentSolidColor}
                 activeTags={activeTags}
@@ -2575,14 +2712,12 @@ function IndexContent() {
                     );
                   })}
 
-                  {tempActiveTags.length > 0 && (
-                    <TouchableOpacity
-                      style={styles.addPresetBtn}
-                      onPress={handleOpenPresetModal}
-                    >
-                      <Ionicons name="add" size={16} color="#AEAEB2" />
-                    </TouchableOpacity>
-                  )}
+                  <TouchableOpacity
+                    style={styles.addPresetBtn}
+                    onPress={handleOpenPresetModal}
+                  >
+                    <Ionicons name="add" size={16} color="#AEAEB2" />
+                  </TouchableOpacity>
                 </View>
 
                 <Text style={[styles.modalSectionLabel, { marginTop: 20 }]}>
@@ -2624,13 +2759,13 @@ function IndexContent() {
                         styles.gridCard,
                         tempActiveTags.includes("外部予定")
                           ? {
-                            backgroundColor: "#FF2D55",
-                            borderColor: "#FF2D55",
-                          }
+                              backgroundColor: "#FF2D55",
+                              borderColor: "#FF2D55",
+                            }
                           : [
-                            styles.gridCardGhost,
-                            { borderColor: "#FF2D5540" },
-                          ],
+                              styles.gridCardGhost,
+                              { borderColor: "#FF2D5540" },
+                            ],
                       ]}
                       onPress={() => toggleTempTag("外部予定")}
                     >
@@ -2690,13 +2825,13 @@ function IndexContent() {
                           styles.gridCard,
                           isSelected
                             ? {
-                              backgroundColor: displayColor,
-                              borderColor: displayColor,
-                            }
+                                backgroundColor: displayColor,
+                                borderColor: displayColor,
+                              }
                             : [
-                              styles.gridCardGhost,
-                              { borderColor: displayColor + "40" },
-                            ],
+                                styles.gridCardGhost,
+                                { borderColor: displayColor + "40" },
+                              ],
                         ]}
                         onPress={() => toggleTempTag(layer)}
                       >
@@ -2978,17 +3113,17 @@ function IndexContent() {
           Alert.alert("保存完了", "支出情報を予定に紐付けました。");
         }}
       />
-      {/*
+
       <View style={styles.adContainer}>
         <BannerAd
-          unitId={TestIds.BANNER}
+          unitId={bannerId}
           size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
           requestOptions={{
-            requestNonPersonalizedAdsOnly: true,
+            requestNonPersonalizedAdsOnly: false, // 🌟 falseにして最適化広告にする
           }}
         />
       </View>
-*/}
+
       {deepLinkJoinVisible && (
         <Modal visible={deepLinkJoinVisible} transparent animationType="fade">
           <KeyboardAvoidingView
