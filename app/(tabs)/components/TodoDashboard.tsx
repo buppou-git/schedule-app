@@ -48,13 +48,18 @@ export const TodoDashboard = React.memo(
     // =========================================================
     const [optDayTasks, setOptDayTasks] = useState(dayTasks);
     const isUpdating = useRef(false);
+    const prevDate = useRef(selectedDate); // 🌟 追加：日付の記憶
 
-    // 親（サーバー側データ）から最新データが降ってきたら同期（ただし操作直後の1秒間はブロック）
+    // 🌟 修正：日付が変わった瞬間はバリアを強制解除して、新しい日のデータを即座に受け入れる！
     useEffect(() => {
-      if (!isUpdating.current) {
+      if (prevDate.current !== selectedDate) {
+        setOptDayTasks(dayTasks);
+        isUpdating.current = false;
+        prevDate.current = selectedDate;
+      } else if (!isUpdating.current) {
         setOptDayTasks(dayTasks);
       }
-    }, [dayTasks]);
+    }, [dayTasks, selectedDate]); // 🌟 selectedDate を監視対象に追加
 
     // 🌟 親タスク用：タップした瞬間に進捗バーの計算を0秒で書き換える関数
     const handleToggleTodoOptimistic = useCallback(
@@ -155,7 +160,8 @@ export const TodoDashboard = React.memo(
     return (
       <SectionList
         sections={sections}
-        keyExtractor={(item) => item.id.toString()}
+        // 🌟 修正：キーを日付ごとに完全に独立させ、状態が翌日に持ち越されるのを防ぐ！
+        keyExtractor={(item, index) => `${item.id}-${selectedDate}-${index}`}
         ListHeaderComponent={renderHeader}
         renderSectionHeader={({ section: { title } }) => (
           <Text style={localStyles.sectionTitle}>{title}</Text>

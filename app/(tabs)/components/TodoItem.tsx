@@ -52,14 +52,19 @@ const TodoItem = memo(function TodoItem({
 
   // 🌟 2. 追加：親からの古いデータをブロックするバリア
   const isUpdating = useRef(false);
+  const prevDate = useRef(selectedDate); // 🌟 追加
 
   // クラウド同期などで親の最新データが降ってきたら、それに合わせる
   useEffect(() => {
-    // 🌟 3. 変更：バリアが張られていない時だけ、親のデータを受け入れる
-    if (!isUpdating.current) {
+    // 🌟 修正：日付が切り替わったらバリアを強制解除！古いチェック状態をリセットする
+    if (prevDate.current !== selectedDate) {
+      setOptItem(item);
+      isUpdating.current = false;
+      prevDate.current = selectedDate;
+    } else if (!isUpdating.current) {
       setOptItem(item);
     }
-  }, [item]);
+  }, [item, selectedDate]); // 🌟 selectedDate を監視対象に追加
 
   // 🌟 魔法の即時関数（親タスク用）
   const handleToggleTodo = () => {

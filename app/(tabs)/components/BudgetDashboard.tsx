@@ -7,6 +7,7 @@ import {
   Alert,
   Dimensions,
   Keyboard,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   ScrollView,
@@ -2685,771 +2686,815 @@ export default function BudgetDashboard({
 
       {/* サブカテゴリ追加モーダル */}
       <Modal visible={addSubTagModalVisible} transparent animationType="fade">
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setIsAddWishModalVisible(false)}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1 }}
         >
-          {/* 🌟 修正④：枠外タップでキーボードを閉じる */}
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View style={styles.editCardModal}>
-              <Text style={styles.editTitle}>
-                [{targetLayerForSubTag}] に追加
-              </Text>
-              <Text style={styles.settingLabel}>サブカテゴリ名</Text>
-              <TextInput
-                style={styles.editInputAmount}
-                value={newSubTagName}
-                onChangeText={setNewSubTagName}
-                autoFocus
-              />
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setIsAddWishModalVisible(false)}
+          >
+            {/* 🌟 修正④：枠外タップでキーボードを閉じる */}
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              <View style={styles.editCardModal}>
+                <Text style={styles.editTitle}>
+                  [{targetLayerForSubTag}] に追加
+                </Text>
+                <Text style={styles.settingLabel}>サブカテゴリ名</Text>
+                <TextInput
+                  style={styles.editInputAmount}
+                  value={newSubTagName}
+                  onChangeText={setNewSubTagName}
+                  autoFocus
+                />
 
-              <Text style={styles.settingLabel}>カラーを選択（任意）</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={{ marginBottom: 20 }}
-              >
-                {PRESET_COLORS.map((color) => (
+                <Text style={styles.settingLabel}>カラーを選択（任意）</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={{ marginBottom: 20 }}
+                >
+                  {PRESET_COLORS.map((color) => (
+                    <TouchableOpacity
+                      key={color}
+                      style={[
+                        {
+                          width: 30,
+                          height: 30,
+                          borderRadius: 15,
+                          backgroundColor: color,
+                          marginRight: 10,
+                        },
+                        newSubTagColor === color && {
+                          borderWidth: 3,
+                          borderColor: "#1C1C1E",
+                        },
+                      ]}
+                      onPress={() => setNewSubTagColor(color)}
+                    />
+                  ))}
+                </ScrollView>
+
+                <View
+                  style={[
+                    styles.editActionRow,
+                    { justifyContent: "space-between" },
+                  ]}
+                >
                   <TouchableOpacity
-                    key={color}
+                    onPress={() => setAddSubTagModalVisible(false)}
+                    style={{ padding: 10 }}
+                  >
+                    <Text style={{ color: "#8E8E93", fontWeight: "bold" }}>
+                      キャンセル
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
                     style={[
+                      styles.saveBtn,
                       {
-                        width: 30,
-                        height: 30,
-                        borderRadius: 15,
-                        backgroundColor: color,
-                        marginRight: 10,
-                      },
-                      newSubTagColor === color && {
-                        borderWidth: 3,
-                        borderColor: "#1C1C1E",
+                        // 🌟 修正：外部予定なら赤にする
+                        backgroundColor:
+                          targetLayerForSubTag === "外部予定"
+                            ? "#FF2D55"
+                            : layerMaster[targetLayerForSubTag] || themeColor,
                       },
                     ]}
-                    onPress={() => setNewSubTagColor(color)}
-                  />
-                ))}
-              </ScrollView>
-
-              <View
-                style={[
-                  styles.editActionRow,
-                  { justifyContent: "space-between" },
-                ]}
-              >
-                <TouchableOpacity
-                  onPress={() => setAddSubTagModalVisible(false)}
-                  style={{ padding: 10 }}
-                >
-                  <Text style={{ color: "#8E8E93", fontWeight: "bold" }}>
-                    キャンセル
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.saveBtn,
-                    {
-                      // 🌟 修正：外部予定なら赤にする
-                      backgroundColor:
-                        targetLayerForSubTag === "外部予定"
-                          ? "#FF2D55"
-                          : layerMaster[targetLayerForSubTag] || themeColor,
-                    },
-                  ]}
-                  onPress={executeAddSubTag}
-                >
-                  <Text style={styles.saveText}>追加</Text>
-                </TouchableOpacity>
+                    onPress={executeAddSubTag}
+                  >
+                    <Text style={styles.saveText}>追加</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
-          </TouchableWithoutFeedback>
-        </TouchableOpacity>
+            </TouchableWithoutFeedback>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* 収入の記録モーダル */}
       <Modal visible={isSalaryModalVisible} transparent animationType="fade">
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setIsSalaryModalVisible(false)}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1 }}
         >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View style={styles.editCardModal}>
-              <Text style={styles.editTitle}>収入の記録</Text>
-              <Text style={styles.settingLabel}>金額を入力</Text>
-              <TextInput
-                // 🌟 魔法の動的スタイル：7文字を超えたら、自動的にフォントサイズを 16 に小さくする！
-                style={[
-                  styles.editInputAmount,
-                  { fontSize: salaryInputAmount.length > 7 ? 16 : 24 },
-                ]}
-                keyboardType="numeric"
-                value={salaryInputAmount}
-                onChangeText={setSalaryInputAmount}
-                autoFocus
-                multiline={false}
-                maxLength={10}
-              />
-              <View
-                style={[
-                  styles.editActionRow,
-                  { justifyContent: "space-between" },
-                ]}
-              >
-                <TouchableOpacity
-                  onPress={() => setIsSalaryModalVisible(false)}
-                  style={{ padding: 10 }}
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setIsSalaryModalVisible(false)}
+          >
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              <View style={styles.editCardModal}>
+                <Text style={styles.editTitle}>収入の記録</Text>
+                <Text style={styles.settingLabel}>金額を入力</Text>
+                <TextInput
+                  // 🌟 魔法の動的スタイル：7文字を超えたら、自動的にフォントサイズを 16 に小さくする！
+                  style={[
+                    styles.editInputAmount,
+                    { fontSize: salaryInputAmount.length > 7 ? 16 : 24 },
+                  ]}
+                  keyboardType="numeric"
+                  value={salaryInputAmount}
+                  onChangeText={setSalaryInputAmount}
+                  autoFocus
+                  multiline={false}
+                  maxLength={10}
+                />
+                <View
+                  style={[
+                    styles.editActionRow,
+                    { justifyContent: "space-between" },
+                  ]}
                 >
-                  <Text style={{ color: "#8E8E93", fontWeight: "bold" }}>
-                    キャンセル
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.saveBtn, { backgroundColor: themeColor }]}
-                  onPress={executeSalaryRecord}
-                >
-                  <Text style={styles.saveText}>記録する</Text>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setIsSalaryModalVisible(false)}
+                    style={{ padding: 10 }}
+                  >
+                    <Text style={{ color: "#8E8E93", fontWeight: "bold" }}>
+                      キャンセル
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.saveBtn, { backgroundColor: themeColor }]}
+                    onPress={executeSalaryRecord}
+                  >
+                    <Text style={styles.saveText}>記録する</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
-          </TouchableWithoutFeedback>
-        </TouchableOpacity>
+            </TouchableWithoutFeedback>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Wish作成・編集モーダル */}
       <Modal visible={isAddWishModalVisible} transparent animationType="fade">
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setIsAddWishModalVisible(false)}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1 }}
         >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View style={styles.editCardModal}>
-              <Text style={styles.editTitle}>
-                {editingWishId ? "目標を編集" : "新しい目標を作成"}
-              </Text>
-
-              <Text style={styles.settingLabel}>欲しいもの・やりたいこと</Text>
-              <TextInput
-                style={styles.inputField}
-                placeholder="例: ライブ遠征費用"
-                placeholderTextColor="#C7C7CC"
-                value={newWishName}
-                onChangeText={setNewWishName}
-              />
-
-              <Text style={styles.settingLabel}>目標金額 (¥)</Text>
-              <TextInput
-                style={styles.inputField}
-                keyboardType="numeric"
-                placeholder="30000"
-                placeholderTextColor="#C7C7CC"
-                value={newWishTarget}
-                onChangeText={setNewWishTarget}
-              />
-
-              <View style={styles.settingSwitchRow}>
-                <Text style={styles.settingSwitchLabel}>
-                  毎月自動で積み立てる
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setIsAddWishModalVisible(false)}
+          >
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              <View style={styles.editCardModal}>
+                <Text style={styles.editTitle}>
+                  {editingWishId ? "目標を編集" : "新しい目標を作成"}
                 </Text>
-                <Switch
-                  value={newWishAutoDeposit}
-                  onValueChange={setNewWishAutoDeposit}
-                  trackColor={{ false: "#E5E5EA", true: newWishColor }}
+
+                <Text style={styles.settingLabel}>
+                  欲しいもの・やりたいこと
+                </Text>
+                <TextInput
+                  style={styles.inputField}
+                  placeholder="例: ライブ遠征費用"
+                  placeholderTextColor="#C7C7CC"
+                  value={newWishName}
+                  onChangeText={setNewWishName}
                 />
-              </View>
 
-              {newWishAutoDeposit && (
-                <>
-                  <Text style={styles.settingLabel}>毎月の積立額 (¥)</Text>
-                  <TextInput
-                    style={styles.inputField}
-                    keyboardType="numeric"
-                    placeholder="例: 5000"
-                    placeholderTextColor="#C7C7CC"
-                    value={newWishAutoAmount}
-                    onChangeText={setNewWishAutoAmount}
-                  />
-                </>
-              )}
+                <Text style={styles.settingLabel}>目標金額 (¥)</Text>
+                <TextInput
+                  style={styles.inputField}
+                  keyboardType="numeric"
+                  placeholder="30000"
+                  placeholderTextColor="#C7C7CC"
+                  value={newWishTarget}
+                  onChangeText={setNewWishTarget}
+                />
 
-              {/* 🌟 共有スイッチとレイヤー選択UI */}
-              {sharedRooms && Object.keys(sharedRooms).length > 0 && (
-                <View style={{ marginTop: 15 }}>
-                  <View style={styles.settingSwitchRow}>
-                    <Text style={styles.settingSwitchLabel}>夢を共有する</Text>
-                    <Switch
-                      value={newWishIsShared}
-                      onValueChange={(v) => {
-                        setNewWishIsShared(v);
-                        if (v && sharedRooms) {
-                          // 🌟 追加：ONにした瞬間に、自動で最初の共有ルームを選択状態にする（選択忘れ防止！）
-                          const availableRooms = Object.keys(sharedRooms);
-                          if (
-                            availableRooms.length > 0 &&
-                            !selectedSharedRoom
-                          ) {
-                            setSelectedSharedRoom(availableRooms[0]);
-                          }
-                        } else if (!v) {
-                          setSelectedSharedRoom(null); // オフにしたら選択をクリア
-                        }
-                      }}
-                      trackColor={{ false: "#E5E5EA", true: newWishColor }}
-                    />
-                  </View>
-
-                  {/* スイッチONの時だけ、カテゴリ選択ボタンを表示 */}
-                  {newWishIsShared && (
-                    <View style={{ marginTop: 10 }}>
-                      <Text style={styles.settingLabel}>
-                        共有先レイヤーを選択
-                      </Text>
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          flexWrap: "wrap",
-                          gap: 8,
-                          marginTop: 5,
-                        }}
-                      >
-                        {Object.keys(sharedRooms).map((layer) => (
-                          <TouchableOpacity
-                            key={layer}
-                            style={[
-                              {
-                                paddingVertical: 8,
-                                paddingHorizontal: 12,
-                                borderRadius: 8,
-                                borderWidth: 1,
-                              },
-                              {
-                                backgroundColor:
-                                  selectedSharedRoom === layer
-                                    ? newWishColor
-                                    : "#F2F2F7",
-                                borderColor:
-                                  selectedSharedRoom === layer
-                                    ? newWishColor
-                                    : "#E5E5EA",
-                              },
-                            ]}
-                            onPress={() => setSelectedSharedRoom(layer)}
-                          >
-                            <Text
-                              style={{
-                                color:
-                                  selectedSharedRoom === layer
-                                    ? "#FFF"
-                                    : "#333",
-                                fontSize: 12,
-                                fontWeight: "bold",
-                              }}
-                            >
-                              {layer}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    </View>
-                  )}
-                </View>
-              )}
-
-              <Text style={styles.settingLabel}>アイコンを選択</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={{ marginBottom: 15 }}
-              >
-                {presetIcons.map((icon) => (
-                  <TouchableOpacity
-                    key={icon}
-                    onPress={() => setNewWishIcon(icon)}
-                    style={[
-                      styles.iconSelectBtn,
-                      newWishIcon === icon && {
-                        backgroundColor: "#F2F2F7",
-                        borderColor: "#C7C7CC",
-                      },
-                    ]}
-                  >
-                    <Ionicons
-                      name={
-                        icon as React.ComponentProps<typeof Ionicons>["name"]
-                      }
-                      size={24}
-                      color={newWishIcon === icon ? "#1C1C1E" : "#8E8E93"}
-                    />
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-
-              <Text style={styles.settingLabel}>テーマカラー</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={{ marginBottom: 20 }}
-              >
-                {WISH_COLORS.map((color) => (
-                  <TouchableOpacity
-                    key={color}
-                    onPress={() => setNewWishColor(color)}
-                    style={[
-                      {
-                        width: 30,
-                        height: 30,
-                        borderRadius: 15,
-                        backgroundColor: color,
-                        marginRight: 10,
-                      },
-                      newWishColor === color && {
-                        borderWidth: 3,
-                        borderColor: "#1C1C1E",
-                      },
-                    ]}
-                  />
-                ))}
-              </ScrollView>
-
-              <View
-                style={[
-                  styles.editActionRow,
-                  {
-                    justifyContent: "space-between",
-                    marginTop: 20, // 少し余裕を持たせました
-                    alignItems: "center",
-                  },
-                ]}
-              >
-                {/* キャンセルボタン：控えめにしつつタップ範囲を確保 */}
-                <TouchableOpacity
-                  onPress={() => setIsAddWishModalVisible(false)}
-                  style={{ paddingVertical: 10, paddingHorizontal: 5 }}
-                >
-                  <Text style={{ color: "#8E8E93", fontWeight: "bold" }}>
-                    キャンセル
+                <View style={styles.settingSwitchRow}>
+                  <Text style={styles.settingSwitchLabel}>
+                    毎月自動で積み立てる
                   </Text>
-                </TouchableOpacity>
+                  <Switch
+                    value={newWishAutoDeposit}
+                    onValueChange={setNewWishAutoDeposit}
+                    trackColor={{ false: "#E5E5EA", true: newWishColor }}
+                  />
+                </View>
 
-                <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  {/* 🌟 削除ボタン：薄い赤の背景を付けて、押しやすく存在感をアップ */}
-                  {editingWishId && (
+                {newWishAutoDeposit && (
+                  <>
+                    <Text style={styles.settingLabel}>毎月の積立額 (¥)</Text>
+                    <TextInput
+                      style={styles.inputField}
+                      keyboardType="numeric"
+                      placeholder="例: 5000"
+                      placeholderTextColor="#C7C7CC"
+                      value={newWishAutoAmount}
+                      onChangeText={setNewWishAutoAmount}
+                    />
+                  </>
+                )}
+
+                {/* 🌟 共有スイッチとレイヤー選択UI */}
+                {sharedRooms && Object.keys(sharedRooms).length > 0 && (
+                  <View style={{ marginTop: 15 }}>
+                    <View style={styles.settingSwitchRow}>
+                      <Text style={styles.settingSwitchLabel}>
+                        夢を共有する
+                      </Text>
+                      <Switch
+                        value={newWishIsShared}
+                        onValueChange={(v) => {
+                          setNewWishIsShared(v);
+                          if (v && sharedRooms) {
+                            // 🌟 追加：ONにした瞬間に、自動で最初の共有ルームを選択状態にする（選択忘れ防止！）
+                            const availableRooms = Object.keys(sharedRooms);
+                            if (
+                              availableRooms.length > 0 &&
+                              !selectedSharedRoom
+                            ) {
+                              setSelectedSharedRoom(availableRooms[0]);
+                            }
+                          } else if (!v) {
+                            setSelectedSharedRoom(null); // オフにしたら選択をクリア
+                          }
+                        }}
+                        trackColor={{ false: "#E5E5EA", true: newWishColor }}
+                      />
+                    </View>
+
+                    {/* スイッチONの時だけ、カテゴリ選択ボタンを表示 */}
+                    {newWishIsShared && (
+                      <View style={{ marginTop: 10 }}>
+                        <Text style={styles.settingLabel}>
+                          共有先レイヤーを選択
+                        </Text>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            flexWrap: "wrap",
+                            gap: 8,
+                            marginTop: 5,
+                          }}
+                        >
+                          {Object.keys(sharedRooms).map((layer) => (
+                            <TouchableOpacity
+                              key={layer}
+                              style={[
+                                {
+                                  paddingVertical: 8,
+                                  paddingHorizontal: 12,
+                                  borderRadius: 8,
+                                  borderWidth: 1,
+                                },
+                                {
+                                  backgroundColor:
+                                    selectedSharedRoom === layer
+                                      ? newWishColor
+                                      : "#F2F2F7",
+                                  borderColor:
+                                    selectedSharedRoom === layer
+                                      ? newWishColor
+                                      : "#E5E5EA",
+                                },
+                              ]}
+                              onPress={() => setSelectedSharedRoom(layer)}
+                            >
+                              <Text
+                                style={{
+                                  color:
+                                    selectedSharedRoom === layer
+                                      ? "#FFF"
+                                      : "#333",
+                                  fontSize: 12,
+                                  fontWeight: "bold",
+                                }}
+                              >
+                                {layer}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                <Text style={styles.settingLabel}>アイコンを選択</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={{ marginBottom: 15 }}
+                >
+                  {presetIcons.map((icon) => (
                     <TouchableOpacity
-                      onPress={confirmDeleteWish}
+                      key={icon}
+                      onPress={() => setNewWishIcon(icon)}
                       style={[
-                        styles.saveBtn,
-                        {
-                          backgroundColor: "#FF3B3015", // 薄い赤
-                          marginRight: 10,
-                          paddingHorizontal: 15, // 横幅を調整
-                          borderWidth: 0,
+                        styles.iconSelectBtn,
+                        newWishIcon === icon && {
+                          backgroundColor: "#F2F2F7",
+                          borderColor: "#C7C7CC",
                         },
                       ]}
                     >
-                      <Text style={{ color: "#FF3B30", fontWeight: "bold" }}>
-                        削除
-                      </Text>
+                      <Ionicons
+                        name={
+                          icon as React.ComponentProps<typeof Ionicons>["name"]
+                        }
+                        size={24}
+                        color={newWishIcon === icon ? "#1C1C1E" : "#8E8E93"}
+                      />
                     </TouchableOpacity>
-                  )}
+                  ))}
+                </ScrollView>
 
-                  {/* 保存ボタン：メインのアクション */}
+                <Text style={styles.settingLabel}>テーマカラー</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={{ marginBottom: 20 }}
+                >
+                  {WISH_COLORS.map((color) => (
+                    <TouchableOpacity
+                      key={color}
+                      onPress={() => setNewWishColor(color)}
+                      style={[
+                        {
+                          width: 30,
+                          height: 30,
+                          borderRadius: 15,
+                          backgroundColor: color,
+                          marginRight: 10,
+                        },
+                        newWishColor === color && {
+                          borderWidth: 3,
+                          borderColor: "#1C1C1E",
+                        },
+                      ]}
+                    />
+                  ))}
+                </ScrollView>
+
+                <View
+                  style={[
+                    styles.editActionRow,
+                    {
+                      justifyContent: "space-between",
+                      marginTop: 20, // 少し余裕を持たせました
+                      alignItems: "center",
+                    },
+                  ]}
+                >
+                  {/* キャンセルボタン：控えめにしつつタップ範囲を確保 */}
                   <TouchableOpacity
-                    style={[
-                      styles.saveBtn,
-                      {
-                        backgroundColor: newWishColor,
-                        paddingHorizontal: 20,
-                      },
-                    ]}
-                    onPress={executeAddWish}
+                    onPress={() => setIsAddWishModalVisible(false)}
+                    style={{ paddingVertical: 10, paddingHorizontal: 5 }}
                   >
-                    <Text style={styles.saveText}>
-                      {editingWishId ? "保存" : "目標を設定"}
+                    <Text style={{ color: "#8E8E93", fontWeight: "bold" }}>
+                      キャンセル
                     </Text>
                   </TouchableOpacity>
+
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    {/* 🌟 削除ボタン：薄い赤の背景を付けて、押しやすく存在感をアップ */}
+                    {editingWishId && (
+                      <TouchableOpacity
+                        onPress={confirmDeleteWish}
+                        style={[
+                          styles.saveBtn,
+                          {
+                            backgroundColor: "#FF3B3015", // 薄い赤
+                            marginRight: 10,
+                            paddingHorizontal: 15, // 横幅を調整
+                            borderWidth: 0,
+                          },
+                        ]}
+                      >
+                        <Text style={{ color: "#FF3B30", fontWeight: "bold" }}>
+                          削除
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {/* 保存ボタン：メインのアクション */}
+                    <TouchableOpacity
+                      style={[
+                        styles.saveBtn,
+                        {
+                          backgroundColor: newWishColor,
+                          paddingHorizontal: 20,
+                        },
+                      ]}
+                      onPress={executeAddWish}
+                    >
+                      <Text style={styles.saveText}>
+                        {editingWishId ? "保存" : "目標を設定"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
-            </View>
-          </TouchableWithoutFeedback>
-        </TouchableOpacity>
+            </TouchableWithoutFeedback>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* 残金一括振り分け（スウィーパー）モーダル */}
       <Modal visible={isSweeperModalVisible} transparent animationType="fade">
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setIsSweeperModalVisible(false)}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1 }}
         >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View style={styles.editCardModal}>
-              <View style={{ alignItems: "center", marginBottom: 15 }}>
-                <View
-                  style={[
-                    styles.sweeperIconBg,
-                    {
-                      width: 50,
-                      height: 50,
-                      borderRadius: 25,
-                      marginBottom: 10,
-                    },
-                  ]}
-                >
-                  <Ionicons name="sparkles" size={28} color="#FF9500" />
-                </View>
-                <Text style={styles.editTitle}>残金を一括振り分け</Text>
-                <Text
-                  style={{
-                    color: "#8E8E93",
-                    fontSize: 12,
-                    fontWeight: "bold",
-                    marginBottom: 5,
-                  }}
-                >
-                  先月の余り（未配分プール）
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 32,
-                    fontWeight: "900",
-                    color: remainingToAllocate < 0 ? "#FF3B30" : "#1C1C1E",
-                  }}
-                >
-                  ¥{remainingToAllocate.toLocaleString()}
-                </Text>
-              </View>
-
-              {activeWishes.length === 0 ? (
-                <View style={{ padding: 20, alignItems: "center" }}>
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setIsSweeperModalVisible(false)}
+          >
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              <View style={styles.editCardModal}>
+                <View style={{ alignItems: "center", marginBottom: 15 }}>
+                  <View
+                    style={[
+                      styles.sweeperIconBg,
+                      {
+                        width: 50,
+                        height: 50,
+                        borderRadius: 25,
+                        marginBottom: 10,
+                      },
+                    ]}
+                  >
+                    <Ionicons name="sparkles" size={28} color="#FF9500" />
+                  </View>
+                  <Text style={styles.editTitle}>残金を一括振り分け</Text>
                   <Text
                     style={{
                       color: "#8E8E93",
-                      textAlign: "center",
-                      lineHeight: 20,
+                      fontSize: 12,
+                      fontWeight: "bold",
+                      marginBottom: 5,
                     }}
                   >
-                    個別の目標がありません。{"\n"}
-                    下のボタンから全額を一般貯金に回せます。
+                    先月の余り（未配分プール）
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 32,
+                      fontWeight: "900",
+                      color: remainingToAllocate < 0 ? "#FF3B30" : "#1C1C1E",
+                    }}
+                  >
+                    ¥{remainingToAllocate.toLocaleString()}
                   </Text>
                 </View>
-              ) : (
-                <ScrollView
-                  style={{ maxHeight: 200, marginVertical: 10 }}
-                  showsVerticalScrollIndicator={false}
-                >
-                  {activeWishes.map((wish) => (
-                    <View key={wish.id} style={styles.sweeperRow}>
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          flex: 1,
-                        }}
-                      >
+
+                {activeWishes.length === 0 ? (
+                  <View style={{ padding: 20, alignItems: "center" }}>
+                    <Text
+                      style={{
+                        color: "#8E8E93",
+                        textAlign: "center",
+                        lineHeight: 20,
+                      }}
+                    >
+                      個別の目標がありません。{"\n"}
+                      下のボタンから全額を一般貯金に回せます。
+                    </Text>
+                  </View>
+                ) : (
+                  <ScrollView
+                    style={{ maxHeight: 200, marginVertical: 10 }}
+                    showsVerticalScrollIndicator={false}
+                  >
+                    {activeWishes.map((wish) => (
+                      <View key={wish.id} style={styles.sweeperRow}>
                         <View
-                          style={[
-                            styles.wishIconBg,
-                            {
-                              backgroundColor: wish.color + "20",
-                              width: 30,
-                              height: 30,
-                              marginBottom: 0,
-                            },
-                          ]}
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            flex: 1,
+                          }}
                         >
-                          <Ionicons
-                            name={
-                              wish.icon as React.ComponentProps<
-                                typeof Ionicons
-                              >["name"]
-                            }
-                            size={16}
-                            color={wish.color}
+                          <View
+                            style={[
+                              styles.wishIconBg,
+                              {
+                                backgroundColor: wish.color + "20",
+                                width: 30,
+                                height: 30,
+                                marginBottom: 0,
+                              },
+                            ]}
+                          >
+                            <Ionicons
+                              name={
+                                wish.icon as React.ComponentProps<
+                                  typeof Ionicons
+                                >["name"]
+                              }
+                              size={16}
+                              color={wish.color}
+                            />
+                          </View>
+                          <View style={{ marginLeft: 10, flex: 1 }}>
+                            <Text
+                              style={{ fontWeight: "bold", fontSize: 14 }}
+                              numberOfLines={1}
+                            >
+                              {wish.name}
+                            </Text>
+                            <Text style={{ fontSize: 10, color: "#8E8E93" }}>
+                              あと ¥
+                              {(
+                                wish.targetAmount - wish.dynamicSavedAmount
+                              ).toLocaleString()}
+                            </Text>
+                          </View>
+                        </View>
+                        <View
+                          style={{ flexDirection: "row", alignItems: "center" }}
+                        >
+                          <Text
+                            style={{
+                              fontWeight: "bold",
+                              color: "#8E8E93",
+                              marginRight: 5,
+                            }}
+                          >
+                            +
+                          </Text>
+                          <TextInput
+                            style={styles.sweeperInput}
+                            keyboardType="numeric"
+                            placeholder="0"
+                            placeholderTextColor="#C7C7CC"
+                            value={(
+                              sweeperAllocations[wish.id] || ""
+                            ).toString()}
+                            onChangeText={(val) => {
+                              const clean = val.replace(/[^0-9]/g, "");
+                              setSweeperAllocations((prev) => ({
+                                ...prev,
+                                [wish.id]: clean ? parseInt(clean, 10) : 0,
+                              }));
+                            }}
                           />
                         </View>
-                        <View style={{ marginLeft: 10, flex: 1 }}>
-                          <Text
-                            style={{ fontWeight: "bold", fontSize: 14 }}
-                            numberOfLines={1}
-                          >
-                            {wish.name}
-                          </Text>
-                          <Text style={{ fontSize: 10, color: "#8E8E93" }}>
-                            あと ¥
-                            {(
-                              wish.targetAmount - wish.dynamicSavedAmount
-                            ).toLocaleString()}
-                          </Text>
-                        </View>
                       </View>
-                      <View
-                        style={{ flexDirection: "row", alignItems: "center" }}
-                      >
-                        <Text
-                          style={{
-                            fontWeight: "bold",
-                            color: "#8E8E93",
-                            marginRight: 5,
-                          }}
-                        >
-                          +
-                        </Text>
-                        <TextInput
-                          style={styles.sweeperInput}
-                          keyboardType="numeric"
-                          placeholder="0"
-                          placeholderTextColor="#C7C7CC"
-                          value={(sweeperAllocations[wish.id] || "").toString()}
-                          onChangeText={(val) => {
-                            const clean = val.replace(/[^0-9]/g, "");
-                            setSweeperAllocations((prev) => ({
-                              ...prev,
-                              [wish.id]: clean ? parseInt(clean, 10) : 0,
-                            }));
-                          }}
-                        />
-                      </View>
-                    </View>
-                  ))}
-                </ScrollView>
-              )}
+                    ))}
+                  </ScrollView>
+                )}
 
-              <View style={styles.sweeperFooterRow}>
-                <Text
-                  style={{ fontSize: 12, fontWeight: "bold", color: "#8E8E93" }}
-                >
-                  🏦 一般貯金に残す金額
-                </Text>
-                <Text
-                  style={{ fontSize: 14, fontWeight: "bold", color: "#34C759" }}
-                >
-                  ¥{Math.max(0, remainingToAllocate).toLocaleString()}
-                </Text>
-              </View>
-
-              <View
-                style={[
-                  styles.editActionRow,
-                  { justifyContent: "space-between", marginTop: 20, gap: 10 },
-                ]}
-              >
-                <TouchableOpacity
-                  onPress={() => setIsSweeperModalVisible(false)}
-                  style={{ padding: 10 }}
-                >
-                  <Text style={{ color: "#8E8E93", fontWeight: "bold" }}>
-                    キャンセル
-                  </Text>
-                </TouchableOpacity>
-                <View style={{ flexDirection: "row", gap: 10 }}>
-                  <TouchableOpacity
-                    style={[
-                      styles.saveBtn,
-                      { backgroundColor: "#34C759", paddingHorizontal: 15 },
-                    ]}
-                    onPress={executeAllToSavings}
+                <View style={styles.sweeperFooterRow}>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "bold",
+                      color: "#8E8E93",
+                    }}
                   >
-                    <Text style={styles.saveText}>全額貯金</Text>
+                    🏦 一般貯金に残す金額
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "bold",
+                      color: "#34C759",
+                    }}
+                  >
+                    ¥{Math.max(0, remainingToAllocate).toLocaleString()}
+                  </Text>
+                </View>
+
+                <View
+                  style={[
+                    styles.editActionRow,
+                    { justifyContent: "space-between", marginTop: 20, gap: 10 },
+                  ]}
+                >
+                  <TouchableOpacity
+                    onPress={() => setIsSweeperModalVisible(false)}
+                    style={{ padding: 10 }}
+                  >
+                    <Text style={{ color: "#8E8E93", fontWeight: "bold" }}>
+                      キャンセル
+                    </Text>
                   </TouchableOpacity>
-                  {activeWishes.length > 0 && (
+                  <View style={{ flexDirection: "row", gap: 10 }}>
                     <TouchableOpacity
                       style={[
                         styles.saveBtn,
-                        { backgroundColor: "#FF9500", paddingHorizontal: 15 },
+                        { backgroundColor: "#34C759", paddingHorizontal: 15 },
                       ]}
-                      onPress={executeSweeper}
+                      onPress={executeAllToSavings}
                     >
-                      <Text style={styles.saveText}>振り分け</Text>
+                      <Text style={styles.saveText}>全額貯金</Text>
                     </TouchableOpacity>
-                  )}
+                    {activeWishes.length > 0 && (
+                      <TouchableOpacity
+                        style={[
+                          styles.saveBtn,
+                          { backgroundColor: "#FF9500", paddingHorizontal: 15 },
+                        ]}
+                        onPress={executeSweeper}
+                      >
+                        <Text style={styles.saveText}>振り分け</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
               </View>
-            </View>
-          </TouchableWithoutFeedback>
-        </TouchableOpacity>
+            </TouchableWithoutFeedback>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* 個別Wish入金（チャージ）モーダル */}
       <Modal visible={isDepositModalVisible} transparent animationType="fade">
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setIsDepositModalVisible(false)}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1 }}
         >
-          <TouchableWithoutFeedback>
-            <View style={styles.editCardModal}>
-              {selectedWish && (
-                <>
-                  <View style={{ alignItems: "center", marginBottom: 15 }}>
-                    <Ionicons
-                      name={
-                        selectedWish.icon as React.ComponentProps<
-                          typeof Ionicons
-                        >["name"]
-                      }
-                      size={36}
-                      color={selectedWish.color}
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setIsDepositModalVisible(false)}
+          >
+            <TouchableWithoutFeedback>
+              <View style={styles.editCardModal}>
+                {selectedWish && (
+                  <>
+                    <View style={{ alignItems: "center", marginBottom: 15 }}>
+                      <Ionicons
+                        name={
+                          selectedWish.icon as React.ComponentProps<
+                            typeof Ionicons
+                          >["name"]
+                        }
+                        size={36}
+                        color={selectedWish.color}
+                      />
+                      <Text
+                        style={[
+                          styles.editTitle,
+                          { marginBottom: 5, marginTop: 5 },
+                        ]}
+                      >
+                        {selectedWish.name} へ入金
+                      </Text>
+                      <Text
+                        style={{
+                          color: "#8E8E93",
+                          fontSize: 12,
+                          fontWeight: "bold",
+                        }}
+                      >
+                        あと ¥
+                        {(
+                          selectedWish.targetAmount -
+                          selectedWish.dynamicSavedAmount
+                        ).toLocaleString()}{" "}
+                        で達成！
+                      </Text>
+                    </View>
+
+                    <Text style={styles.settingLabel}>
+                      今月の使えるお金から入金 (¥)
+                    </Text>
+                    <TextInput
+                      // 🌟 魔法の動的スタイル：こちらも7文字を超えたら自動縮小！
+                      style={[
+                        styles.editInputAmount,
+                        { fontSize: depositAmount.length > 7 ? 16 : 24 },
+                      ]}
+                      keyboardType="numeric"
+                      placeholder="0"
+                      placeholderTextColor="#C7C7CC"
+                      value={depositAmount}
+                      onChangeText={setDepositAmount}
+                      autoFocus
+                      multiline={false}
+                      maxLength={10}
                     />
                     <Text
-                      style={[
-                        styles.editTitle,
-                        { marginBottom: 5, marginTop: 5 },
-                      ]}
-                    >
-                      {selectedWish.name} へ入金
-                    </Text>
-                    <Text
                       style={{
-                        color: "#8E8E93",
-                        fontSize: 12,
-                        fontWeight: "bold",
+                        fontSize: 11,
+                        color: "#AEAEB2",
+                        marginTop: 8,
+                        textAlign: "right",
                       }}
                     >
-                      あと ¥
-                      {(
-                        selectedWish.targetAmount -
-                        selectedWish.dynamicSavedAmount
-                      ).toLocaleString()}{" "}
-                      で達成！
+                      ※マイナス値を入れると残高に戻せます
                     </Text>
-                  </View>
 
-                  <Text style={styles.settingLabel}>
-                    今月の使えるお金から入金 (¥)
-                  </Text>
-                  <TextInput
-                    // 🌟 魔法の動的スタイル：こちらも7文字を超えたら自動縮小！
-                    style={[
-                      styles.editInputAmount,
-                      { fontSize: depositAmount.length > 7 ? 16 : 24 },
-                    ]}
-                    keyboardType="numeric"
-                    placeholder="0"
-                    placeholderTextColor="#C7C7CC"
-                    value={depositAmount}
-                    onChangeText={setDepositAmount}
-                    autoFocus
-                    multiline={false}
-                    maxLength={10}
-                  />
-                  <Text
-                    style={{
-                      fontSize: 11,
-                      color: "#AEAEB2",
-                      marginTop: 8,
-                      textAlign: "right",
-                    }}
-                  >
-                    ※マイナス値を入れると残高に戻せます
-                  </Text>
-
-                  <View
-                    style={[
-                      styles.editActionRow,
-                      { justifyContent: "space-between" },
-                    ]}
-                  >
-                    <TouchableOpacity
-                      onPress={() => setIsDepositModalVisible(false)}
-                      style={{ padding: 10 }}
-                    >
-                      <Text style={{ color: "#8E8E93", fontWeight: "bold" }}>
-                        キャンセル
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
+                    <View
                       style={[
-                        styles.saveBtn,
-                        { backgroundColor: selectedWish.color },
+                        styles.editActionRow,
+                        { justifyContent: "space-between" },
                       ]}
-                      onPress={executeDeposit}
                     >
-                      <Text style={styles.saveText}>チャージする</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              )}
-            </View>
-          </TouchableWithoutFeedback>
-        </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => setIsDepositModalVisible(false)}
+                        style={{ padding: 10 }}
+                      >
+                        <Text style={{ color: "#8E8E93", fontWeight: "bold" }}>
+                          キャンセル
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.saveBtn,
+                          { backgroundColor: selectedWish.color },
+                        ]}
+                        onPress={executeDeposit}
+                      >
+                        <Text style={styles.saveText}>チャージする</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
+              </View>
+            </TouchableWithoutFeedback>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* 目標達成処理モーダル */}
       <Modal visible={isCompleteModalVisible} transparent animationType="fade">
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setIsCompleteModalVisible(false)}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1 }}
         >
-          <TouchableWithoutFeedback>
-            <View style={styles.editCardModal}>
-              {selectedWish && (
-                <>
-                  <View style={{ alignItems: "center", marginBottom: 15 }}>
-                    <Text style={{ fontSize: 40, marginBottom: 10 }}>🎉</Text>
-                    <Text
-                      style={[
-                        styles.editTitle,
-                        { marginBottom: 5, color: selectedWish.color },
-                      ]}
-                    >
-                      目標達成！
-                    </Text>
-                    <Text
-                      style={{
-                        color: "#333",
-                        fontSize: 14,
-                        fontWeight: "bold",
-                        textAlign: "center",
-                        marginTop: 10,
-                        lineHeight: 20,
-                      }}
-                    >
-                      「{selectedWish.name}」に必要な資金が{"\n"}
-                      すべて貯まりました！
-                    </Text>
-                  </View>
-
-                  <View
-                    style={[
-                      styles.editActionRow,
-                      { justifyContent: "space-between", marginTop: 20 },
-                    ]}
-                  >
-                    <TouchableOpacity
-                      onPress={() => setIsCompleteModalVisible(false)}
-                      style={{ padding: 10 }}
-                    >
-                      <Text style={{ color: "#8E8E93", fontWeight: "bold" }}>
-                        あとで
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setIsCompleteModalVisible(false)}
+          >
+            <TouchableWithoutFeedback>
+              <View style={styles.editCardModal}>
+                {selectedWish && (
+                  <>
+                    <View style={{ alignItems: "center", marginBottom: 15 }}>
+                      <Text style={{ fontSize: 40, marginBottom: 10 }}>🎉</Text>
+                      <Text
+                        style={[
+                          styles.editTitle,
+                          { marginBottom: 5, color: selectedWish.color },
+                        ]}
+                      >
+                        目標達成！
                       </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
+                      <Text
+                        style={{
+                          color: "#333",
+                          fontSize: 14,
+                          fontWeight: "bold",
+                          textAlign: "center",
+                          marginTop: 10,
+                          lineHeight: 20,
+                        }}
+                      >
+                        「{selectedWish.name}」に必要な資金が{"\n"}
+                        すべて貯まりました！
+                      </Text>
+                    </View>
+
+                    <View
                       style={[
-                        styles.saveBtn,
-                        {
-                          backgroundColor: selectedWish.color,
-                          flexDirection: "row",
-                          alignItems: "center",
-                        },
+                        styles.editActionRow,
+                        { justifyContent: "space-between", marginTop: 20 },
                       ]}
-                      onPress={executeCompleteWish}
                     >
-                      <Ionicons
-                        name="calendar"
-                        size={16}
-                        color="#FFF"
-                        style={{ marginRight: 6 }}
-                      />
-                      <Text style={styles.saveText}>予定に追加して完了</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              )}
-            </View>
-          </TouchableWithoutFeedback>
-        </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => setIsCompleteModalVisible(false)}
+                        style={{ padding: 10 }}
+                      >
+                        <Text style={{ color: "#8E8E93", fontWeight: "bold" }}>
+                          あとで
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.saveBtn,
+                          {
+                            backgroundColor: selectedWish.color,
+                            flexDirection: "row",
+                            alignItems: "center",
+                          },
+                        ]}
+                        onPress={executeCompleteWish}
+                      >
+                        <Ionicons
+                          name="calendar"
+                          size={16}
+                          color="#FFF"
+                          style={{ marginRight: 6 }}
+                        />
+                        <Text style={styles.saveText}>予定に追加して完了</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
+              </View>
+            </TouchableWithoutFeedback>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
       <Modal
         visible={isHistoryModalVisible}
