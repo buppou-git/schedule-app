@@ -153,17 +153,7 @@ export function useCalendarData(
         const exists = expanded[dateStr].some((i) => i.id === holidayId);
 
         if (!exists) {
-          // 🌟 究極のフィルター突破ロジック：
-          // リスト表示側の裏側にある「実在するカレンダーチェック」を確実に突破させるため、
-          // 単一レイヤーモードならそのレイヤー、全体表示ならlayerMasterに実在する最初のレイヤーに所属を動的に偽装します！
-          const validLayers = Object.keys(layerMaster);
-          const holidayLayer =
-            activeTags.length === 1
-              ? activeTags[0]
-              : validLayers.length > 0
-                ? validLayers[0]
-                : "共通";
-
+          // 🌟 修正：既存のレイヤーに偽装してねじ込むのをやめ、完全に独立した「休日」レイヤーとして生成する！
           const holidayItem: ScheduleItem = {
             id: holidayId,
             title: holidayName,
@@ -172,12 +162,10 @@ export function useCalendarData(
             isEvent: true,
             isTodo: false,
             color: "#FF3B30", // 祝日は真っ赤なデザイン
-            tag: "祝日",
-
-            // 🌟 フィルターをすり抜けるための正しいカレンダー情報を注入
-            tags: [holidayLayer, "祝日"],
-            layer: holidayLayer,
-            category: "祝日",
+            tag: "休日", // 統一して「休日」にする
+            tags: ["休日"], // 所属も「休日」のみ
+            layer: "休日", // レイヤーも「休日」
+            category: "休日",
 
             amount: 0,
             isDone: false,
@@ -235,7 +223,13 @@ export function useCalendarData(
             "#999"; // ④ どれもなければグレー
 
           // フィルタリング（表示設定）のチェック
-          if (!isAllLayers && !activeTagsSet.has(info.layer) && tag !== "祝日")
+          // 🌟 修正：「祝日」「休日」はフィルターに関係なく常にカレンダーにドット（点）を出す
+          if (
+            !isAllLayers &&
+            !activeTagsSet.has(info.layer) &&
+            tag !== "祝日" &&
+            tag !== "休日"
+          )
             return;
 
           dayDots.add(finalColor);

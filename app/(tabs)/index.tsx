@@ -542,10 +542,9 @@ function IndexContent() {
     if (Object.keys(layerMaster).length === 0) return;
 
     let hasNewTags = false;
-    const nextTagMaster = { ...tagMaster }; // 関数(prev=>)ではなく、現在のtagMasterを直接コピー！
+    const nextTagMaster = { ...tagMaster };
 
     Object.keys(roomSchedules).forEach((roomId) => {
-      // 自分の親レイヤー名を特定
       const myLayerName =
         Object.keys(sharedRooms).find((key) => sharedRooms[key] === roomId) ||
         roomId;
@@ -553,17 +552,24 @@ function IndexContent() {
       const datesData = roomSchedules[roomId] || {};
       Object.keys(datesData).forEach((date) => {
         datesData[date].forEach((item) => {
-          // 相手が送ってきた属性（サブカテゴリ）を特定
           const { parent = "", sub = "" } = resolveTags(item) || {};
 
           let subTag = "";
-
-          // 親と違えば sub とみなす
           if (sub !== parent && sub !== myLayerName) {
             subTag = sub;
           }
 
-          // 🌟 自分の辞書（設定）にない未知の属性なら、自動で登録する！
+          // 🌟 修正：「祝日」や「休日」というワードは絶対に自動登録（学習）させない！
+          if (
+            subTag === "祝日" ||
+            subTag === "休日" ||
+            parent === "祝日" ||
+            parent === "休日"
+          ) {
+            return;
+          }
+
+          // 自分の辞書（設定）にない未知の属性なら、自動で登録する
           if (subTag && !nextTagMaster[subTag]) {
             nextTagMaster[subTag] = {
               layer: myLayerName,
@@ -575,7 +581,6 @@ function IndexContent() {
       });
     });
 
-    // もし新しい属性を学習したら、一発でセットして保存する！
     if (hasNewTags) {
       setTagMaster(nextTagMaster);
       import("@react-native-async-storage/async-storage").then(
@@ -1163,11 +1168,25 @@ function IndexContent() {
           setLayerMaster(initialLayers);
           if (pre) setPresets(JSON.parse(pre));
 
-          // 🌟 魔法の自己修復：「休日」や「祝日」が誤ってサブカテゴリに登録されていたら自動削除してクリーンアップ！
+          // 🌟 修正：「祝日」「休日」という文字がカレンダー（大枠）や属性（小タグ）に混ざっていたら、起動時に根こそぎ完全消滅させる
           let initialTags = tags ? JSON.parse(tags) : {};
+          let tagsChanged = false;
           if (initialTags["祝日"] || initialTags["休日"]) {
             delete initialTags["祝日"];
             delete initialTags["休日"];
+            tagsChanged = true;
+          }
+          // 念のため大枠（layerMaster）側からも完全に駆除
+          if (initialLayers["祝日"] || initialLayers["休日"]) {
+            delete initialLayers["祝日"];
+            delete initialLayers["休日"];
+            setLayerMaster({ ...initialLayers });
+            await AsyncStorage.setItem(
+              "layerMasterData",
+              JSON.stringify(initialLayers),
+            );
+          }
+          if (tagsChanged) {
             await AsyncStorage.setItem(
               "tagMasterData",
               JSON.stringify(initialTags),
@@ -1252,6 +1271,23 @@ function IndexContent() {
       const newItems = scheduleData[date]
         .filter((item) => !pendingDeletes.has(item.id))
         .map((item: ScheduleItem) => {
+          if (
+            item.tag === "祝日" ||
+            item.category === "祝日" ||
+            item.layer === "祝日" ||
+            item.tag === "休日" ||
+            item.category === "休日" ||
+            item.layer === "休日"
+          ) {
+            return {
+              ...item,
+              color: "#FF3B30",
+              tag: "休日",
+              layer: "休日",
+              tags: ["休日"],
+            };
+          }
+
           const { parent = "", sub = "" } = resolveTags(item) || {};
 
           const itemTag = sub;
@@ -1785,112 +1821,128 @@ function IndexContent() {
     subTaskId: number,
   ) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const newData = { ...scheduleData };
 
-    let targetDate = date;
-    let found = false;
+    let targetItemToSync: ScheduleItem | null = null;
+    let targetDateForSync = date;
 
-    if (
-      newData[targetDate] &&
-      newData[targetDate].some((i) => i.id === parentId)
-    ) {
-      found = true;
-    } else {
-      for (const d of Object.keys(newData)) {
-        if (newData[d].some((i) => i.id === parentId)) {
-          targetDate = d;
-          found = true;
-          break;
+    // 🌟 修正：古い記憶（クロージャ）に惑わされないよう、関数型の更新（prevData）で確実に最新データを操作する！
+    setScheduleData((prevData) => {
+      const nextData: Record<string, ScheduleItem[]> = {};
+      Object.keys(prevData).forEach((key) => {
+        nextData[key] = [...prevData[key]]; // 🌟 配列自体を新しく作り直すことで、Reactに100%変更を検知させる
+      });
+
+      let targetDate = date;
+      let found = false;
+
+      if (
+        nextData[targetDate] &&
+        nextData[targetDate].some((i) => i.id === parentId)
+      ) {
+        found = true;
+      } else {
+        for (const d of Object.keys(nextData)) {
+          if (nextData[d].some((i) => i.id === parentId)) {
+            targetDate = d;
+            found = true;
+            break;
+          }
         }
       }
-    }
-    if (!found) return;
+      if (!found) return prevData;
 
-    newData[targetDate] = newData[targetDate].map((item) => {
-      if (item.id === parentId && item.subTasks) {
-        const updatedSubTasks = item.subTasks.map((sub: any) => {
-          if (sub.id === subTaskId) {
-            // 🌟 追加：繰り返しなら専用の配列(completedDates)で管理、単発なら通常の(isDone)で管理
-            let nextStatus;
-            let updatedCompletedDates = sub.completedDates || [];
+      nextData[targetDate] = nextData[targetDate].map((item) => {
+        if (item.id === parentId && item.subTasks) {
+          const updatedSubTasks = item.subTasks.map((sub: any) => {
+            if (sub.id === subTaskId) {
+              // 🌟 繰り返しなら専用の配列(completedDates)で管理、単発なら通常の(isDone)で管理
+              let nextStatus;
+              let updatedCompletedDates = sub.completedDates || [];
 
-            if (item.repeatType) {
-              const isCurrentlyDone = updatedCompletedDates.includes(date);
-              nextStatus = !isCurrentlyDone;
-              if (nextStatus) {
-                updatedCompletedDates = [...updatedCompletedDates, date]; // 完了日に今日を追加
+              if (item.repeatType) {
+                const isCurrentlyDone = updatedCompletedDates.includes(date);
+                nextStatus = !isCurrentlyDone;
+                if (nextStatus) {
+                  updatedCompletedDates = [...updatedCompletedDates, date]; // 完了日に今日を追加
+                } else {
+                  updatedCompletedDates = updatedCompletedDates.filter(
+                    (d: string) => d !== date,
+                  ); // 外す
+                }
               } else {
-                updatedCompletedDates = updatedCompletedDates.filter(
-                  (d: string) => d !== date,
-                ); // 外す
+                nextStatus = !sub.isDone;
               }
-            } else {
-              nextStatus = !sub.isDone;
+
+              if (nextStatus && sub.notificationId) {
+                cancelItemNotification(sub.notificationId);
+              }
+              return {
+                ...sub,
+                isDone: nextStatus,
+                completedDates: updatedCompletedDates,
+                notificationId: nextStatus ? undefined : sub.notificationId,
+                reminderOption: nextStatus ? "none" : sub.reminderOption,
+              };
             }
+            return sub;
+          });
 
-            if (nextStatus && sub.notificationId) {
-              cancelItemNotification(sub.notificationId);
+          // 1. お金の記録以外を完了判定の対象にする
+          const pureTodos = updatedSubTasks.filter(
+            (sub: any) => !sub.isExpense && !sub.isIncome,
+          );
+
+          // 2. 全て完了しているか計算（純粋なタスクがない場合は元の状態を維持）
+          const isAllSubTasksDone =
+            pureTodos.length > 0
+              ? pureTodos.every((sub: any) => {
+                  if (item.repeatType)
+                    return sub.completedDates?.includes(date);
+                  return sub.isDone;
+                })
+              : item.isDone || false;
+
+          // 🌟 3. 習慣(ルーチン)予定の場合の特別処理
+          let updatedCompletedDates = item.completedDates || [];
+          if (item.repeatType) {
+            if (isAllSubTasksDone && !updatedCompletedDates.includes(date)) {
+              updatedCompletedDates = [...updatedCompletedDates, date]; // 完了日に今日を追加
+            } else if (
+              !isAllSubTasksDone &&
+              updatedCompletedDates.includes(date)
+            ) {
+              updatedCompletedDates = updatedCompletedDates.filter(
+                (d: string) => d !== date,
+              ); // 完了から外す
             }
-            return {
-              ...sub,
-              isDone: nextStatus,
-              completedDates: updatedCompletedDates, // 🌟 サブタスクにも完了日リストを記録！
-              notificationId: nextStatus ? undefined : sub.notificationId,
-              reminderOption: nextStatus ? "none" : sub.reminderOption,
-            };
           }
-          return sub;
-        });
 
-        // 1. お金の記録以外を完了判定の対象にする
-        const pureTodos = updatedSubTasks.filter(
-          (sub: any) => !sub.isExpense && !sub.isIncome,
-        );
+          const updatedParentItem = {
+            ...item,
+            subTasks: updatedSubTasks,
+            isDone: isAllSubTasksDone,
+            completedDates: updatedCompletedDates,
+          };
 
-        // 2. 全て完了しているか計算（純粋なタスクがない場合は元の状態を維持）
-        // 🌟 修正：繰り返し予定の場合は、今タップした日(date)で全完了か判定！
-        const isAllSubTasksDone =
-          pureTodos.length > 0
-            ? pureTodos.every((sub: any) => {
-                if (item.repeatType) return sub.completedDates?.includes(date);
-                return sub.isDone;
-              })
-            : item.isDone || false;
+          // 同期用にデータを確保しておく
+          targetItemToSync = updatedParentItem;
+          targetDateForSync = targetDate;
 
-        // 🌟 3. 習慣(ルーチン)予定の場合の特別処理
-        let updatedCompletedDates = item.completedDates || [];
-        if (item.repeatType) {
-          // ⚠️ targetDate ではなく date を使うように修正！
-          if (isAllSubTasksDone && !updatedCompletedDates.includes(date)) {
-            updatedCompletedDates = [...updatedCompletedDates, date]; // 完了日に今日を追加
-          } else if (
-            !isAllSubTasksDone &&
-            updatedCompletedDates.includes(date)
-          ) {
-            updatedCompletedDates = updatedCompletedDates.filter(
-              (d: string) => d !== date,
-            ); // 完了から外す
-          }
+          return updatedParentItem;
         }
+        return item;
+      });
 
-        // 🌟 変数に一旦入れてから返すように修正
-        const updatedParentItem = {
-          ...item,
-          subTasks: updatedSubTasks,
-          isDone: isAllSubTasksDone,
-          completedDates: updatedCompletedDates,
-        };
-
-        // 🌟 追加：共有タスクなら裏で同期！
-        safeDebouncedSync(updatedParentItem, targetDate);
-
-        return updatedParentItem;
-      }
-      return item;
+      return nextData;
     });
 
-    setScheduleData(newData);
-    setHasUnsavedChanges(true);
+    // 🌟 同期処理は画面の描画が終わった後に裏側でコッソリ行う
+    setTimeout(() => {
+      if (targetItemToSync) {
+        safeDebouncedSync(targetItemToSync, targetDateForSync);
+      }
+      setHasUnsavedChanges(true);
+    }, 0);
   };
 
   const layerSummary = useMemo(() => {
