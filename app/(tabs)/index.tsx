@@ -1725,15 +1725,34 @@ function IndexContent() {
       setSelectedExternalItem(item);
       setExternalModalVisible(true);
     } else {
-      // 🌟 安全装置：表示用にタグ名がすり替わっているので、scheduleDataの奥底から「本物の元データ」を探し出して編集画面に渡す！
-      let originalItem = item;
+      // 🌟 修正：開こうとしている「対象の日付」を確保する
+      const targetDate = item.date || selectedDate;
+      let originalItem = { ...item };
+
+      // 🌟 安全装置：scheduleDataの奥底から「本物の元データ」を探し出す
       for (const d of Object.keys(scheduleData)) {
         const found = scheduleData[d].find((i) => i.id === item.id);
         if (found) {
-          originalItem = found;
+          // 参照を切るためにディープコピー
+          originalItem = JSON.parse(JSON.stringify(found));
           break;
         }
       }
+
+      // 🌟 究極の修正：繰り返し予定の場合は、生データではなく「対象日(targetDate)」のチェック状態を復元してから画面に渡す！
+      if (originalItem.repeatType) {
+        originalItem.isDone =
+          originalItem.completedDates?.includes(targetDate) || false;
+        if (originalItem.subTasks) {
+          originalItem.subTasks = originalItem.subTasks.map((sub: any) => ({
+            ...sub,
+            isDone: sub.completedDates?.includes(targetDate) || false,
+          }));
+        }
+      }
+
+      // 内部データを対象日に固定して渡す
+      originalItem.date = targetDate;
       setSelectedItem(originalItem);
       setModalVisible(true);
     }
@@ -2422,15 +2441,31 @@ function IndexContent() {
       setSelectedExternalItem(item);
       setExternalModalVisible(true);
     } else {
-      // 🌟 安全装置：こちらも同様に本物の元データを渡す
-      let originalItem = item;
+      // 🌟 修正：開こうとしている「対象の日付」を確保する
+      const targetDate = item.date || selectedDate;
+      let originalItem = { ...item };
+
       for (const d of Object.keys(scheduleData)) {
         const found = scheduleData[d].find((i) => i.id === item.id);
         if (found) {
-          originalItem = found;
+          originalItem = JSON.parse(JSON.stringify(found));
           break;
         }
       }
+
+      // 🌟 究極の修正：繰り返し予定の場合は、対象日(targetDate)のチェック状態を復元する！
+      if (originalItem.repeatType) {
+        originalItem.isDone =
+          originalItem.completedDates?.includes(targetDate) || false;
+        if (originalItem.subTasks) {
+          originalItem.subTasks = originalItem.subTasks.map((sub: any) => ({
+            ...sub,
+            isDone: sub.completedDates?.includes(targetDate) || false,
+          }));
+        }
+      }
+
+      originalItem.date = targetDate;
       setQuickActionItem(originalItem);
       setQuickActionVisible(true);
     }
